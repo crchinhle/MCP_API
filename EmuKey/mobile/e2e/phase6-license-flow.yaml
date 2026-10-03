@@ -1,0 +1,23 @@
+appId: app.emukey.mobile
+name: Phase 6 real backend and blockchain flow
+env:
+  CUSTOMER_EMAIL: ${E2E_CUSTOMER_EMAIL}
+  CUSTOMER_PASSWORD: ${E2E_CUSTOMER_PASSWORD}
+---
+- launchApp:
+    clearState: true
+- tapOn: Email
+- inputText: ${CUSTOMER_EMAIL}
+- tapOn: Mật khẩu
+- inputText: ${CUSTOMER_PASSWORD}
+- tapOn: Đăng nhập
+- tapOn: License
+- assertVisible: License của tôi
+- tapOn: Nhận activation key
+- assertVisible: Kích hoạt thiết bị này
+- tapOn: Kích hoạt thiết bị này
+- extendedWaitUntil:
+    visible: "Command CONFIRMED:.*"
+    timeout: 150000
+- tapOn: Xem thiết bị
+- assertVisible: ".*ACTIVE.*CONFIRMED.*"

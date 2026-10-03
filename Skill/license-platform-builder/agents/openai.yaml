@@ -1,0 +1,14 @@
+interface:
+  display_name: License Platform Builder
+  short_description: Build the license platform end to end
+  default_prompt: Implement this feature as a complete vertical slice across the existing
+    license platform, preserving architecture, tests, and workspace hygiene.
+  icon_small: assets/icon.svg
+  icon_large: assets/icon.svg
+policy:
+  products:
+  - chatgpt
+  - codex
+  - api
+  - atlas
+  allow_implicit_invocation: true

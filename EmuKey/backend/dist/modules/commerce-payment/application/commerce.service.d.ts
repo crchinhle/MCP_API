@@ -1,0 +1,63 @@
+import type { ActivationEnvelopePort } from '../../blockchain/application/ports/activation-envelope.port.js';
+import type { ActivationEnvelopeRecoveryService } from '../../blockchain/application/activation-envelope-recovery.service.js';
+import type { AuthPrincipal } from '../../identity-access/identity.types.js';
+import type { AcceptServiceTermsDto, CreateOrderDto } from '../presentation/commerce.dto.js';
+import type { PaymentGatewayPort } from './ports/payment-gateway.port.js';
+import { ServiceTermsContent } from '../../../platform/terms/service-terms-content.js';
+import { CommerceRepository, type ChainConfiguration } from '../infrastructure/commerce.repository.js';
+export declare class CommerceService {
+    private readonly repository;
+    private readonly payment;
+    private readonly envelopes;
+    private readonly envelopeRecovery;
+    private readonly chain;
+    private readonly serviceTerms;
+    constructor(repository: CommerceRepository, payment: PaymentGatewayPort, envelopes: ActivationEnvelopePort, envelopeRecovery: ActivationEnvelopeRecoveryService, chain: ChainConfiguration, serviceTerms?: ServiceTermsContent);
+    createOrder(actor: AuthPrincipal, idempotencyKey: string | undefined, _licenseKey: string | undefined, dto: CreateOrderDto): Promise<import("../infrastructure/commerce.repository.js").OrderRecord>;
+    listOrders(actor: AuthPrincipal): Promise<import("../infrastructure/commerce.repository.js").OrderRecord[]>;
+    renewalPreview(actor: AuthPrincipal, licenseId: string): Promise<{
+        licenseId: string;
+        planId: string;
+        planName: string;
+        productName: string;
+        currentExpiresAt: Date;
+        durationMonths: number;
+        priceVnd: number;
+        estimatedExpiresAt: Date;
+        canRenew: boolean;
+        pendingOrder: import("../infrastructure/commerce.repository.js").OrderRecord | null;
+    }>;
+    findOrder(actor: AuthPrincipal, id: string): Promise<import("../infrastructure/commerce.repository.js").OrderRecord>;
+    cancelOverdueOrders(): Promise<number>;
+    getServiceTerms(actor: AuthPrincipal, id: string): Promise<{
+        content: string;
+        hash: string;
+        version: string;
+    }>;
+    acceptServiceTerms(actor: AuthPrincipal, id: string, dto: AcceptServiceTermsDto): Promise<import("../infrastructure/commerce.repository.js").OrderRecord>;
+    cancelOrder(actor: AuthPrincipal, id: string): Promise<import("../infrastructure/commerce.repository.js").OrderRecord>;
+    checkout(actor: AuthPrincipal, id: string): Promise<{
+        amountVnd: number;
+        attemptId: string;
+        expiresAt: string;
+        expiresWithOrder: boolean;
+        checkoutFields: Record<string, string>;
+        checkoutMethod: "POST";
+        checkoutReference: string;
+        checkoutUrl: string;
+    }>;
+    ingestIpn(payload: unknown, signature?: string): Promise<import("../infrastructure/commerce.repository.js").PaymentIngestResult>;
+    reconcileSandboxPayment(actor: AuthPrincipal, id: string, reason: string): Promise<import("../infrastructure/commerce.repository.js").PaymentIngestResult>;
+    private fulfillPayment;
+    listPaymentHistory(actor: AuthPrincipal): Promise<import("../infrastructure/commerce.repository.js").PaymentHistoryRecord[]>;
+    getPaymentReceipt(actor: AuthPrincipal, id: string): Promise<import("../infrastructure/commerce.repository.js").PaymentReceiptRecord>;
+    listPaymentReview(actor: AuthPrincipal): Promise<import("../infrastructure/commerce.repository.js").PaymentReviewRecord[]>;
+    reviewPayment(actor: AuthPrincipal, id: string, status: 'CLOSED_NO_ACTION' | 'RESOLVED', reason: string): Promise<import("../infrastructure/commerce.repository.js").PaymentReviewRecord>;
+    private newActivation;
+    private notFound;
+    private requirePaymentEvidenceRole;
+    private requireReviewRole;
+    private requireCustomer;
+    private forbidden;
+    private translate;
+}

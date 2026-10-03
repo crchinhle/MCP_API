@@ -1,0 +1,1245 @@
+{
+  "generatedAt": "2026-09-24T04:59:51.810Z",
+  "records": [
+    {
+      "name": "buyer-home",
+      "route": "/buyer",
+      "viewport": "desktop",
+      "data": {
+        "licenses": [
+          {
+            "id": "1",
+            "productName": "SecureDesk Pro",
+            "status": "ACTIVE",
+            "maxActiveDevices": 25,
+            "activationKeyAvailable": true,
+            "expiresAt": "2027-12-31T00:00:00.000Z"
+          },
+          {
+            "id": "2",
+            "productName": "CloudStudio AI",
+            "status": "ACTIVE",
+            "maxActiveDevices": 10,
+            "activationKeyAvailable": false,
+            "expiresAt": "2027-02-01T00:00:00.000Z"
+          },
+          {
+            "id": "3",
+            "productName": "DataGuard SDK",
+            "status": "ACTIVE",
+            "maxActiveDevices": 5,
+            "activationKeyAvailable": false,
+            "expiresAt": "2026-10-01T00:00:00.000Z"
+          }
+        ],
+        "orders": [
+          {
+            "id": "ORD-001",
+            "orderNumber": "ORD-001",
+            "planNameSnapshot": "Gói Basic",
+            "priceVndSnapshot": 5000000,
+            "orderStatus": "PAYMENT_ACCEPTED",
+            "productNameSnapshot": "SecureDesk Pro"
+          },
+          {
+            "id": "ORD-002",
+            "orderNumber": "ORD-002",
+            "planNameSnapshot": "Gói Pro",
+            "priceVndSnapshot": 8000000,
+            "orderStatus": "WAITING_PAYMENT",
+            "productNameSnapshot": "CloudStudio AI"
+          }
+        ],
+        "devicesByLicense": {
+          "1": [
+            {
+              "id": "device-a",
+              "deviceRef": "DESKTOP-AN-01",
+              "status": "ACTIVE",
+              "bindingGeneration": 1
+            },
+            {
+              "id": "device-b",
+              "deviceRef": "LAPTOP-MKT-04",
+              "status": "ACTIVE",
+              "bindingGeneration": 1
+            },
+            {
+              "id": "device-c",
+              "deviceRef": "DESKTOP-DEV-02",
+              "status": "ACTIVE",
+              "bindingGeneration": 1
+            }
+          ]
+        }
+      },
+      "output": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\artifacts\\buyer-home-fixture.png",
+      "status": "CAPTURED_WITH_INTERCEPT",
+      "interceptionLog": [
+        {
+          "at": "2026-09-24T04:59:42.739Z",
+          "url": "http://localhost:5173/api/v1/auth/refresh",
+          "fixture": "buyer-home",
+          "status": 200,
+          "response": {
+            "accessToken": "visual-test-token",
+            "user": {
+              "id": "visual-user",
+              "email": "minhan@example.test",
+              "displayName": "Minh An",
+              "role": "CUSTOMER",
+              "status": "ACTIVE"
+            }
+          }
+        },
+        {
+          "at": "2026-09-24T04:59:42.834Z",
+          "url": "http://localhost:5173/api/v1/notifications",
+          "fixture": "buyer-home",
+          "status": 200,
+          "response": []
+        },
+        {
+          "at": "2026-09-24T04:59:42.837Z",
+          "url": "http://localhost:5173/api/v1/licenses",
+          "fixture": "buyer-home",
+          "status": 200,
+          "response": [
+            {
+              "id": "1",
+              "productName": "SecureDesk Pro",
+              "status": "ACTIVE",
+              "maxActiveDevices": 25,
+              "activationKeyAvailable": true,
+              "expiresAt": "2027-12-31T00:00:00.000Z"
+            },
+            {
+              "id": "2",
+              "productName": "CloudStudio AI",
+              "status": "ACTIVE",
+              "maxActiveDevices": 10,
+              "activationKeyAvailable": false,
+              "expiresAt": "2027-02-01T00:00:00.000Z"
+            },
+            {
+              "id": "3",
+              "productName": "DataGuard SDK",
+              "status": "ACTIVE",
+              "maxActiveDevices": 5,
+              "activationKeyAvailable": false,
+              "expiresAt": "2026-10-01T00:00:00.000Z"
+            }
+          ]
+        },
+        {
+          "at": "2026-09-24T04:59:42.838Z",
+          "url": "http://localhost:5173/api/v1/orders",
+          "fixture": "buyer-home",
+          "status": 200,
+          "response": [
+            {
+              "id": "ORD-001",
+              "orderNumber": "ORD-001",
+              "planNameSnapshot": "Gói Basic",
+              "priceVndSnapshot": 5000000,
+              "orderStatus": "PAYMENT_ACCEPTED",
+              "productNameSnapshot": "SecureDesk Pro"
+            },
+            {
+              "id": "ORD-002",
+              "orderNumber": "ORD-002",
+              "planNameSnapshot": "Gói Pro",
+              "priceVndSnapshot": 8000000,
+              "orderStatus": "WAITING_PAYMENT",
+              "productNameSnapshot": "CloudStudio AI"
+            }
+          ]
+        },
+        {
+          "at": "2026-09-24T04:59:42.981Z",
+          "url": "http://localhost:5173/api/v1/licenses/1/devices",
+          "fixture": "buyer-home",
+          "status": 200,
+          "response": [
+            {
+              "id": "device-a",
+              "deviceRef": "DESKTOP-AN-01",
+              "status": "ACTIVE",
+              "bindingGeneration": 1
+            },
+            {
+              "id": "device-b",
+              "deviceRef": "LAPTOP-MKT-04",
+              "status": "ACTIVE",
+              "bindingGeneration": 1
+            },
+            {
+              "id": "device-c",
+              "deviceRef": "DESKTOP-DEV-02",
+              "status": "ACTIVE",
+              "bindingGeneration": 1
+            }
+          ]
+        },
+        {
+          "at": "2026-09-24T04:59:42.984Z",
+          "url": "http://localhost:5173/api/v1/licenses/2/devices",
+          "fixture": "buyer-home",
+          "status": 200,
+          "response": []
+        },
+        {
+          "at": "2026-09-24T04:59:42.984Z",
+          "url": "http://localhost:5173/api/v1/licenses/3/devices",
+          "fixture": "buyer-home",
+          "status": 200,
+          "response": []
+        }
+      ],
+      "selectorLog": {
+        "recentOrders": 2,
+        "activeDevices": 3,
+        "licensesExpiringWithin30Days": 1,
+        "fixedDate": "2026-09-23T00:00:00.000Z"
+      }
+    },
+    {
+      "name": "buyer-home-mobile",
+      "route": "/buyer",
+      "viewport": "mobile",
+      "data": {
+        "licenses": [
+          {
+            "id": "1",
+            "productName": "SecureDesk Pro",
+            "status": "ACTIVE",
+            "maxActiveDevices": 25,
+            "activationKeyAvailable": true
+          },
+          {
+            "id": "2",
+            "productName": "CloudStudio AI",
+            "status": "PENDING",
+            "maxActiveDevices": 10,
+            "activationKeyAvailable": false
+          }
+        ],
+        "orders": [
+          {
+            "id": "ORD-001",
+            "orderNumber": "ORD-001",
+            "planNameSnapshot": "Gói Basic",
+            "priceVndSnapshot": 5000000,
+            "orderStatus": "PAYMENT_ACCEPTED",
+            "productNameSnapshot": "SecureDesk Pro"
+          },
+          {
+            "id": "ORD-002",
+            "orderNumber": "ORD-002",
+            "planNameSnapshot": "Gói Pro",
+            "priceVndSnapshot": 8000000,
+            "orderStatus": "WAITING_PAYMENT",
+            "productNameSnapshot": "CloudStudio AI"
+          }
+        ]
+      },
+      "output": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\artifacts\\buyer-home-mobile__fixture.png",
+      "status": "CAPTURED_WITH_INTERCEPT",
+      "interceptionLog": [
+        {
+          "at": "2026-09-24T04:59:44.530Z",
+          "url": "http://localhost:5173/api/v1/auth/refresh",
+          "fixture": "buyer-home-mobile",
+          "status": 200,
+          "response": {
+            "accessToken": "visual-test-token",
+            "user": {
+              "id": "visual-user",
+              "email": "minhan@example.test",
+              "displayName": "Minh An",
+              "role": "CUSTOMER",
+              "status": "ACTIVE"
+            }
+          }
+        },
+        {
+          "at": "2026-09-24T04:59:44.603Z",
+          "url": "http://localhost:5173/api/v1/notifications",
+          "fixture": "buyer-home-mobile",
+          "status": 200,
+          "response": []
+        },
+        {
+          "at": "2026-09-24T04:59:44.605Z",
+          "url": "http://localhost:5173/api/v1/licenses",
+          "fixture": "buyer-home-mobile",
+          "status": 200,
+          "response": [
+            {
+              "id": "1",
+              "productName": "SecureDesk Pro",
+              "status": "ACTIVE",
+              "maxActiveDevices": 25,
+              "activationKeyAvailable": true
+            },
+            {
+              "id": "2",
+              "productName": "CloudStudio AI",
+              "status": "PENDING",
+              "maxActiveDevices": 10,
+              "activationKeyAvailable": false
+            }
+          ]
+        },
+        {
+          "at": "2026-09-24T04:59:44.606Z",
+          "url": "http://localhost:5173/api/v1/orders",
+          "fixture": "buyer-home-mobile",
+          "status": 200,
+          "response": [
+            {
+              "id": "ORD-001",
+              "orderNumber": "ORD-001",
+              "planNameSnapshot": "Gói Basic",
+              "priceVndSnapshot": 5000000,
+              "orderStatus": "PAYMENT_ACCEPTED",
+              "productNameSnapshot": "SecureDesk Pro"
+            },
+            {
+              "id": "ORD-002",
+              "orderNumber": "ORD-002",
+              "planNameSnapshot": "Gói Pro",
+              "priceVndSnapshot": 8000000,
+              "orderStatus": "WAITING_PAYMENT",
+              "productNameSnapshot": "CloudStudio AI"
+            }
+          ]
+        },
+        {
+          "at": "2026-09-24T04:59:44.702Z",
+          "url": "http://localhost:5173/api/v1/licenses/1/devices",
+          "fixture": "buyer-home-mobile",
+          "status": 200,
+          "response": []
+        },
+        {
+          "at": "2026-09-24T04:59:44.704Z",
+          "url": "http://localhost:5173/api/v1/licenses/2/devices",
+          "fixture": "buyer-home-mobile",
+          "status": 200,
+          "response": []
+        }
+      ],
+      "selectorLog": {
+        "recentOrders": 2,
+        "activeDevices": 0,
+        "licensesExpiringWithin30Days": 1,
+        "fixedDate": "2026-09-23T00:00:00.000Z"
+      }
+    },
+    {
+      "name": "buyer-orders",
+      "route": "/buyer/orders",
+      "viewport": "desktop",
+      "data": {
+        "orders": [
+          {
+            "id": "order-0218",
+            "orderNumber": "ORD-2026-0218",
+            "planId": "securedesk-25",
+            "planNameSnapshot": "25 thiết bị",
+            "maxActiveDevicesSnapshot": 25,
+            "priceVndSnapshot": 2450000,
+            "productNameSnapshot": "SecureDesk Pro",
+            "orderStatus": "WAITING_PAYMENT"
+          },
+          {
+            "id": "order-0207",
+            "orderNumber": "ORD-2026-0207",
+            "planId": "cloudstudio-10",
+            "planNameSnapshot": "10 thiết bị",
+            "maxActiveDevicesSnapshot": 10,
+            "priceVndSnapshot": 1890000,
+            "productNameSnapshot": "CloudStudio AI",
+            "orderStatus": "PAYMENT_ACCEPTED"
+          },
+          {
+            "id": "order-0199",
+            "orderNumber": "ORD-2026-0199",
+            "planId": "dataguard-5",
+            "planNameSnapshot": "5 thiết bị",
+            "maxActiveDevicesSnapshot": 5,
+            "priceVndSnapshot": 990000,
+            "productNameSnapshot": "DataGuard SDK",
+            "orderStatus": "PAYMENT_ACCEPTED"
+          },
+          {
+            "id": "order-0184",
+            "orderNumber": "ORD-2026-0184",
+            "planId": "securedesk-15",
+            "planNameSnapshot": "15 thiết bị",
+            "maxActiveDevicesSnapshot": 15,
+            "priceVndSnapshot": 1470000,
+            "productNameSnapshot": "SecureDesk Pro",
+            "orderStatus": "PAYMENT_ACCEPTED"
+          }
+        ]
+      },
+      "output": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\artifacts\\buyer-orders__fixture.png",
+      "status": "CAPTURED_WITH_INTERCEPT",
+      "interceptionLog": [
+        {
+          "at": "2026-09-24T04:59:46.088Z",
+          "url": "http://localhost:5173/api/v1/auth/refresh",
+          "fixture": "buyer-orders",
+          "status": 200,
+          "response": {
+            "accessToken": "visual-test-token",
+            "user": {
+              "id": "visual-user",
+              "email": "minhan@example.test",
+              "displayName": "Minh An",
+              "role": "CUSTOMER",
+              "status": "ACTIVE"
+            }
+          }
+        },
+        {
+          "at": "2026-09-24T04:59:46.171Z",
+          "url": "http://localhost:5173/api/v1/notifications",
+          "fixture": "buyer-orders",
+          "status": 200,
+          "response": []
+        },
+        {
+          "at": "2026-09-24T04:59:46.177Z",
+          "url": "http://localhost:5173/api/v1/orders",
+          "fixture": "buyer-orders",
+          "status": 200,
+          "response": [
+            {
+              "id": "order-0218",
+              "orderNumber": "ORD-2026-0218",
+              "planId": "securedesk-25",
+              "planNameSnapshot": "25 thiết bị",
+              "maxActiveDevicesSnapshot": 25,
+              "priceVndSnapshot": 2450000,
+              "productNameSnapshot": "SecureDesk Pro",
+              "orderStatus": "WAITING_PAYMENT"
+            },
+            {
+              "id": "order-0207",
+              "orderNumber": "ORD-2026-0207",
+              "planId": "cloudstudio-10",
+              "planNameSnapshot": "10 thiết bị",
+              "maxActiveDevicesSnapshot": 10,
+              "priceVndSnapshot": 1890000,
+              "productNameSnapshot": "CloudStudio AI",
+              "orderStatus": "PAYMENT_ACCEPTED"
+            },
+            {
+              "id": "order-0199",
+              "orderNumber": "ORD-2026-0199",
+              "planId": "dataguard-5",
+              "planNameSnapshot": "5 thiết bị",
+              "maxActiveDevicesSnapshot": 5,
+              "priceVndSnapshot": 990000,
+              "productNameSnapshot": "DataGuard SDK",
+              "orderStatus": "PAYMENT_ACCEPTED"
+            },
+            {
+              "id": "order-0184",
+              "orderNumber": "ORD-2026-0184",
+              "planId": "securedesk-15",
+              "planNameSnapshot": "15 thiết bị",
+              "maxActiveDevicesSnapshot": 15,
+              "priceVndSnapshot": 1470000,
+              "productNameSnapshot": "SecureDesk Pro",
+              "orderStatus": "PAYMENT_ACCEPTED"
+            }
+          ]
+        },
+        {
+          "at": "2026-09-24T04:59:46.324Z",
+          "url": "http://localhost:5173/api/v1/notifications",
+          "fixture": "buyer-orders",
+          "status": 200,
+          "response": []
+        }
+      ],
+      "selectorLog": {
+        "recentOrders": 4,
+        "activeDevices": 0,
+        "licensesExpiringWithin30Days": 1,
+        "fixedDate": "2026-09-23T00:00:00.000Z"
+      }
+    },
+    {
+      "name": "buyer-orders-mobile",
+      "route": "/buyer/orders",
+      "viewport": "mobile",
+      "data": {
+        "orders": [
+          {
+            "id": "order-0218",
+            "orderNumber": "ORD-2026-0218",
+            "planId": "securedesk-25",
+            "planNameSnapshot": "25 thiết bị",
+            "maxActiveDevicesSnapshot": 25,
+            "priceVndSnapshot": 2450000,
+            "productNameSnapshot": "SecureDesk Pro",
+            "orderStatus": "WAITING_PAYMENT"
+          },
+          {
+            "id": "order-0207",
+            "orderNumber": "ORD-2026-0207",
+            "planId": "cloudstudio-10",
+            "planNameSnapshot": "10 thiết bị",
+            "maxActiveDevicesSnapshot": 10,
+            "priceVndSnapshot": 1890000,
+            "productNameSnapshot": "CloudStudio AI",
+            "orderStatus": "PAYMENT_ACCEPTED"
+          },
+          {
+            "id": "order-0199",
+            "orderNumber": "ORD-2026-0199",
+            "planId": "dataguard-5",
+            "planNameSnapshot": "5 thiết bị",
+            "maxActiveDevicesSnapshot": 5,
+            "priceVndSnapshot": 990000,
+            "productNameSnapshot": "DataGuard SDK",
+            "orderStatus": "PAYMENT_ACCEPTED"
+          },
+          {
+            "id": "order-0184",
+            "orderNumber": "ORD-2026-0184",
+            "planId": "securedesk-15",
+            "planNameSnapshot": "15 thiết bị",
+            "maxActiveDevicesSnapshot": 15,
+            "priceVndSnapshot": 1470000,
+            "productNameSnapshot": "SecureDesk Pro",
+            "orderStatus": "PAYMENT_ACCEPTED"
+          }
+        ]
+      },
+      "output": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\artifacts\\buyer-orders-mobile__fixture.png",
+      "status": "CAPTURED_WITH_INTERCEPT",
+      "interceptionLog": [
+        {
+          "at": "2026-09-24T04:59:47.777Z",
+          "url": "http://localhost:5173/api/v1/auth/refresh",
+          "fixture": "buyer-orders-mobile",
+          "status": 200,
+          "response": {
+            "accessToken": "visual-test-token",
+            "user": {
+              "id": "visual-user",
+              "email": "minhan@example.test",
+              "displayName": "Minh An",
+              "role": "CUSTOMER",
+              "status": "ACTIVE"
+            }
+          }
+        },
+        {
+          "at": "2026-09-24T04:59:47.837Z",
+          "url": "http://localhost:5173/api/v1/notifications",
+          "fixture": "buyer-orders-mobile",
+          "status": 200,
+          "response": []
+        },
+        {
+          "at": "2026-09-24T04:59:47.839Z",
+          "url": "http://localhost:5173/api/v1/orders",
+          "fixture": "buyer-orders-mobile",
+          "status": 200,
+          "response": [
+            {
+              "id": "order-0218",
+              "orderNumber": "ORD-2026-0218",
+              "planId": "securedesk-25",
+              "planNameSnapshot": "25 thiết bị",
+              "maxActiveDevicesSnapshot": 25,
+              "priceVndSnapshot": 2450000,
+              "productNameSnapshot": "SecureDesk Pro",
+              "orderStatus": "WAITING_PAYMENT"
+            },
+            {
+              "id": "order-0207",
+              "orderNumber": "ORD-2026-0207",
+              "planId": "cloudstudio-10",
+              "planNameSnapshot": "10 thiết bị",
+              "maxActiveDevicesSnapshot": 10,
+              "priceVndSnapshot": 1890000,
+              "productNameSnapshot": "CloudStudio AI",
+              "orderStatus": "PAYMENT_ACCEPTED"
+            },
+            {
+              "id": "order-0199",
+              "orderNumber": "ORD-2026-0199",
+              "planId": "dataguard-5",
+              "planNameSnapshot": "5 thiết bị",
+              "maxActiveDevicesSnapshot": 5,
+              "priceVndSnapshot": 990000,
+              "productNameSnapshot": "DataGuard SDK",
+              "orderStatus": "PAYMENT_ACCEPTED"
+            },
+            {
+              "id": "order-0184",
+              "orderNumber": "ORD-2026-0184",
+              "planId": "securedesk-15",
+              "planNameSnapshot": "15 thiết bị",
+              "maxActiveDevicesSnapshot": 15,
+              "priceVndSnapshot": 1470000,
+              "productNameSnapshot": "SecureDesk Pro",
+              "orderStatus": "PAYMENT_ACCEPTED"
+            }
+          ]
+        },
+        {
+          "at": "2026-09-24T04:59:47.970Z",
+          "url": "http://localhost:5173/api/v1/notifications",
+          "fixture": "buyer-orders-mobile",
+          "status": 200,
+          "response": []
+        }
+      ],
+      "selectorLog": {
+        "recentOrders": 4,
+        "activeDevices": 0,
+        "licensesExpiringWithin30Days": 1,
+        "fixedDate": "2026-09-23T00:00:00.000Z"
+      }
+    },
+    {
+      "name": "buyer-licenses",
+      "route": "/buyer/licenses",
+      "viewport": "desktop",
+      "data": {
+        "licenses": [
+          {
+            "id": "1",
+            "productName": "SecureDesk Pro",
+            "plan": {
+              "name": "Business",
+              "version": 1
+            },
+            "maxActiveDevices": 25,
+            "status": "ACTIVE",
+            "expiresAt": "2027-08-21",
+            "activationKeyAvailable": true,
+            "publicLicenseId": "LIC-8F3A-2026"
+          },
+          {
+            "id": "2",
+            "productName": "CloudStudio AI",
+            "plan": {
+              "name": "Gói Pro",
+              "version": 1
+            },
+            "maxActiveDevices": 10,
+            "status": "PENDING",
+            "expiresAt": "2026-06-01",
+            "activationKeyAvailable": false,
+            "publicLicenseId": "EMU-LIC-002"
+          },
+          {
+            "id": "3",
+            "productName": "DataGuard SDK",
+            "plan": {
+              "name": "Gói Starter",
+              "version": 1
+            },
+            "maxActiveDevices": 5,
+            "status": "ACTIVE",
+            "expiresAt": "2027-11-15",
+            "activationKeyAvailable": false,
+            "publicLicenseId": "EMU-LIC-003"
+          }
+        ],
+        "devicesByLicense": {
+          "1": [
+            {
+              "id": "device-1",
+              "deviceRef": "DESKTOP-AN-01",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-2",
+              "deviceRef": "LAPTOP-MKT-04",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-3",
+              "deviceRef": "DEVICE-03",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-4",
+              "deviceRef": "DEVICE-04",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-5",
+              "deviceRef": "DEVICE-05",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-6",
+              "deviceRef": "DEVICE-06",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-7",
+              "deviceRef": "DEVICE-07",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-8",
+              "deviceRef": "DEVICE-08",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-9",
+              "deviceRef": "DEVICE-09",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-10",
+              "deviceRef": "DEVICE-10",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-11",
+              "deviceRef": "DEVICE-11",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-12",
+              "deviceRef": "DEVICE-12",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-13",
+              "deviceRef": "DEVICE-13",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-14",
+              "deviceRef": "DEVICE-14",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            }
+          ]
+        }
+      },
+      "output": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\artifacts\\buyer-licenses__fixture.png",
+      "status": "CAPTURED_WITH_INTERCEPT",
+      "interceptionLog": [
+        {
+          "at": "2026-09-24T04:59:49.363Z",
+          "url": "http://localhost:5173/api/v1/auth/refresh",
+          "fixture": "buyer-licenses",
+          "status": 200,
+          "response": {
+            "accessToken": "visual-test-token",
+            "user": {
+              "id": "visual-user",
+              "email": "minhan@example.test",
+              "displayName": "Minh An",
+              "role": "CUSTOMER",
+              "status": "ACTIVE"
+            }
+          }
+        },
+        {
+          "at": "2026-09-24T04:59:49.421Z",
+          "url": "http://localhost:5173/api/v1/notifications",
+          "fixture": "buyer-licenses",
+          "status": 200,
+          "response": []
+        },
+        {
+          "at": "2026-09-24T04:59:49.422Z",
+          "url": "http://localhost:5173/api/v1/licenses",
+          "fixture": "buyer-licenses",
+          "status": 200,
+          "response": [
+            {
+              "id": "1",
+              "productName": "SecureDesk Pro",
+              "plan": {
+                "name": "Business",
+                "version": 1
+              },
+              "maxActiveDevices": 25,
+              "status": "ACTIVE",
+              "expiresAt": "2027-08-21",
+              "activationKeyAvailable": true,
+              "publicLicenseId": "LIC-8F3A-2026"
+            },
+            {
+              "id": "2",
+              "productName": "CloudStudio AI",
+              "plan": {
+                "name": "Gói Pro",
+                "version": 1
+              },
+              "maxActiveDevices": 10,
+              "status": "PENDING",
+              "expiresAt": "2026-06-01",
+              "activationKeyAvailable": false,
+              "publicLicenseId": "EMU-LIC-002"
+            },
+            {
+              "id": "3",
+              "productName": "DataGuard SDK",
+              "plan": {
+                "name": "Gói Starter",
+                "version": 1
+              },
+              "maxActiveDevices": 5,
+              "status": "ACTIVE",
+              "expiresAt": "2027-11-15",
+              "activationKeyAvailable": false,
+              "publicLicenseId": "EMU-LIC-003"
+            }
+          ]
+        },
+        {
+          "at": "2026-09-24T04:59:49.513Z",
+          "url": "http://localhost:5173/api/v1/notifications",
+          "fixture": "buyer-licenses",
+          "status": 200,
+          "response": []
+        },
+        {
+          "at": "2026-09-24T04:59:49.514Z",
+          "url": "http://localhost:5173/api/v1/licenses/1/devices",
+          "fixture": "buyer-licenses",
+          "status": 200,
+          "response": [
+            {
+              "id": "device-1",
+              "deviceRef": "DESKTOP-AN-01",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-2",
+              "deviceRef": "LAPTOP-MKT-04",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-3",
+              "deviceRef": "DEVICE-03",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-4",
+              "deviceRef": "DEVICE-04",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-5",
+              "deviceRef": "DEVICE-05",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-6",
+              "deviceRef": "DEVICE-06",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-7",
+              "deviceRef": "DEVICE-07",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-8",
+              "deviceRef": "DEVICE-08",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-9",
+              "deviceRef": "DEVICE-09",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-10",
+              "deviceRef": "DEVICE-10",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-11",
+              "deviceRef": "DEVICE-11",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-12",
+              "deviceRef": "DEVICE-12",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-13",
+              "deviceRef": "DEVICE-13",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-14",
+              "deviceRef": "DEVICE-14",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            }
+          ]
+        }
+      ],
+      "selectorLog": {
+        "recentOrders": 0,
+        "activeDevices": 14,
+        "licensesExpiringWithin30Days": 1,
+        "fixedDate": "2026-09-23T00:00:00.000Z"
+      }
+    },
+    {
+      "name": "buyer-licenses-mobile",
+      "route": "/buyer/licenses",
+      "viewport": "mobile",
+      "data": {
+        "licenses": [
+          {
+            "id": "1",
+            "productName": "SecureDesk Pro",
+            "plan": {
+              "name": "Business",
+              "version": 1
+            },
+            "maxActiveDevices": 25,
+            "status": "ACTIVE",
+            "expiresAt": "2027-08-21",
+            "activationKeyAvailable": true,
+            "publicLicenseId": "LIC-8F3A-2026"
+          },
+          {
+            "id": "2",
+            "productName": "CloudStudio AI",
+            "plan": {
+              "name": "Gói Pro",
+              "version": 1
+            },
+            "maxActiveDevices": 10,
+            "status": "PENDING",
+            "expiresAt": "2026-06-01",
+            "activationKeyAvailable": false,
+            "publicLicenseId": "EMU-LIC-002"
+          },
+          {
+            "id": "3",
+            "productName": "DataGuard SDK",
+            "plan": {
+              "name": "Gói Starter",
+              "version": 1
+            },
+            "maxActiveDevices": 5,
+            "status": "ACTIVE",
+            "expiresAt": "2027-11-15",
+            "activationKeyAvailable": false,
+            "publicLicenseId": "EMU-LIC-003"
+          }
+        ],
+        "devicesByLicense": {
+          "1": [
+            {
+              "id": "device-1",
+              "deviceRef": "DESKTOP-AN-01",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-2",
+              "deviceRef": "LAPTOP-MKT-04",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-3",
+              "deviceRef": "DEVICE-03",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-4",
+              "deviceRef": "DEVICE-04",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-5",
+              "deviceRef": "DEVICE-05",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-6",
+              "deviceRef": "DEVICE-06",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-7",
+              "deviceRef": "DEVICE-07",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-8",
+              "deviceRef": "DEVICE-08",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-9",
+              "deviceRef": "DEVICE-09",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-10",
+              "deviceRef": "DEVICE-10",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-11",
+              "deviceRef": "DEVICE-11",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-12",
+              "deviceRef": "DEVICE-12",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-13",
+              "deviceRef": "DEVICE-13",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-14",
+              "deviceRef": "DEVICE-14",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            }
+          ]
+        }
+      },
+      "output": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\artifacts\\buyer-licenses-mobile__fixture.png",
+      "status": "CAPTURED_WITH_INTERCEPT",
+      "interceptionLog": [
+        {
+          "at": "2026-09-24T04:59:50.949Z",
+          "url": "http://localhost:5173/api/v1/auth/refresh",
+          "fixture": "buyer-licenses-mobile",
+          "status": 200,
+          "response": {
+            "accessToken": "visual-test-token",
+            "user": {
+              "id": "visual-user",
+              "email": "minhan@example.test",
+              "displayName": "Minh An",
+              "role": "CUSTOMER",
+              "status": "ACTIVE"
+            }
+          }
+        },
+        {
+          "at": "2026-09-24T04:59:51.007Z",
+          "url": "http://localhost:5173/api/v1/notifications",
+          "fixture": "buyer-licenses-mobile",
+          "status": 200,
+          "response": []
+        },
+        {
+          "at": "2026-09-24T04:59:51.009Z",
+          "url": "http://localhost:5173/api/v1/licenses",
+          "fixture": "buyer-licenses-mobile",
+          "status": 200,
+          "response": [
+            {
+              "id": "1",
+              "productName": "SecureDesk Pro",
+              "plan": {
+                "name": "Business",
+                "version": 1
+              },
+              "maxActiveDevices": 25,
+              "status": "ACTIVE",
+              "expiresAt": "2027-08-21",
+              "activationKeyAvailable": true,
+              "publicLicenseId": "LIC-8F3A-2026"
+            },
+            {
+              "id": "2",
+              "productName": "CloudStudio AI",
+              "plan": {
+                "name": "Gói Pro",
+                "version": 1
+              },
+              "maxActiveDevices": 10,
+              "status": "PENDING",
+              "expiresAt": "2026-06-01",
+              "activationKeyAvailable": false,
+              "publicLicenseId": "EMU-LIC-002"
+            },
+            {
+              "id": "3",
+              "productName": "DataGuard SDK",
+              "plan": {
+                "name": "Gói Starter",
+                "version": 1
+              },
+              "maxActiveDevices": 5,
+              "status": "ACTIVE",
+              "expiresAt": "2027-11-15",
+              "activationKeyAvailable": false,
+              "publicLicenseId": "EMU-LIC-003"
+            }
+          ]
+        },
+        {
+          "at": "2026-09-24T04:59:51.092Z",
+          "url": "http://localhost:5173/api/v1/notifications",
+          "fixture": "buyer-licenses-mobile",
+          "status": 200,
+          "response": []
+        },
+        {
+          "at": "2026-09-24T04:59:51.093Z",
+          "url": "http://localhost:5173/api/v1/licenses/1/devices",
+          "fixture": "buyer-licenses-mobile",
+          "status": 200,
+          "response": [
+            {
+              "id": "device-1",
+              "deviceRef": "DESKTOP-AN-01",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-2",
+              "deviceRef": "LAPTOP-MKT-04",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-3",
+              "deviceRef": "DEVICE-03",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-4",
+              "deviceRef": "DEVICE-04",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-5",
+              "deviceRef": "DEVICE-05",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-6",
+              "deviceRef": "DEVICE-06",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-7",
+              "deviceRef": "DEVICE-07",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-8",
+              "deviceRef": "DEVICE-08",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-9",
+              "deviceRef": "DEVICE-09",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-10",
+              "deviceRef": "DEVICE-10",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-11",
+              "deviceRef": "DEVICE-11",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-12",
+              "deviceRef": "DEVICE-12",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-13",
+              "deviceRef": "DEVICE-13",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            },
+            {
+              "id": "device-14",
+              "deviceRef": "DEVICE-14",
+              "status": "ACTIVE",
+              "finality": "CONFIRMED"
+            }
+          ]
+        }
+      ],
+      "selectorLog": {
+        "recentOrders": 0,
+        "activeDevices": 14,
+        "licensesExpiringWithin30Days": 1,
+        "fixedDate": "2026-09-23T00:00:00.000Z"
+      }
+    }
+  ]
+}

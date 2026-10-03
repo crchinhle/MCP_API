@@ -1,0 +1,37 @@
+{
+  "runId": "release-20260920084541",
+  "generatedAt": "2026-09-20T08:45:42.940Z",
+  "classification": "LOCAL_VERIFIED",
+  "gitCommit": "f449b040a3244c5b8738e26a606e4c6621b1a842",
+  "workingTreeDirty": true,
+  "backendImage": null,
+  "frontendArtifact": null,
+  "abi": "backend/src/modules/blockchain/infrastructure/generated/license-registry.abi.json",
+  "contractAddress": "0xAf61c3712e0A5fe9d5be0b3Fe080C786076e2845",
+  "chainId": 11155111,
+  "deploymentBlock": 11738092,
+  "schemaVersion": "backend/database/schema.sql",
+  "openApiSnapshot": "backend/docs/openapi/openapi.json",
+  "checks": {
+    "baseline": {
+      "status": "PASS",
+      "output": "Baseline valid: 35 capabilities, 18 tables, unique owners locked.\n"
+    },
+    "releaseCheck": {
+      "status": "PASS",
+      "output": "{\n  \"status\": \"PASS\",\n  \"checkedFiles\": 8,\n  \"checkedConfigKeys\": 20\n}\n"
+    },
+    "security": {
+      "status": "PASS",
+      "output": "{\n  \"status\": \"PASS\",\n  \"trackedFilesScanned\": 339,\n  \"localEnvironmentScanned\": false,\n  \"secretFilesScanned\": true,\n  \"piiSurfacesScanned\": true,\n  \"activationSurfacesScanned\": true\n}\n"
+    },
+    "dependencyAudit": {
+      "status": "PASS",
+      "output": "{\n  \"status\": \"PASS\",\n  \"auditLevel\": \"high\",\n  \"output\": \"{\\n  \\\"advisories\\\": {},\\n  \\\"metadata\\\": {\\n    \\\"vulnerabilities\\\": {\\n      \\\"info\\\": 0,\\n      \\\"low\\\": 0,\\n      \\\"moderate\\\": 0,\\n      \\\"high\\\": 0,\\n      \\\"critical\\\": 0\\n    },\\n    \\\"dependencies\\\": 388,\\n    \\\"devDependencies\\\": 0,\\n    \\\"optionalDependencies\\\": 25,\\n    \\\"totalDependencies\\\": 413\\n  }\\n}\\n\"\n}\n"
+    }
+  },
+  "redaction": {
+    "secretsPersisted": false,
+    "credentialValuesPersisted": false
+  }
+}

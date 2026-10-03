@@ -1,0 +1,15 @@
+
+/* Orders table runtime alignment */
+.buyer-orders-table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.buyer-orders-cell-text,
+.buyer-orders-id {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

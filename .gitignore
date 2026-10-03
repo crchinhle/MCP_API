@@ -1,0 +1,16 @@
+# Local environment and credentials
+.env*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+.secrets/
+
+# Dependencies (generated output is intentionally included)
+node_modules/
+
+# Local configuration containing credentials
+/.kilo/kilo.jsonc

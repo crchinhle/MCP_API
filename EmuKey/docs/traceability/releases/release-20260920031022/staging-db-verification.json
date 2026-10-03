@@ -1,0 +1,20 @@
+{
+  "classification": "LOCAL_VERIFIED",
+  "database": "disposable PostgreSQL 18 with pgvector",
+  "schemaSource": "backend/database/schema.sql",
+  "initialization": "PASS",
+  "seedFirstRun": "PASS",
+  "seedSecondRun": "PASS",
+  "baselineVerification": "PASS",
+  "tables": 18,
+  "legacyColumns": {
+    "orders.service_terms_accepted_at": "PRESENT",
+    "plans.terms_version": "ABSENT",
+    "plans.terms_hash": "ABSENT",
+    "orders.terms_version_snapshot": "ABSENT",
+    "orders.terms_hash_snapshot": "ABSENT",
+    "orders.terms_accepted_at": "ABSENT"
+  },
+  "databaseUrlPersisted": false,
+  "environment": "DISPOSABLE_LOCAL_NOT_PRODUCTION"
+}

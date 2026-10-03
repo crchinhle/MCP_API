@@ -1,0 +1,185 @@
+{
+  "generatedAt": "2026-09-24T05:00:17.048Z",
+  "route": "/buyer/orders",
+  "figmaNode": "51:453",
+  "viewport": "1440x1024",
+  "deviceScaleFactor": 1,
+  "reference": {
+    "file": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\diff\\buyer-orders-reference.png",
+    "source": "figma-api_download_figma_images",
+    "sha256": "70a995c4f7c22245574ceaa61b6570cc9f83a05afca1a668242678661c0b95b6"
+  },
+  "live": {
+    "file": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\diff\\buyer-orders-live.png",
+    "sha256": "2935ba4fecf6c7d185d1c0b6302361cb7e2a7fe1166cc9534bde53ff162610bd",
+    "diff": {
+      "status": "FAIL_OVER_5_PERCENT",
+      "width": 1440,
+      "height": 1024,
+      "mismatchedPixels": 664462,
+      "totalPixels": 1474560,
+      "differencePercent": 45.0617,
+      "diffImage": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\diff\\buyer-orders__live.diff.png",
+      "heatmapImage": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\diff\\buyer-orders__live.heatmap.png",
+      "overlayImage": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\diff\\buyer-orders__live.overlay.png"
+    }
+  },
+  "fixture": {
+    "file": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\diff\\buyer-orders-fixture.png",
+    "sha256": "88da7efda71a90bc7dcd3f87f7253996827bab6d4d926899a36205c2878f38e1",
+    "diff": {
+      "status": "PASS_UNDER_5_PERCENT",
+      "width": 1440,
+      "height": 1024,
+      "mismatchedPixels": 53090,
+      "totalPixels": 1474560,
+      "differencePercent": 3.6004,
+      "diffImage": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\diff\\buyer-orders__fixture.diff.png",
+      "heatmapImage": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\diff\\buyer-orders__fixture.heatmap.png",
+      "overlayImage": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\diff\\buyer-orders__fixture.overlay.png"
+    },
+    "interception": true,
+    "fixtureRecord": {
+      "name": "buyer-orders",
+      "route": "/buyer/orders",
+      "viewport": "desktop",
+      "data": {
+        "orders": [
+          {
+            "id": "order-0218",
+            "orderNumber": "ORD-2026-0218",
+            "planId": "securedesk-25",
+            "planNameSnapshot": "25 thiết bị",
+            "maxActiveDevicesSnapshot": 25,
+            "priceVndSnapshot": 2450000,
+            "productNameSnapshot": "SecureDesk Pro",
+            "orderStatus": "WAITING_PAYMENT"
+          },
+          {
+            "id": "order-0207",
+            "orderNumber": "ORD-2026-0207",
+            "planId": "cloudstudio-10",
+            "planNameSnapshot": "10 thiết bị",
+            "maxActiveDevicesSnapshot": 10,
+            "priceVndSnapshot": 1890000,
+            "productNameSnapshot": "CloudStudio AI",
+            "orderStatus": "PAYMENT_ACCEPTED"
+          },
+          {
+            "id": "order-0199",
+            "orderNumber": "ORD-2026-0199",
+            "planId": "dataguard-5",
+            "planNameSnapshot": "5 thiết bị",
+            "maxActiveDevicesSnapshot": 5,
+            "priceVndSnapshot": 990000,
+            "productNameSnapshot": "DataGuard SDK",
+            "orderStatus": "PAYMENT_ACCEPTED"
+          },
+          {
+            "id": "order-0184",
+            "orderNumber": "ORD-2026-0184",
+            "planId": "securedesk-15",
+            "planNameSnapshot": "15 thiết bị",
+            "maxActiveDevicesSnapshot": 15,
+            "priceVndSnapshot": 1470000,
+            "productNameSnapshot": "SecureDesk Pro",
+            "orderStatus": "PAYMENT_ACCEPTED"
+          }
+        ]
+      },
+      "output": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\artifacts\\buyer-orders__fixture.png",
+      "status": "CAPTURED_WITH_INTERCEPT",
+      "interceptionLog": [
+        {
+          "at": "2026-09-24T04:59:46.088Z",
+          "url": "http://localhost:5173/api/v1/auth/refresh",
+          "fixture": "buyer-orders",
+          "status": 200,
+          "response": {
+            "accessToken": "visual-test-token",
+            "user": {
+              "id": "visual-user",
+              "email": "minhan@example.test",
+              "displayName": "Minh An",
+              "role": "CUSTOMER",
+              "status": "ACTIVE"
+            }
+          }
+        },
+        {
+          "at": "2026-09-24T04:59:46.171Z",
+          "url": "http://localhost:5173/api/v1/notifications",
+          "fixture": "buyer-orders",
+          "status": 200,
+          "response": []
+        },
+        {
+          "at": "2026-09-24T04:59:46.177Z",
+          "url": "http://localhost:5173/api/v1/orders",
+          "fixture": "buyer-orders",
+          "status": 200,
+          "response": [
+            {
+              "id": "order-0218",
+              "orderNumber": "ORD-2026-0218",
+              "planId": "securedesk-25",
+              "planNameSnapshot": "25 thiết bị",
+              "maxActiveDevicesSnapshot": 25,
+              "priceVndSnapshot": 2450000,
+              "productNameSnapshot": "SecureDesk Pro",
+              "orderStatus": "WAITING_PAYMENT"
+            },
+            {
+              "id": "order-0207",
+              "orderNumber": "ORD-2026-0207",
+              "planId": "cloudstudio-10",
+              "planNameSnapshot": "10 thiết bị",
+              "maxActiveDevicesSnapshot": 10,
+              "priceVndSnapshot": 1890000,
+              "productNameSnapshot": "CloudStudio AI",
+              "orderStatus": "PAYMENT_ACCEPTED"
+            },
+            {
+              "id": "order-0199",
+              "orderNumber": "ORD-2026-0199",
+              "planId": "dataguard-5",
+              "planNameSnapshot": "5 thiết bị",
+              "maxActiveDevicesSnapshot": 5,
+              "priceVndSnapshot": 990000,
+              "productNameSnapshot": "DataGuard SDK",
+              "orderStatus": "PAYMENT_ACCEPTED"
+            },
+            {
+              "id": "order-0184",
+              "orderNumber": "ORD-2026-0184",
+              "planId": "securedesk-15",
+              "planNameSnapshot": "15 thiết bị",
+              "maxActiveDevicesSnapshot": 15,
+              "priceVndSnapshot": 1470000,
+              "productNameSnapshot": "SecureDesk Pro",
+              "orderStatus": "PAYMENT_ACCEPTED"
+            }
+          ]
+        },
+        {
+          "at": "2026-09-24T04:59:46.324Z",
+          "url": "http://localhost:5173/api/v1/notifications",
+          "fixture": "buyer-orders",
+          "status": 200,
+          "response": []
+        }
+      ],
+      "selectorLog": {
+        "recentOrders": 4,
+        "activeDevices": 0,
+        "licensesExpiringWithin30Days": 1,
+        "fixedDate": "2026-09-23T00:00:00.000Z"
+      }
+    }
+  },
+  "artifacts": {
+    "overlay": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\diff\\buyer-orders__fixture.overlay.png",
+    "diff": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\diff\\buyer-orders__fixture.diff.png",
+    "heatmap": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\diff\\buyer-orders__fixture.heatmap.png"
+  }
+}

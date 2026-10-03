@@ -1,0 +1,14 @@
+interface:
+  display_name: Workspace Hygiene Guard
+  short_description: Prevent duplicate code and workspace clutter
+  default_prompt: Inspect this repository before and after the requested change, reuse
+    existing code, and block duplicate or junk artifacts.
+  icon_small: assets/icon.svg
+  icon_large: assets/icon.svg
+policy:
+  products:
+  - chatgpt
+  - codex
+  - api
+  - atlas
+  allow_implicit_invocation: true

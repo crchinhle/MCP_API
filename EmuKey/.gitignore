@@ -1,0 +1,53 @@
+# Environment and secrets
+.env*
+!.env.example
+*.jks
+*.keystore
+*.pem
+*.key
+*.p12
+*.pfx
+
+# JavaScript dependencies and generated output
+node_modules/
+dist/
+build/
+coverage/
+.turbo/
+.vite/
+playwright-report/
+test-results/
+
+# Android and Gradle local/generated state
+.gradle/
+local.properties
+*.apk
+*.aab
+captures/
+
+# Editors, operating systems, and logs
+.idea/
+.vscode/
+*.iml
+*.log
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Patch and backup artifacts
+*.bak
+*.orig
+*.rej
+
+# Runtime data belongs to volumes/object storage, never the repository.
+/backend/data/
+
+# Release evidence bundles may contain only redacted text evidence. Never retain dumps.
+/docs/traceability/releases/**/postgres.dump
+
+# Local agent tooling is not product source.
+/skill/
+/skills/
+kilo.json
+skills-lock.json

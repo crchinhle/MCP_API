@@ -1,0 +1,22 @@
+schemaVersion: 1
+component: backend
+container:
+  context: .
+  dockerfile: Dockerfile
+  image: emukey-backend
+ci:
+  - corepack pnpm install --frozen-lockfile
+  - corepack pnpm lint
+  - corepack pnpm typecheck
+  - corepack pnpm test
+  - corepack pnpm contracts:verify
+  - corepack pnpm delivery:check
+  - corepack pnpm openapi:check
+  - corepack pnpm build
+cd:
+  artifact: oci-image
+  processes:
+    api: node dist/entrypoints/api/main.js
+    worker: node dist/entrypoints/worker/main.js
+  readinessPath: /api/v1/health/ready
+  requiredServices: [postgresql, redis]

@@ -1,0 +1,21 @@
+
+/* Keep primary navigation directly beside the notification/account cluster. */
+.site-header-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.site-header-right .public-nav {
+  margin: 0;
+  flex: 0 1 auto;
+}
+
+.site-header-right .header-actions,
+.site-header-right .public-header .header-actions {
+  margin-left: 0;
+  flex: 0 0 auto;
+}

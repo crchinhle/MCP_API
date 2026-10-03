@@ -1,0 +1,25 @@
+{
+  "runId": "ui-sepay-20260920-1017",
+  "classification": "REAL_VERIFIED_TO_PROVIDER_BOUNDARY",
+  "surface": "Playwright browser",
+  "steps": [
+    "catalog",
+    "login",
+    "published plan",
+    "create order",
+    "load Service Terms",
+    "Service Terms checkbox gate",
+    "accept Service Terms",
+    "payment request",
+    "SePay Sandbox checkout form",
+    "SePay Sandbox Giả lập thanh toán",
+    "return to EmuKey payment screen"
+  ],
+  "orderId": "61c32859-b612-4c35-a44e-2378175aec60",
+  "paymentAttemptId": "1aec411a-00cf-4b98-bcc0-c7d6d29b69f1",
+  "providerCallbackReceived": true,
+  "providerCallbackAccepted": false,
+  "providerRejection": "PAYMENT_OUTSIDE_ACCEPTED_WINDOW",
+  "securityDecision": "preserved payment cutoff; no manual payment effect",
+  "traceScreenshotVideoCaptured": true
+}

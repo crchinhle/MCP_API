@@ -1,0 +1,10 @@
+{
+  "network": "sepolia",
+  "chainId": 11155111,
+  "contractName": "LicenseRegistry",
+  "contractAddress": "0xAf61c3712e0A5fe9d5be0b3Fe080C786076e2845",
+  "deploymentTransaction": "0x26b27aa01bc194fe4b9505009b74e09d16794b92da870fd564d9f3ddc77db77e",
+  "deploymentBlock": 11738092,
+  "abi": "../../src/modules/blockchain/infrastructure/generated/license-registry.abi.json",
+  "domain": "DOMAIN_PLAN_V2"
+}

@@ -1,0 +1,73 @@
+name: Phase 8 External and Release Evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_sepay:
+        description: Run SePay Sandbox callback flow
+        required: false
+        default: false
+        type: boolean
+      run_sepolia:
+        description: Run Sepolia provider/pipeline evidence
+        required: false
+        default: false
+        type: boolean
+      run_mobile:
+        description: Run Maestro on a configured device
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  external:
+    runs-on: ubuntu-latest
+    environment: phase8-external
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.21.0
+      - name: Enable Corepack and install dependencies
+        run: |
+          corepack enable
+          corepack pnpm --dir backend install --frozen-lockfile
+          corepack pnpm --dir frontend install --frozen-lockfile
+      - name: Validate release structure
+        run: corepack pnpm --dir backend release:check
+      - name: Run opted-in provider evidence
+        env:
+          RUN_SEPAY_EXTERNAL: ${{ inputs.run_sepay && 'true' || 'false' }}
+          RUN_SEPOLIA_EXTERNAL: ${{ inputs.run_sepolia && 'true' || 'false' }}
+          RUN_GEMINI_EXTERNAL: ${{ vars.RUN_GEMINI_EXTERNAL || 'false' }}
+          RUN_CLOUDINARY_EXTERNAL: ${{ vars.RUN_CLOUDINARY_EXTERNAL || 'false' }}
+          RUN_BREVO_EXTERNAL: ${{ vars.RUN_BREVO_EXTERNAL || 'false' }}
+          RUN_FCM_EXTERNAL: ${{ vars.RUN_FCM_EXTERNAL || 'false' }}
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          REDIS_URL: ${{ secrets.STAGING_REDIS_URL }}
+          SEPAY_ENV: sandbox
+          SEPAY_MERCHANT_ID: ${{ secrets.SEPAY_SANDBOX_MERCHANT_ID }}
+          SEPAY_SECRET_KEY: ${{ secrets.SEPAY_SANDBOX_SECRET_KEY }}
+          EVM_NETWORK: sepolia
+          EVM_CHAIN_ID: '11155111'
+          EVM_DEPLOYMENT_BLOCK: '11738092'
+          EVM_INDEXER_BATCH_SIZE: '500'
+          EVM_RPC_HTTP_URL: ${{ secrets.SEPOLIA_RPC_HTTP_URL }}
+          EVM_RPC_FALLBACK_HTTP_URL: ${{ secrets.SEPOLIA_RPC_FALLBACK_HTTP_URL }}
+          EVM_CONTRACT_ADDRESS: ${{ vars.SEPOLIA_CONTRACT_ADDRESS || '0xAf61c3712e0A5fe9d5be0b3Fe080C786076e2845' }}
+          EVM_RELAYER_PRIVATE_KEY: ${{ secrets.SEPOLIA_RELAYER_PRIVATE_KEY }}
+          E2E_TEST_EMAIL_RECIPIENT: ${{ secrets.E2E_TEST_EMAIL_RECIPIENT }}
+          E2E_TEST_FCM_TOKEN: ${{ secrets.E2E_TEST_FCM_TOKEN }}
+        run: corepack pnpm --dir backend build && corepack pnpm --dir backend test:external
+      - name: Upload redacted evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase8-external-evidence
+          path: docs/traceability/external-provider-evidence.json
+          if-no-files-found: error

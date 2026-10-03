@@ -1,0 +1,250 @@
+{
+  "generatedAt": "2026-09-24T05:00:17.034Z",
+  "route": "/buyer",
+  "figmaNode": "519:1740",
+  "viewport": "1440x1024",
+  "deviceScaleFactor": 1,
+  "reference": {
+    "file": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\diff\\buyer-home-reference.png",
+    "source": "figma-api_download_figma_images",
+    "sha256": "f73c82bc75101ccc1f8aa324bb8e796958962c68e8c4a43e276c2e550d684bbd"
+  },
+  "live": {
+    "file": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\diff\\buyer-home-live.png",
+    "sha256": "2935ba4fecf6c7d185d1c0b6302361cb7e2a7fe1166cc9534bde53ff162610bd",
+    "diff": {
+      "status": "FAIL_OVER_5_PERCENT",
+      "width": 1440,
+      "height": 1024,
+      "mismatchedPixels": 647111,
+      "totalPixels": 1474560,
+      "differencePercent": 43.885,
+      "diffImage": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\diff\\buyer-home__live.diff.png",
+      "heatmapImage": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\diff\\buyer-home__live.heatmap.png",
+      "overlayImage": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\diff\\buyer-home__live.overlay.png"
+    }
+  },
+  "fixture": {
+    "file": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\diff\\buyer-home-fixture.png",
+    "sha256": "e5020f66b1eed6cf0a4a53a939eb4f7217555a2025ccf6507fba9ee8636f91bf",
+    "diff": {
+      "status": "PASS_UNDER_5_PERCENT",
+      "width": 1440,
+      "height": 1024,
+      "mismatchedPixels": 23475,
+      "totalPixels": 1474560,
+      "differencePercent": 1.592,
+      "diffImage": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\diff\\buyer-home__fixture.diff.png",
+      "heatmapImage": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\diff\\buyer-home__fixture.heatmap.png",
+      "overlayImage": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\diff\\buyer-home__fixture.overlay.png"
+    },
+    "interception": true,
+    "fixtureRecord": {
+      "name": "buyer-home",
+      "route": "/buyer",
+      "viewport": "desktop",
+      "data": {
+        "licenses": [
+          {
+            "id": "1",
+            "productName": "SecureDesk Pro",
+            "status": "ACTIVE",
+            "maxActiveDevices": 25,
+            "activationKeyAvailable": true,
+            "expiresAt": "2027-12-31T00:00:00.000Z"
+          },
+          {
+            "id": "2",
+            "productName": "CloudStudio AI",
+            "status": "ACTIVE",
+            "maxActiveDevices": 10,
+            "activationKeyAvailable": false,
+            "expiresAt": "2027-02-01T00:00:00.000Z"
+          },
+          {
+            "id": "3",
+            "productName": "DataGuard SDK",
+            "status": "ACTIVE",
+            "maxActiveDevices": 5,
+            "activationKeyAvailable": false,
+            "expiresAt": "2026-10-01T00:00:00.000Z"
+          }
+        ],
+        "orders": [
+          {
+            "id": "ORD-001",
+            "orderNumber": "ORD-001",
+            "planNameSnapshot": "Gói Basic",
+            "priceVndSnapshot": 5000000,
+            "orderStatus": "PAYMENT_ACCEPTED",
+            "productNameSnapshot": "SecureDesk Pro"
+          },
+          {
+            "id": "ORD-002",
+            "orderNumber": "ORD-002",
+            "planNameSnapshot": "Gói Pro",
+            "priceVndSnapshot": 8000000,
+            "orderStatus": "WAITING_PAYMENT",
+            "productNameSnapshot": "CloudStudio AI"
+          }
+        ],
+        "devicesByLicense": {
+          "1": [
+            {
+              "id": "device-a",
+              "deviceRef": "DESKTOP-AN-01",
+              "status": "ACTIVE",
+              "bindingGeneration": 1
+            },
+            {
+              "id": "device-b",
+              "deviceRef": "LAPTOP-MKT-04",
+              "status": "ACTIVE",
+              "bindingGeneration": 1
+            },
+            {
+              "id": "device-c",
+              "deviceRef": "DESKTOP-DEV-02",
+              "status": "ACTIVE",
+              "bindingGeneration": 1
+            }
+          ]
+        }
+      },
+      "output": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\artifacts\\buyer-home-fixture.png",
+      "status": "CAPTURED_WITH_INTERCEPT",
+      "interceptionLog": [
+        {
+          "at": "2026-09-24T04:59:42.739Z",
+          "url": "http://localhost:5173/api/v1/auth/refresh",
+          "fixture": "buyer-home",
+          "status": 200,
+          "response": {
+            "accessToken": "visual-test-token",
+            "user": {
+              "id": "visual-user",
+              "email": "minhan@example.test",
+              "displayName": "Minh An",
+              "role": "CUSTOMER",
+              "status": "ACTIVE"
+            }
+          }
+        },
+        {
+          "at": "2026-09-24T04:59:42.834Z",
+          "url": "http://localhost:5173/api/v1/notifications",
+          "fixture": "buyer-home",
+          "status": 200,
+          "response": []
+        },
+        {
+          "at": "2026-09-24T04:59:42.837Z",
+          "url": "http://localhost:5173/api/v1/licenses",
+          "fixture": "buyer-home",
+          "status": 200,
+          "response": [
+            {
+              "id": "1",
+              "productName": "SecureDesk Pro",
+              "status": "ACTIVE",
+              "maxActiveDevices": 25,
+              "activationKeyAvailable": true,
+              "expiresAt": "2027-12-31T00:00:00.000Z"
+            },
+            {
+              "id": "2",
+              "productName": "CloudStudio AI",
+              "status": "ACTIVE",
+              "maxActiveDevices": 10,
+              "activationKeyAvailable": false,
+              "expiresAt": "2027-02-01T00:00:00.000Z"
+            },
+            {
+              "id": "3",
+              "productName": "DataGuard SDK",
+              "status": "ACTIVE",
+              "maxActiveDevices": 5,
+              "activationKeyAvailable": false,
+              "expiresAt": "2026-10-01T00:00:00.000Z"
+            }
+          ]
+        },
+        {
+          "at": "2026-09-24T04:59:42.838Z",
+          "url": "http://localhost:5173/api/v1/orders",
+          "fixture": "buyer-home",
+          "status": 200,
+          "response": [
+            {
+              "id": "ORD-001",
+              "orderNumber": "ORD-001",
+              "planNameSnapshot": "Gói Basic",
+              "priceVndSnapshot": 5000000,
+              "orderStatus": "PAYMENT_ACCEPTED",
+              "productNameSnapshot": "SecureDesk Pro"
+            },
+            {
+              "id": "ORD-002",
+              "orderNumber": "ORD-002",
+              "planNameSnapshot": "Gói Pro",
+              "priceVndSnapshot": 8000000,
+              "orderStatus": "WAITING_PAYMENT",
+              "productNameSnapshot": "CloudStudio AI"
+            }
+          ]
+        },
+        {
+          "at": "2026-09-24T04:59:42.981Z",
+          "url": "http://localhost:5173/api/v1/licenses/1/devices",
+          "fixture": "buyer-home",
+          "status": 200,
+          "response": [
+            {
+              "id": "device-a",
+              "deviceRef": "DESKTOP-AN-01",
+              "status": "ACTIVE",
+              "bindingGeneration": 1
+            },
+            {
+              "id": "device-b",
+              "deviceRef": "LAPTOP-MKT-04",
+              "status": "ACTIVE",
+              "bindingGeneration": 1
+            },
+            {
+              "id": "device-c",
+              "deviceRef": "DESKTOP-DEV-02",
+              "status": "ACTIVE",
+              "bindingGeneration": 1
+            }
+          ]
+        },
+        {
+          "at": "2026-09-24T04:59:42.984Z",
+          "url": "http://localhost:5173/api/v1/licenses/2/devices",
+          "fixture": "buyer-home",
+          "status": 200,
+          "response": []
+        },
+        {
+          "at": "2026-09-24T04:59:42.984Z",
+          "url": "http://localhost:5173/api/v1/licenses/3/devices",
+          "fixture": "buyer-home",
+          "status": 200,
+          "response": []
+        }
+      ],
+      "selectorLog": {
+        "recentOrders": 2,
+        "activeDevices": 3,
+        "licensesExpiringWithin30Days": 1,
+        "fixedDate": "2026-09-23T00:00:00.000Z"
+      }
+    }
+  },
+  "artifacts": {
+    "overlay": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\diff\\buyer-home__fixture.overlay.png",
+    "diff": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\diff\\buyer-home__fixture.diff.png",
+    "heatmap": "D:\\TLHT\\KLTN\\UY\\EmuKey\\frontend\\visual-regression\\diff\\buyer-home__fixture.heatmap.png"
+  }
+}

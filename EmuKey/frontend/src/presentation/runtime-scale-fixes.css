@@ -1,0 +1,190 @@
+
+/* Runtime scale corrections */
+.brand-wordmark--header {
+  font-family: 'Great Vibes', 'Segoe Script', 'Brush Script MT', cursive;
+  font-size: 34px;
+  font-weight: 400;
+  line-height: 1;
+  min-height: 44px;
+}
+
+.customer-navigation {
+  min-height: 52px;
+  padding: 0 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.customer-navigation a {
+  min-height: 44px;
+  padding: 10px 16px;
+  display: inline-flex;
+  align-items: center;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.customer-navigation a.active {
+  border-bottom-color: var(--primary);
+  color: var(--primary);
+}
+
+.auth-story h1 {
+  font-size: 32px;
+  line-height: 1.2;
+}
+
+.auth-story > p,
+.benefit-list li {
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.auth-card {
+  width: min(500px, 100%);
+  padding: 40px;
+}
+
+.auth-card h2 {
+  font-size: 28px;
+  line-height: 1.2;
+}
+
+.auth-card .ant-input,
+.auth-card .ant-input-affix-wrapper,
+.auth-card .ant-btn {
+  min-height: 48px;
+}
+
+.auth-card .ant-input-affix-wrapper > .ant-input {
+  min-height: 0;
+}
+
+.auth-area {
+  padding: 48px clamp(32px, 8vw, 140px);
+}
+
+.catalog-content,
+.detail-content,
+.buyer-home-main,
+.buyer-orders-main,
+.buyer-licenses-main {
+  width: min(100%, 1320px);
+  margin-inline: auto;
+}
+
+.buyer-home-main {
+  padding-inline: 40px;
+}
+
+.buyer-home-welcome {
+  padding: 32px;
+}
+
+.buyer-home-welcome h1 {
+  font-size: 32px;
+  line-height: 1.2;
+}
+
+.buyer-home-welcome p,
+.buyer-home-shortcut p {
+  font-size: 15px;
+}
+
+.buyer-home-metric {
+  min-height: 124px;
+  padding: 24px;
+}
+
+.buyer-home-metric strong {
+  font-size: 32px;
+  line-height: 1.2;
+}
+
+.buyer-home-shortcut {
+  min-height: 168px;
+  padding: 24px;
+}
+
+.buyer-home-shortcut h3 {
+  font-size: 18px;
+}
+
+.product-card .ant-card-body,
+.public-home-featured-card .ant-card-body {
+  padding: 28px;
+}
+
+.product-card p,
+.public-home-featured-card p {
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.product-card .ant-btn,
+.public-home-featured-card .ant-btn {
+  min-height: 44px;
+}
+
+@media (max-width: 760px) {
+  .role-sidebar { width: 100%; padding: 12px 16px; flex-direction: row; align-items: center; justify-content: space-between; }
+  .role-sidebar .role-account-footer { display: none; }
+  .role-sidebar .role-menu-trigger { align-self: center; }
+  .role-mobile-menu .mobile-menu-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+  .role-main { padding: 24px 16px 80px; }
+  .role-account-row { flex-wrap: wrap; gap: 8px; }
+  .auth-story { padding: 24px; min-height: auto; }
+  .auth-story h1 { font-size: 22px; margin-block: 16px 0; }
+  .auth-story > p, .auth-story .benefit-list { display: none; }
+  .auth-area { padding: 24px 16px 80px; }
+  .auth-card { padding: 24px; }
+  .auth-card h2 { font-size: 26px; }
+  .remember-row { flex-wrap: wrap; }
+  .card-heading, .section-heading { flex-wrap: wrap; gap: 12px; }
+  .card-heading .ant-input-search { width: 100%; }
+  .workspace-card { min-width: 0; }
+  .knowledge-upload, .file-picker { min-width: 0; }
+  .buyer-licenses-tabs, .buyer-orders-tabs { overflow-x: auto; }
+  .buyer-licenses-tabs button, .buyer-orders-tabs button { flex-shrink: 0; }
+  .stack-list article { flex-wrap: wrap; align-items: flex-start; }
+  .stack-list article > div { min-width: 0; width: 100%; }
+  .stack-list article > .table-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .stack-list article strong { overflow-wrap: anywhere; }
+  .public-help-content { padding: 24px 16px; }
+  .public-help-card { padding: 24px; }
+  .customer-navigation {
+    padding: 0 16px;
+    overflow-x: auto;
+  }
+
+  .customer-navigation a {
+    white-space: nowrap;
+  }
+
+  .buyer-home-main {
+    padding-inline: 16px;
+  }
+}
+
+.workspace-screen, .role-main { font-size: 16px; line-height: 1.6; }
+.workspace-card h2, .section-title { font-size: 22px; line-height: 1.35; }
+.workspace-card p, .workspace-card small { overflow-wrap: anywhere; }
+.workspace-actions, .composer-actions { flex-wrap: wrap; gap: 12px; }
+.public-help-card { width: min(900px, 100%); gap: 16px; }
+.public-help-card h1 { font-size: 30px; line-height: 1.3; }
+.public-help-card h2 { margin: 16px 0 0; font-size: 22px; line-height: 1.4; }
+.public-help-card p { font-size: 16px; line-height: 1.7; }
+.buyer-orders-toolbar { grid-template-columns: minmax(0, 1fr) minmax(180px, 280px) auto; }
+@media (max-width: 760px) {
+  .buyer-orders-toolbar { grid-template-columns: 1fr; }
+  .public-help-card h1 { font-size: 26px; }
+}
+.comparison-selection { max-height: 360px; overflow-y: auto; }
+.buyer-license-status--pending, .buyer-license-status--pending_onchain, .buyer-license-status--suspended { color: var(--warning-text); background: var(--warning-surface); border-color: var(--warning-border); }
+.buyer-license-status--revoked, .buyer-license-status--expired { color: var(--error-text); background: var(--error-surface); border-color: var(--error-border); }

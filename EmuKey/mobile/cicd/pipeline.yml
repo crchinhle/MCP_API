@@ -1,0 +1,18 @@
+schemaVersion: 1
+component: mobile
+container:
+  context: .
+  dockerfile: Dockerfile
+  image: emukey-mobile
+ci:
+  - corepack pnpm install --frozen-lockfile
+  - corepack pnpm exec expo install --check
+  - corepack pnpm lint
+  - corepack pnpm typecheck
+  - corepack pnpm test
+  - corepack pnpm openapi:check
+  - corepack pnpm build
+cd:
+  artifact: expo-android-bundle
+  buildArguments: [EXPO_PUBLIC_API_URL]
+  developmentPort: 8081

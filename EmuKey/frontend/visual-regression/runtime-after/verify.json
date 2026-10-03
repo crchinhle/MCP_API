@@ -1,0 +1,119 @@
+[
+  {
+    "route": "/",
+    "screenshot": "home_verify.png",
+    "data": {
+      "route": "/",
+      "hero": {
+        "x": 356,
+        "w": 1208,
+        "y": 72,
+        "h": 227
+      },
+      "content": {
+        "x": 300,
+        "w": 1320,
+        "y": 72,
+        "h": 968
+      },
+      "featured": {
+        "x": 300,
+        "w": 1320,
+        "y": 299,
+        "h": 742
+      },
+      "headerActions": {
+        "x": 1695,
+        "w": 169,
+        "y": 16,
+        "h": 40
+      },
+      "notification": {
+        "x": 1695,
+        "w": 40,
+        "y": 16,
+        "h": 40
+      },
+      "account": {
+        "x": 1739,
+        "w": 125,
+        "y": 16,
+        "h": 40
+      },
+      "nav": {
+        "x": 1211,
+        "w": 476,
+        "y": 14,
+        "h": 44
+      }
+    }
+  },
+  {
+    "route": "/buyer",
+    "screenshot": "buy_verify.png",
+    "data": {
+      "route": "/buyer",
+      "hero": null,
+      "content": null,
+      "featured": null,
+      "headerActions": {
+        "x": 1695,
+        "w": 169,
+        "y": 16,
+        "h": 40
+      },
+      "notification": {
+        "x": 1695,
+        "w": 40,
+        "y": 16,
+        "h": 40
+      },
+      "account": {
+        "x": 1739,
+        "w": 125,
+        "y": 16,
+        "h": 40
+      },
+      "nav": {
+        "x": 1211,
+        "w": 476,
+        "y": 14,
+        "h": 44
+      }
+    }
+  },
+  {
+    "route": "/buyer/orders",
+    "screenshot": "buy_verify.png",
+    "data": {
+      "route": "/buyer/orders",
+      "hero": null,
+      "content": null,
+      "featured": null,
+      "headerActions": {
+        "x": 1695,
+        "w": 169,
+        "y": 16,
+        "h": 40
+      },
+      "notification": {
+        "x": 1695,
+        "w": 40,
+        "y": 16,
+        "h": 40
+      },
+      "account": {
+        "x": 1739,
+        "w": 125,
+        "y": 16,
+        "h": 40
+      },
+      "nav": {
+        "x": 1211,
+        "w": 476,
+        "y": 14,
+        "h": 44
+      }
+    }
+  }
+]

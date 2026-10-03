@@ -1,0 +1,27 @@
+{
+  "runId": "ui-sepay-fixed-20260920-1033",
+  "providerRaw": {
+    "ipnTimestampUnix": 1789900216,
+    "transactionDateLocal": "2026-09-20 17:30:16",
+    "providerEventId": "9d81c728-b4de-11f1-b21a-a6006ab65aca"
+  },
+  "mapping": {
+    "ipnTimestampUnix": "callback delivery evidence only",
+    "transactionDateLocal": "SePay payment occurrence candidate",
+    "transactionDateLocalParsedAs": "Asia/Ho_Chi_Minh",
+    "providerOccurredAt": "2026-09-20T10:30:16.000Z",
+    "databaseColumn": "payment_transactions.provider_occurred_at"
+  },
+  "boundaries": {
+    "orderCreatedAt": "2026-09-20T10:32:39.140Z",
+    "serviceTermsAcceptedAt": "redacted timestamp from same Order; occurred after Order creation",
+    "paymentAttemptCreatedAt": "captured in database run",
+    "providerCallbackReceivedAt": "captured by API request log",
+    "databaseNowAtInspection": "2026-09-20T10:28:12.628Z"
+  },
+  "classification": "UNMATCHED",
+  "reviewReason": "PAYMENT_OUTSIDE_ACCEPTED_WINDOW",
+  "securityDecision": "correct fail-closed rejection; no skew compensation applied",
+  "rootCause": "SePay Sandbox provider timestamps are approximately 143 seconds behind the newly-created Order; both provider timestamp fields agree, so this is provider-side behavior after correct adapter mapping.",
+  "redaction": { "secret": false, "authorization": false, "activationKey": false }
+}

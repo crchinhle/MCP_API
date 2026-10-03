@@ -1,0 +1,22 @@
+{
+  "name": "@emukey/contracts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "hardhat compile",
+    "test": "hardhat test nodejs && node scripts/check-public-surface.mjs",
+    "abi:export": "node scripts/export-abi.mjs",
+    "node": "hardhat node --hostname 0.0.0.0",
+    "deploy:local": "hardhat compile && node scripts/deploy-local.mjs",
+    "deploy:sepolia": "node --env-file-if-exists=../.env ./node_modules/hardhat/dist/src/cli.js ignition deploy ignition/modules/LicenseRegistry.ts --network sepolia",
+    "deployment:show": "node scripts/print-deployment.mjs"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-ignition": "3.1.8",
+    "@nomicfoundation/hardhat-ignition-viem": "3.1.6",
+    "@nomicfoundation/hardhat-toolbox-viem": "5.0.7",
+    "@openzeppelin/contracts": "5.6.1",
+    "hardhat": "3.15.0",
+    "viem": "2.56.3"
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "name": "@emukey/frontend",
+  "private": true,
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=22.13.0 <23"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "e2e": "playwright test",
+    "visual:regression": "node scripts/visual-regression.mjs",
+    "visual:diff": "node scripts/visual-diff.mjs",
+    "visual:fixture": "node scripts/visual-fixture.mjs",
+    "e2e:external": "node scripts/run-playwright.mjs --external",
+    "e2e:orchestrated": "node ../scripts/run-web-e2e.mjs",
+    "lint": "eslint .",
+    "openapi:check": "node scripts/generate-openapi.mjs --check",
+    "openapi:generate": "node scripts/generate-openapi.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ant-design/icons": "6.3.4",
+    "@fontsource-variable/ibm-plex-sans": "5.3.0",
+    "@fontsource/great-vibes": "5.3.0",
+    "@fontsource/ibm-plex-mono": "5.3.0",
+    "@tanstack/react-query": "5.102.8",
+    "antd": "6.6.2",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-router-dom": "7.18.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@hey-api/openapi-ts": "0.99.0",
+    "@playwright/test": "1.62.1",
+    "@testing-library/dom": "10.4.1",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.7",
+    "@types/node": "22.20.1",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.5",
+    "@vitejs/plugin-react": "6.1.1",
+    "eslint": "10.9.1",
+    "jsdom": "29.0.1",
+    "pixelmatch": "6.0.0",
+    "pngjs": "7.0.0",
+    "prettier": "3.9.6",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.69.0",
+    "viem": "2.56.3",
+    "vite": "8.2.2",
+    "vitest": "4.1.11"
+  }
+}

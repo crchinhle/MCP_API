@@ -1,0 +1,114 @@
+name: emukey
+
+services:
+  chain:
+    profiles: [local-chain]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: build
+    command: ["corepack", "pnpm", "--dir", "contracts", "node"]
+    ports:
+      - "127.0.0.1:${EVM_RPC_PORT:-8545}:8545"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8545',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'eth_chainId',params:[]})}).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  chain-deploy:
+    profiles: [local-chain]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      target: build
+    command: ["corepack", "pnpm", "--dir", "contracts", "deploy:local"]
+    environment:
+      LOCAL_RPC_URL: http://chain:8545
+    depends_on:
+      chain:
+        condition: service_healthy
+
+  redis:
+    image: redis:8.2-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    volumes:
+      - redis-data:/data
+
+  database-initialize:
+    profiles: [maintenance]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["node", "dist/entrypoints/database/initialize.js"]
+    env_file:
+      - ./backend/.env
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/.env
+    restart: unless-stopped
+    environment: &backend-environment
+      PORT: 3000
+      REDIS_URL: redis://redis:6379
+      EVM_RPC_FALLBACK_HTTP_URL: ${EVM_RPC_FALLBACK_HTTP_URL:-https://ethereum-sepolia-rpc.publicnode.com}
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/v1/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    ports:
+      - "127.0.0.1:${API_PORT:-3000}:3000"
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["node", "dist/entrypoints/worker/main.js"]
+    env_file:
+      - ./backend/.env
+    restart: unless-stopped
+    environment: *backend-environment
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: /api/v1
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-5173}:80"
+
+volumes:
+  redis-data:

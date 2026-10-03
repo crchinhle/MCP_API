@@ -1,0 +1,2318 @@
+{
+  "generatedAt": "2026-09-24T11:21:33.620Z",
+  "base": "http://localhost:5174",
+  "results": [
+    {
+      "route": "/",
+      "viewport": "1920",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 69,
+          "height": 72
+        },
+        "header": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "0px 56px",
+          "width": 1920,
+          "height": 72
+        },
+        "nav": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 15,
+          "lineHeight": "24px",
+          "fontWeight": "500",
+          "display": "flex",
+          "padding": "9px 14px 5px",
+          "width": 95,
+          "height": 44
+        },
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 38,
+          "lineHeight": "44.08px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 760,
+          "height": 44
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 1920,
+          "height": 1080
+        },
+        "custom_input:not([type=\"hidden\"])": null,
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 15,
+          "lineHeight": "24px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "0px 15px",
+          "width": 104,
+          "height": 44
+        },
+        "custom_.auth-card": null,
+        "custom_.catalog-content": null,
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/auth",
+      "viewport": "1920",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 492,
+          "height": 72
+        },
+        "header": null,
+        "nav": null,
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 24,
+          "lineHeight": "32px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 480,
+          "height": 64
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 1920,
+          "height": 1080
+        },
+        "custom_input:not([type=\"hidden\"])": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "inline-block",
+          "padding": "8.2px 11px",
+          "width": 398,
+          "height": 44
+        },
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "10px 16px",
+          "width": 120,
+          "height": 40
+        },
+        "custom_.auth-card": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "40px",
+          "width": 480,
+          "height": 631
+        },
+        "custom_.catalog-content": null,
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/products",
+      "viewport": "1920",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 69,
+          "height": 72
+        },
+        "header": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "0px 56px",
+          "width": 1920,
+          "height": 72
+        },
+        "nav": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 15,
+          "lineHeight": "24px",
+          "fontWeight": "500",
+          "display": "flex",
+          "padding": "9px 14px 5px",
+          "width": 95,
+          "height": 44
+        },
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 32,
+          "lineHeight": "40px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 435,
+          "height": 40
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 1920,
+          "height": 1080
+        },
+        "custom_input:not([type=\"hidden\"])": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "8.2px 11px",
+          "width": 421,
+          "height": 45
+        },
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 15,
+          "lineHeight": "24px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "0px 15px",
+          "width": 104,
+          "height": 44
+        },
+        "custom_.auth-card": null,
+        "custom_.catalog-content": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "40px 72px",
+          "width": 1440,
+          "height": 1008
+        },
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/buyer",
+      "viewport": "1920",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 492,
+          "height": 72
+        },
+        "header": null,
+        "nav": null,
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 24,
+          "lineHeight": "32px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 480,
+          "height": 64
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 1920,
+          "height": 1080
+        },
+        "custom_input:not([type=\"hidden\"])": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "inline-block",
+          "padding": "8.2px 11px",
+          "width": 398,
+          "height": 44
+        },
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "10px 16px",
+          "width": 120,
+          "height": 40
+        },
+        "custom_.auth-card": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "40px",
+          "width": 480,
+          "height": 631
+        },
+        "custom_.catalog-content": null,
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/buyer/orders",
+      "viewport": "1920",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 492,
+          "height": 72
+        },
+        "header": null,
+        "nav": null,
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 24,
+          "lineHeight": "32px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 480,
+          "height": 64
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 1920,
+          "height": 1080
+        },
+        "custom_input:not([type=\"hidden\"])": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "inline-block",
+          "padding": "8.2px 11px",
+          "width": 398,
+          "height": 44
+        },
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "10px 16px",
+          "width": 120,
+          "height": 40
+        },
+        "custom_.auth-card": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "40px",
+          "width": 480,
+          "height": 631
+        },
+        "custom_.catalog-content": null,
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/buyer/licenses",
+      "viewport": "1920",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 492,
+          "height": 72
+        },
+        "header": null,
+        "nav": null,
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 24,
+          "lineHeight": "32px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 480,
+          "height": 64
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 1920,
+          "height": 1080
+        },
+        "custom_input:not([type=\"hidden\"])": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "inline-block",
+          "padding": "8.2px 11px",
+          "width": 398,
+          "height": 44
+        },
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "10px 16px",
+          "width": 120,
+          "height": 40
+        },
+        "custom_.auth-card": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "40px",
+          "width": 480,
+          "height": 631
+        },
+        "custom_.catalog-content": null,
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/buyer/support",
+      "viewport": "1920",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 492,
+          "height": 72
+        },
+        "header": null,
+        "nav": null,
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 24,
+          "lineHeight": "32px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 480,
+          "height": 64
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 1920,
+          "height": 1080
+        },
+        "custom_input:not([type=\"hidden\"])": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "inline-block",
+          "padding": "8.2px 11px",
+          "width": 398,
+          "height": 44
+        },
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "10px 16px",
+          "width": 120,
+          "height": 40
+        },
+        "custom_.auth-card": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "40px",
+          "width": 480,
+          "height": 631
+        },
+        "custom_.catalog-content": null,
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/",
+      "viewport": "1440",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 69,
+          "height": 72
+        },
+        "header": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "0px 56px",
+          "width": 1440,
+          "height": 72
+        },
+        "nav": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 15,
+          "lineHeight": "24px",
+          "fontWeight": "500",
+          "display": "flex",
+          "padding": "9px 14px 5px",
+          "width": 95,
+          "height": 44
+        },
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 38,
+          "lineHeight": "44.08px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 760,
+          "height": 44
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 1440,
+          "height": 1024
+        },
+        "custom_input:not([type=\"hidden\"])": null,
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 15,
+          "lineHeight": "24px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "0px 15px",
+          "width": 104,
+          "height": 44
+        },
+        "custom_.auth-card": null,
+        "custom_.catalog-content": null,
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/auth",
+      "viewport": "1440",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 492,
+          "height": 72
+        },
+        "header": null,
+        "nav": null,
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 24,
+          "lineHeight": "32px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 480,
+          "height": 64
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 1440,
+          "height": 1024
+        },
+        "custom_input:not([type=\"hidden\"])": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "inline-block",
+          "padding": "8.2px 11px",
+          "width": 398,
+          "height": 44
+        },
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "10px 16px",
+          "width": 120,
+          "height": 40
+        },
+        "custom_.auth-card": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "40px",
+          "width": 480,
+          "height": 631
+        },
+        "custom_.catalog-content": null,
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/products",
+      "viewport": "1440",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 69,
+          "height": 72
+        },
+        "header": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "0px 56px",
+          "width": 1440,
+          "height": 72
+        },
+        "nav": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 15,
+          "lineHeight": "24px",
+          "fontWeight": "500",
+          "display": "flex",
+          "padding": "9px 14px 5px",
+          "width": 95,
+          "height": 44
+        },
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 32,
+          "lineHeight": "40px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 435,
+          "height": 40
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 1440,
+          "height": 1024
+        },
+        "custom_input:not([type=\"hidden\"])": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "8.2px 11px",
+          "width": 421,
+          "height": 45
+        },
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 15,
+          "lineHeight": "24px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "0px 15px",
+          "width": 104,
+          "height": 44
+        },
+        "custom_.auth-card": null,
+        "custom_.catalog-content": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "40px 72px",
+          "width": 1440,
+          "height": 952
+        },
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/buyer",
+      "viewport": "1440",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 492,
+          "height": 72
+        },
+        "header": null,
+        "nav": null,
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 24,
+          "lineHeight": "32px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 480,
+          "height": 64
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 1440,
+          "height": 1024
+        },
+        "custom_input:not([type=\"hidden\"])": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "inline-block",
+          "padding": "8.2px 11px",
+          "width": 398,
+          "height": 44
+        },
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "10px 16px",
+          "width": 120,
+          "height": 40
+        },
+        "custom_.auth-card": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "40px",
+          "width": 480,
+          "height": 631
+        },
+        "custom_.catalog-content": null,
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/buyer/orders",
+      "viewport": "1440",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 492,
+          "height": 72
+        },
+        "header": null,
+        "nav": null,
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 24,
+          "lineHeight": "32px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 480,
+          "height": 64
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 1440,
+          "height": 1024
+        },
+        "custom_input:not([type=\"hidden\"])": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "inline-block",
+          "padding": "8.2px 11px",
+          "width": 398,
+          "height": 44
+        },
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "10px 16px",
+          "width": 120,
+          "height": 40
+        },
+        "custom_.auth-card": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "40px",
+          "width": 480,
+          "height": 631
+        },
+        "custom_.catalog-content": null,
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/buyer/licenses",
+      "viewport": "1440",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 492,
+          "height": 72
+        },
+        "header": null,
+        "nav": null,
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 24,
+          "lineHeight": "32px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 480,
+          "height": 64
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 1440,
+          "height": 1024
+        },
+        "custom_input:not([type=\"hidden\"])": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "inline-block",
+          "padding": "8.2px 11px",
+          "width": 398,
+          "height": 44
+        },
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "10px 16px",
+          "width": 120,
+          "height": 40
+        },
+        "custom_.auth-card": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "40px",
+          "width": 480,
+          "height": 631
+        },
+        "custom_.catalog-content": null,
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/buyer/support",
+      "viewport": "1440",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 492,
+          "height": 72
+        },
+        "header": null,
+        "nav": null,
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 24,
+          "lineHeight": "32px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 480,
+          "height": 64
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 1440,
+          "height": 1024
+        },
+        "custom_input:not([type=\"hidden\"])": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "inline-block",
+          "padding": "8.2px 11px",
+          "width": 398,
+          "height": 44
+        },
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "10px 16px",
+          "width": 120,
+          "height": 40
+        },
+        "custom_.auth-card": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "40px",
+          "width": 480,
+          "height": 631
+        },
+        "custom_.catalog-content": null,
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/",
+      "viewport": "1024",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 69,
+          "height": 72
+        },
+        "header": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "0px 24px",
+          "width": 1024,
+          "height": 72
+        },
+        "nav": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 15,
+          "lineHeight": "24px",
+          "fontWeight": "500",
+          "display": "flex",
+          "padding": "9px 14px 5px",
+          "width": 95,
+          "height": 44
+        },
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 30.72,
+          "lineHeight": "35.6352px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 760,
+          "height": 36
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 1024,
+          "height": 768
+        },
+        "custom_input:not([type=\"hidden\"])": null,
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 15,
+          "lineHeight": "24px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "0px 15px",
+          "width": 104,
+          "height": 44
+        },
+        "custom_.auth-card": null,
+        "custom_.catalog-content": null,
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/auth",
+      "viewport": "1024",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 376,
+          "height": 72
+        },
+        "header": null,
+        "nav": null,
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 24,
+          "lineHeight": "32px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 376,
+          "height": 64
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 1024,
+          "height": 768
+        },
+        "custom_input:not([type=\"hidden\"])": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "inline-block",
+          "padding": "8.2px 11px",
+          "width": 274,
+          "height": 44
+        },
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "10px 16px",
+          "width": 120,
+          "height": 40
+        },
+        "custom_.auth-card": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "40px",
+          "width": 356,
+          "height": 684
+        },
+        "custom_.catalog-content": null,
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/products",
+      "viewport": "1024",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 69,
+          "height": 72
+        },
+        "header": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "0px 24px",
+          "width": 1024,
+          "height": 72
+        },
+        "nav": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 15,
+          "lineHeight": "24px",
+          "fontWeight": "500",
+          "display": "flex",
+          "padding": "9px 14px 5px",
+          "width": 95,
+          "height": 44
+        },
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 32,
+          "lineHeight": "40px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 435,
+          "height": 40
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 1024,
+          "height": 768
+        },
+        "custom_input:not([type=\"hidden\"])": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "8.2px 11px",
+          "width": 283,
+          "height": 45
+        },
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 15,
+          "lineHeight": "24px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "0px 15px",
+          "width": 104,
+          "height": 44
+        },
+        "custom_.auth-card": null,
+        "custom_.catalog-content": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "40px 72px",
+          "width": 1024,
+          "height": 696
+        },
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/buyer",
+      "viewport": "1024",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 376,
+          "height": 72
+        },
+        "header": null,
+        "nav": null,
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 24,
+          "lineHeight": "32px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 376,
+          "height": 64
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 1024,
+          "height": 768
+        },
+        "custom_input:not([type=\"hidden\"])": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "inline-block",
+          "padding": "8.2px 11px",
+          "width": 274,
+          "height": 44
+        },
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "10px 16px",
+          "width": 120,
+          "height": 40
+        },
+        "custom_.auth-card": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "40px",
+          "width": 356,
+          "height": 684
+        },
+        "custom_.catalog-content": null,
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/buyer/orders",
+      "viewport": "1024",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 376,
+          "height": 72
+        },
+        "header": null,
+        "nav": null,
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 24,
+          "lineHeight": "32px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 376,
+          "height": 64
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 1024,
+          "height": 768
+        },
+        "custom_input:not([type=\"hidden\"])": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "inline-block",
+          "padding": "8.2px 11px",
+          "width": 274,
+          "height": 44
+        },
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "10px 16px",
+          "width": 120,
+          "height": 40
+        },
+        "custom_.auth-card": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "40px",
+          "width": 356,
+          "height": 684
+        },
+        "custom_.catalog-content": null,
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/buyer/licenses",
+      "viewport": "1024",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 376,
+          "height": 72
+        },
+        "header": null,
+        "nav": null,
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 24,
+          "lineHeight": "32px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 376,
+          "height": 64
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 1024,
+          "height": 768
+        },
+        "custom_input:not([type=\"hidden\"])": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "inline-block",
+          "padding": "8.2px 11px",
+          "width": 274,
+          "height": 44
+        },
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "10px 16px",
+          "width": 120,
+          "height": 40
+        },
+        "custom_.auth-card": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "40px",
+          "width": 356,
+          "height": 684
+        },
+        "custom_.catalog-content": null,
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/buyer/support",
+      "viewport": "1024",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 376,
+          "height": 72
+        },
+        "header": null,
+        "nav": null,
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 24,
+          "lineHeight": "32px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 376,
+          "height": 64
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 1024,
+          "height": 768
+        },
+        "custom_input:not([type=\"hidden\"])": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "inline-block",
+          "padding": "8.2px 11px",
+          "width": 274,
+          "height": 44
+        },
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "10px 16px",
+          "width": 120,
+          "height": 40
+        },
+        "custom_.auth-card": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "40px",
+          "width": 356,
+          "height": 684
+        },
+        "custom_.catalog-content": null,
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/",
+      "viewport": "390",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 69,
+          "height": 72
+        },
+        "header": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "0px 16px",
+          "width": 390,
+          "height": 64
+        },
+        "nav": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 15,
+          "lineHeight": "24px",
+          "fontWeight": "500",
+          "display": "flex",
+          "padding": "9px 14px 5px",
+          "width": 67,
+          "height": 64
+        },
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 25.6,
+          "lineHeight": "29.696px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 358,
+          "height": 59
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 390,
+          "height": 844
+        },
+        "custom_input:not([type=\"hidden\"])": null,
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 15,
+          "lineHeight": "24px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "0px 15px",
+          "width": 0,
+          "height": 0
+        },
+        "custom_.auth-card": null,
+        "custom_.catalog-content": null,
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/auth",
+      "viewport": "390",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 342,
+          "height": 72
+        },
+        "header": null,
+        "nav": null,
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 24,
+          "lineHeight": "32px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 342,
+          "height": 64
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 390,
+          "height": 844
+        },
+        "custom_input:not([type=\"hidden\"])": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "inline-block",
+          "padding": "8.2px 11px",
+          "width": 312,
+          "height": 44
+        },
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "10px 16px",
+          "width": 120,
+          "height": 40
+        },
+        "custom_.auth-card": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "28px 22px",
+          "width": 358,
+          "height": 640
+        },
+        "custom_.catalog-content": null,
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/products",
+      "viewport": "390",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 69,
+          "height": 72
+        },
+        "header": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "0px 16px",
+          "width": 390,
+          "height": 64
+        },
+        "nav": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 15,
+          "lineHeight": "24px",
+          "fontWeight": "500",
+          "display": "flex",
+          "padding": "9px 14px 5px",
+          "width": 67,
+          "height": 64
+        },
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 32,
+          "lineHeight": "40px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 310,
+          "height": 40
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 390,
+          "height": 844
+        },
+        "custom_input:not([type=\"hidden\"])": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "8.2px 11px",
+          "width": 358,
+          "height": 44
+        },
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 15,
+          "lineHeight": "24px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "0px 15px",
+          "width": 0,
+          "height": 0
+        },
+        "custom_.auth-card": null,
+        "custom_.catalog-content": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "24px 16px",
+          "width": 390,
+          "height": 772
+        },
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/buyer",
+      "viewport": "390",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 342,
+          "height": 72
+        },
+        "header": null,
+        "nav": null,
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 24,
+          "lineHeight": "32px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 342,
+          "height": 64
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 390,
+          "height": 844
+        },
+        "custom_input:not([type=\"hidden\"])": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "inline-block",
+          "padding": "8.2px 11px",
+          "width": 312,
+          "height": 44
+        },
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "10px 16px",
+          "width": 120,
+          "height": 40
+        },
+        "custom_.auth-card": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "28px 22px",
+          "width": 358,
+          "height": 640
+        },
+        "custom_.catalog-content": null,
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/buyer/orders",
+      "viewport": "390",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 342,
+          "height": 72
+        },
+        "header": null,
+        "nav": null,
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 24,
+          "lineHeight": "32px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 342,
+          "height": 64
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 390,
+          "height": 844
+        },
+        "custom_input:not([type=\"hidden\"])": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "inline-block",
+          "padding": "8.2px 11px",
+          "width": 312,
+          "height": 44
+        },
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "10px 16px",
+          "width": 120,
+          "height": 40
+        },
+        "custom_.auth-card": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "28px 22px",
+          "width": 358,
+          "height": 640
+        },
+        "custom_.catalog-content": null,
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/buyer/licenses",
+      "viewport": "390",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 342,
+          "height": 72
+        },
+        "header": null,
+        "nav": null,
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 24,
+          "lineHeight": "32px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 342,
+          "height": 64
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 390,
+          "height": 844
+        },
+        "custom_input:not([type=\"hidden\"])": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "inline-block",
+          "padding": "8.2px 11px",
+          "width": 312,
+          "height": 44
+        },
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "10px 16px",
+          "width": 120,
+          "height": 40
+        },
+        "custom_.auth-card": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "28px 22px",
+          "width": 358,
+          "height": 640
+        },
+        "custom_.catalog-content": null,
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    },
+    {
+      "route": "/buyer/support",
+      "viewport": "390",
+      "ok": true,
+      "fonts": {
+        "greatVibes": false,
+        "greatVibes32": false,
+        "plex": true
+      },
+      "metrics": {
+        "logo": {
+          "fontFamily": "\"IBM Plex Sans Variable\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "24px",
+          "fontWeight": "600",
+          "display": "flex",
+          "padding": "0px 4px",
+          "width": 342,
+          "height": 72
+        },
+        "header": null,
+        "nav": null,
+        "title": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 24,
+          "lineHeight": "32px",
+          "fontWeight": "500",
+          "display": "block",
+          "padding": "0px",
+          "width": 342,
+          "height": 64
+        },
+        "body": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "0px",
+          "width": 390,
+          "height": 844
+        },
+        "custom_input:not([type=\"hidden\"])": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "inline-block",
+          "padding": "8.2px 11px",
+          "width": 312,
+          "height": 44
+        },
+        "custom_button.ant-btn": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "flex",
+          "padding": "10px 16px",
+          "width": 120,
+          "height": 40
+        },
+        "custom_.auth-card": {
+          "fontFamily": "\"IBM Plex Sans Variable\", \"IBM Plex Sans\", \"Segoe UI\", sans-serif",
+          "fontSize": 16,
+          "lineHeight": "25.6px",
+          "fontWeight": "400",
+          "display": "block",
+          "padding": "28px 22px",
+          "width": 358,
+          "height": 640
+        },
+        "custom_.catalog-content": null,
+        "custom_.buyer-home-main": null,
+        "custom_.workspace-screen": null,
+        "custom_.product-card": null,
+        "custom_.buyer-home-metric": null,
+        "custom_.buyer-home-shortcut": null
+      }
+    }
+  ]
+}

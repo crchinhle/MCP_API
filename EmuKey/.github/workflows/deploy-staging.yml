@@ -1,0 +1,46 @@
+name: Deploy Staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_id:
+        description: Release identity (git SHA or immutable image tag)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Validate release identity
+        env:
+          RELEASE_ID: ${{ inputs.release_id }}
+        run: test -n "$RELEASE_ID"
+      - name: Build immutable images
+        run: |
+          docker build --pull -t emukey-backend:${{ inputs.release_id }} backend
+          docker build --pull --build-arg VITE_API_URL=/api/v1 -t emukey-frontend:${{ inputs.release_id }} frontend
+      - name: Deploy using the platform adapter
+        env:
+          RELEASE_ID: ${{ inputs.release_id }}
+          DEPLOY_COMMAND: ${{ secrets.STAGING_DEPLOY_COMMAND }}
+        run: |
+          test -n "$DEPLOY_COMMAND"
+          sh -c "$DEPLOY_COMMAND"
+      - name: Wait for staging readiness
+        env:
+          STAGING_HEALTH_URL: ${{ secrets.STAGING_HEALTH_URL }}
+        run: |
+          test -n "$STAGING_HEALTH_URL"
+          curl --fail --retry 12 --retry-delay 5 --silent --show-error "$STAGING_HEALTH_URL/api/v1/health/ready"
+      - name: Run staging smoke
+        env:
+          BASE_URL: ${{ secrets.STAGING_WEB_URL }}
+          E2E_EXTERNAL: 'true'
+        run: corepack pnpm --dir frontend install --frozen-lockfile && corepack pnpm --dir frontend e2e

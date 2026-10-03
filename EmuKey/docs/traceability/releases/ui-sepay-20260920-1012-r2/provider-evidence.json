@@ -1,0 +1,15 @@
+{
+  "runId": "ui-sepay-20260920-1012-r2",
+  "browserFlow": "real browser -> SePay Sandbox UI -> Giả lập thanh toán -> real IPN",
+  "providerHost": "pay-sandbox.sepay.vn",
+  "providerEventId": "db335eff-b4db-11f1-b21a-a6006ab65aca",
+  "orderId": "3032e9a1-86b5-4e9c-9195-aaad061ab3b0",
+  "providerOccurredAt": "2026-09-20T10:10:31.000Z",
+  "orderCreatedAt": "2026-09-20T10:12:53.501Z",
+  "observedSkewSeconds": 142,
+  "classification": "UNMATCHED",
+  "reviewReason": "PAYMENT_OUTSIDE_ACCEPTED_WINDOW",
+  "businessEffect": { "paymentAttempt": "PENDING", "order": "WAITING_PAYMENT", "chainCommand": false, "license": false },
+  "securityDecision": "correct rejection; production cutoff unchanged",
+  "redaction": { "credentialsPersisted": false, "activationKeyPersisted": false }
+}

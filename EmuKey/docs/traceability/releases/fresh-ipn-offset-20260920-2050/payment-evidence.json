@@ -1,0 +1,22 @@
+{
+  "runId": "fresh-ipn-offset-20260920-2050",
+  "classification": "EXTERNAL_VERIFIED",
+  "browserReachedProvider": true,
+  "providerEventId": "ae27857c-b4f9-11f1-b21a-a6006ab65aca",
+  "orderId": "65e703e3-ad0f-47a5-97de-15a80e4c72f9",
+  "paymentAttemptId": "58f40975-345b-4f14-8b50-2d8cbb966f80",
+  "paymentClassification": "MATCHED",
+  "paymentAttemptStatus": "SUCCEEDED",
+  "orderStatus": "PAYMENT_ACCEPTED",
+  "chainCommandId": "3b269d7b-1d0f-41b2-bc9a-3c53eeb53e92",
+  "chainCommandStatus": "CONFIRMED",
+  "licenseId": "af922a56-d4df-4c01-8722-11b74c0f5fcf",
+  "licenseStatus": "ACTIVE",
+  "activationKeyTrustStatus": "TRUSTED",
+  "sandboxCorrection": {
+    "environment": "sandbox",
+    "offsetSeconds": 143,
+    "appliedAt": "SePay adapter boundary only"
+  },
+  "secretsPersisted": false
+}

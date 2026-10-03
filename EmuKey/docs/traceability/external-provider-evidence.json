@@ -1,0 +1,45 @@
+{
+  "runId": "emukey-ext-20260920030807-540a793e",
+  "generatedAt": "2026-09-20T03:08:07.306Z",
+  "providers": {
+    "Gemini": {
+      "status": "SKIPPED_BY_OPT_IN",
+      "evidence": {}
+    },
+    "Cloudinary": {
+      "status": "SKIPPED_BY_OPT_IN",
+      "evidence": {}
+    },
+    "Brevo": {
+      "status": "SKIPPED_BY_OPT_IN",
+      "evidence": {}
+    },
+    "FCM": {
+      "status": "SKIPPED_BY_OPT_IN",
+      "evidence": {}
+    },
+    "SePay": {
+      "status": "SKIPPED_BY_OPT_IN",
+      "evidence": {}
+    },
+    "Sepolia": {
+      "status": "REAL_EXTERNAL_VERIFIED",
+      "evidence": {
+        "chainId": 11155111,
+        "contractAddress": "0xAf61c3712e0A5fe9d5be0b3Fe080C786076e2845",
+        "deploymentBlock": 11738092,
+        "deploymentTransactionHash": "0x26b27aa01bc194fe4b9505009b74e09d16794b92da870fd564d9f3ddc77db77e",
+        "bytecodeLength": 9222,
+        "planCommitmentV2": "0xbd94baa5c8bcb6938e9768f19869962ecd553cff47d2a3bb94d697df91b94421",
+        "relayerAddress": "0xeC3Aa982a569812471b337D5b8CA67f5C7A2FCfe",
+        "relayerBalanceWeiBefore": "7056090690554126506",
+        "transactionHash": "0x6098e2eb296ac62c4976504e9581340de0cbee4a9af211ddbc7f6162a74cbbf9",
+        "blockNumber": "11741728",
+        "receiptStatus": "success",
+        "gasUsed": "254900",
+        "eventName": "LicenseIssued",
+        "licenseId": "0x1fdc81a1cb461c70c29ee18a3bdc44cd"
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "classification": "REAL_VERIFIED",
+  "apiReadiness": "ok",
+  "postgres": "up",
+  "redis": "up",
+  "blockchain": "up",
+  "runtimeChainId": 11155111,
+  "runtimeContractAddress": "0xAf61c3712e0A5fe9d5be0b3Fe080C786076e2845",
+  "runtimeDeploymentBlock": 11738092,
+  "devSecretsRotatedByRepository": ["JWT_SECRET", "SESSION_SECRET", "ACTIVATION_ENVELOPE_KEY"],
+  "providerCredentialsRequiringOwnerRotation": ["DATABASE_URL", "EVM_RPC_HTTP_URL", "EVM_RELAYER_PRIVATE_KEY"],
+  "secretValuesPersisted": false
+}

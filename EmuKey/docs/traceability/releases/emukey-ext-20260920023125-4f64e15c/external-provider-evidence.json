@@ -1,0 +1,24 @@
+{
+  "runId": "emukey-ext-20260920023125-4f64e15c",
+  "generatedAt": "2026-09-20T02:31:25.172Z",
+  "providers": {
+    "Sepolia": {
+      "status": "REAL_EXTERNAL_VERIFIED",
+      "evidence": {
+        "chainId": 11155111,
+        "contractAddress": "0xAf61c3712e0A5fe9d5be0b3Fe080C786076e2845",
+        "deploymentBlock": 11738092,
+        "deploymentTransactionHash": "0x26b27aa01bc194fe4b9505009b74e09d16794b92da870fd564d9f3ddc77db77e",
+        "bytecodeLength": 9222,
+        "planCommitmentV2": "0xfb021f3516ac6cbc399989d166d36e36b147af1fc5a2c87b5099a29e159fdcf7",
+        "transactionHash": "0xc69e2d9f3162a38d238d425cd8286f5d6964006d7446ea49d6f06bcc68aa6b04",
+        "blockNumber": "11741561",
+        "receiptStatus": "success",
+        "gasUsed": "254900",
+        "eventName": "LicenseIssued",
+        "licenseId": "0xbcc7920982799b62975e417d7056daef"
+      }
+    }
+  },
+  "redaction": { "credentialsPersisted": false }
+}

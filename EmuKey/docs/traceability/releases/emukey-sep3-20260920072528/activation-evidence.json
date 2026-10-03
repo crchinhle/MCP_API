@@ -1,0 +1,15 @@
+{
+  "licenseId": "ce9755e9-d2d6-4eab-9da1-0b5929e29f32",
+  "licenseStatusBeforeRetrieval": "ACTIVE",
+  "activationKeyTrustStatus": "TRUSTED",
+  "firstRetrieval": {
+    "httpStatus": 201,
+    "keyPresent": true,
+    "keyLength": 66,
+    "plaintextPersisted": false
+  },
+  "secondRetrieval": {
+    "httpStatus": 404,
+    "errorCode": "ACTIVATION_KEY_UNAVAILABLE"
+  }
+}

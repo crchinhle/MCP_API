@@ -1,0 +1,22 @@
+{
+  "runId": "ui-sepay-20260920-1017",
+  "browserFlow": "catalog -> login -> order -> Service Terms -> payment form -> SePay Sandbox UI -> simulated payment",
+  "providerHost": "pay-sandbox.sepay.vn",
+  "providerEventId": "b52f6c6c-b4da-11f1-b21a-a6006ab65aca",
+  "providerTransactionReference": "6aafaf2a9541b",
+  "orderId": "61c32859-b612-4c35-a44e-2378175aec60",
+  "paymentAttemptId": "1aec411a-00cf-4b98-bcc0-c7d6d29b69f1",
+  "amountVnd": 120000,
+  "providerOccurredAt": "2026-09-20T10:02:18.000Z",
+  "orderCreatedAt": "2026-09-20T10:04:40.919Z",
+  "classification": "UNMATCHED",
+  "reviewReason": "PAYMENT_OUTSIDE_ACCEPTED_WINDOW",
+  "businessEffect": {
+    "paymentAttempt": "PENDING",
+    "order": "WAITING_PAYMENT",
+    "chainCommand": false,
+    "license": false
+  },
+  "securityDecision": "CORRECT_REJECTION; payment cutoff was not weakened",
+  "redaction": { "credentialsPersisted": false, "activationKeyPersisted": false }
+}

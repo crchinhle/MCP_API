@@ -1,0 +1,41 @@
+{
+  "runId": "emukey-sep3-20260920072528",
+  "classification": "EXTERNAL_VERIFIED",
+  "environment": "development-database-with-Sepolia-testnet",
+  "paymentBoundary": {
+    "adapter": "sepay",
+    "callbackPath": "/api/v1/payments/ipn",
+    "signatureVerified": true,
+    "classification": "MATCHED",
+    "orderId": "19f6ec73-b4be-4bb2-8871-51378aee8255",
+    "paymentAttemptId": "da5bae60-61c9-408d-9344-3d1e58d83f10",
+    "duplicateReplay": "DUPLICATE",
+    "duplicateBusinessEffect": false
+  },
+  "chain": {
+    "chainId": 11155111,
+    "contractAddress": "0xAf61c3712e0A5fe9d5be0b3Fe080C786076e2845",
+    "deploymentBlock": 11738092,
+    "commandId": "1cc2dd6d-ba38-42e1-925d-94a242f91181",
+    "licenseId": "ce9755e9-d2d6-4eab-9da1-0b5929e29f32",
+    "transactionHash": "0x86dbeaea0fb1a334e4dfc96064a87ff045bf5475f0d31ad8119c1f2cea56c808",
+    "receiptStatus": "SUCCESS",
+    "eventId": "55808343-d0a8-4d84-8f84-df639a6f2e96",
+    "eventType": "LICENSE_ISSUED",
+    "eventBlock": 11742839,
+    "confirmationCount": 59,
+    "finalityStatus": "CONFIRMED"
+  },
+  "projection": {
+    "orderStatus": "PAYMENT_ACCEPTED",
+    "licenseStatus": "ACTIVE",
+    "activationKeyTrustStatus": "TRUSTED",
+    "activationKeyFirstRetrieval": "201_CREATED_KEY_PRESENT",
+    "activationKeySecondRetrieval": "404_ACTIVATION_KEY_UNAVAILABLE"
+  },
+  "redaction": {
+    "activationKeyPersisted": false,
+    "credentialsPersisted": false,
+    "customerEmailPersisted": false
+  }
+}

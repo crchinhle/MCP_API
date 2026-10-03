@@ -1,0 +1,17 @@
+.env*
+!.env.example
+node_modules/
+dist/
+build/
+coverage/
+.expo/
+android/
+ios/
+*.apk
+*.aab
+*.log
+.idea/
+.vscode/
+*.bak
+*.orig
+*.rej

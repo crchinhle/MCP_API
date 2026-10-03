@@ -1,0 +1,9 @@
+node_modules/
+dist/
+build/
+coverage/
+.expo/
+android/
+ios/
+pnpm-lock.yaml
+openapi/openapi.json

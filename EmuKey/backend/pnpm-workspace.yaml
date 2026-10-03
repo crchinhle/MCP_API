@@ -1,0 +1,22 @@
+packages:
+  - contracts
+savePrefix: ''
+engineStrict: true
+autoInstallPeers: true
+strictPeerDependencies: true
+strictDepBuilds: true
+overrides:
+  multer: '>=2.3.0'
+allowBuilds:
+  '@google/genai': false
+  '@parcel/watcher': true
+  '@scarf/scarf': false
+  '@swc/core': true
+  argon2: true
+  cpu-features: false
+  esbuild: true
+  msgpackr-extract: false
+  protobufjs: false
+  sse4_crc32: false
+  ssh2: false
+  unrs-resolver: true

@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "entitlements": {
+    "value": {
+      "desktop": true,
+      "features": ["offline", "updates"]
+    },
+    "jcs": "{\"desktop\":true,\"features\":[\"offline\",\"updates\"]}",
+    "hash": "0x19c1e13d13878b75167f31572cadf0d5ada7992c8e17c19ec99120f0666395d2"
+  },
+  "plan": {
+    "providerChainAddress": "0x0000000000000000000000000000000000000002",
+    "productId": "00000000-0000-4000-8000-000000000200",
+    "planId": "00000000-0000-4000-8000-000000000302",
+    "planVersion": 1,
+    "durationMonths": 12,
+    "maxActiveDevices": 3,
+    "commitment": "0xc0dae0bf0aed78df9c36143a470ebcf9f5b1ea1d61f2ad7cb91f0c4a2c55790e"
+  },
+  "activation": {
+    "secret": "0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "commitment": "0x8ae1aa597fa146ebd3aa2ceddf360668dea5e526567e92b0321816a4e895bd2d"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "classification": "REAL_VERIFIED",
+  "chain": "local Hardhat disposable testnet",
+  "artifactGuard": "current deployed bytecode required; stale address reuse rejected",
+  "requests": 20,
+  "concurrency": 20,
+  "p50Ms": 41.89,
+  "p95Ms": 53.48,
+  "p99Ms": 53.48,
+  "errorRate": 0
+}

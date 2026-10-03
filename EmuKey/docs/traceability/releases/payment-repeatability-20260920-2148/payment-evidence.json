@@ -1,0 +1,16 @@
+{
+  "runId": "payment-repeatability-20260920-2148",
+  "classification": "EXTERNAL_VERIFIED",
+  "providerEventReceived": true,
+  "orderId": "8e5f1aac-4ea5-4c14-9e77-0cdf5da437ee",
+  "paymentClassification": "MATCHED",
+  "paymentAttemptStatus": "SUCCEEDED",
+  "orderStatus": "PAYMENT_ACCEPTED",
+  "chainCommandStatus": "CONFIRMED",
+  "licenseStatus": "ACTIVE",
+  "activationKeyTrustStatus": "TRUSTED",
+  "sandboxEnvironment": true,
+  "sandboxClockOffsetSeconds": 144,
+  "productionOffsetPolicy": "non-zero offset rejected at production startup",
+  "secretsPersisted": false
+}

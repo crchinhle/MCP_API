@@ -1,0 +1,3 @@
+/* eslint-disable no-undef */
+import { chromium } from '@playwright/test';
+const b=await chromium.launch();const c=await b.newContext({viewport:{width:1920,height:1080}});const p=await c.newPage();await p.goto('http://localhost:5174/');await p.evaluate(async()=>document.fonts.ready);const data=await p.evaluate(()=>Object.fromEntries(['.public-home-hero','.public-home-featured-card','.public-home-page','.public-home-featured'].map(s=>{const e=document.querySelector(s);const r=e?.getBoundingClientRect();return [s,r?{x:r.x,width:r.width,y:r.y,height:r.height}:null]})));console.log(JSON.stringify(data,null,2));await b.close();

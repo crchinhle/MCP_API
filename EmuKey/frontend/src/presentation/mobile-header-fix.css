@@ -1,0 +1,23 @@
+
+@media (max-width: 1050px) {
+  .site-header {
+    height: 64px;
+    padding: 0 16px;
+  }
+
+  .site-header .brand-wordmark--header {
+    height: 64px;
+    font-size: 30px;
+    line-height: 1;
+  }
+
+  .site-header .public-nav,
+  .site-header .header-actions {
+    display: none;
+  }
+
+  .site-header .mobile-menu-trigger {
+    display: inline-flex;
+    margin-left: auto;
+  }
+}
