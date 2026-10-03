@@ -9,8 +9,31 @@
 *.keystore
 .secrets/
 
-# Dependencies (generated output is intentionally included)
+# Dependencies
 node_modules/
+
+# Build, cache, and test outputs
+dist/
+build/
+coverage/
+.cache/
+.vite/
+.turbo/
+.expo/
+playwright-report/
+test-results/
+/EmuKey/backend/contracts/artifacts/
+/EmuKey/backend/contracts/cache/
+*.log
+*.tmp
+*.bak
+*.orig
+*.rej
+
+# OS noise
+.DS_Store
+Thumbs.db
 
 # Local configuration containing credentials
 /.kilo/kilo.jsonc
+/.kilo/agent-manager.json

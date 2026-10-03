@@ -2,7 +2,7 @@
 
 This matrix is the release-hardening index for the existing Phase 1-7 baseline.
 It does not add business capability or replace the canonical owners documented in
-`APP_IMPLEMENTATION_PLAN.md`.
+`context/current/APP_IMPLEMENTATION_PLAN.md`.
 
 Status vocabulary: `LOCAL_VERIFIED`, `STAGING_VERIFIED`, `EXTERNAL_VERIFIED`,
 `PRODUCTION_READY`, `BLOCKED_EXTERNAL`, `FAIL`, `OPEN`.

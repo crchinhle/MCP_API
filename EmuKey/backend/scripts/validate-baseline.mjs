@@ -133,28 +133,32 @@ async function assertNoLocalPostgresService(repoRoot) {
 }
 
 async function assertAuthority(workspaceRoot, backendSchema) {
+  const authorityRoot = resolve(workspaceRoot, 'context', 'current');
   const authorities = [
     ['chuc_nang_toan_he_thong_ver2.0.md', /baseline v5\.1/i],
     ['APP_IMPLEMENTATION_PLAN.md', /baseline v5\.1/i],
     ['cong_nghe_he_thong.md', /baseline v5\.1/i],
   ];
   for (const [name, headerPattern] of authorities) {
-    const path = resolve(workspaceRoot, name);
-    if (!(await existingFile(path))) continue;
+    const path = resolve(authorityRoot, name);
+    if (!(await existingFile(path))) fail(`missing authority: ${path}`);
     const header = (await readFile(path, 'utf8')).slice(0, 500);
     if (!headerPattern.test(header)) fail(`${name} header is not v5.1`);
   }
 
-  const canonicalSchema = resolve(workspaceRoot, 'sql_minimal.sql');
-  if (await existingFile(canonicalSchema)) {
-    const [canonical, runtime] = await Promise.all([
-      readFile(canonicalSchema),
-      readFile(backendSchema),
-    ]);
-    const digest = (value) => createHash('sha256').update(value).digest('hex');
-    if (digest(canonical) !== digest(runtime)) {
-      fail('canonical sql_minimal.sql and backend/database/schema.sql differ');
-    }
+  const canonicalSchema = resolve(authorityRoot, 'sql_minimal.sql');
+  if (!(await existingFile(canonicalSchema))) {
+    fail(`missing authority: ${canonicalSchema}`);
+  }
+  const [canonical, runtime] = await Promise.all([
+    readFile(canonicalSchema),
+    readFile(backendSchema),
+  ]);
+  const digest = (value) => createHash('sha256').update(value).digest('hex');
+  if (digest(canonical) !== digest(runtime)) {
+    fail(
+      'canonical context/current/sql_minimal.sql and backend/database/schema.sql differ',
+    );
   }
 }
 

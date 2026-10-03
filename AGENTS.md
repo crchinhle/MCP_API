@@ -4,6 +4,21 @@ These rules apply to every coding task in this repository. Prefer the existing r
 
 ## Skill routing
 
+Repository skills have one source of truth at `agent/skills/<skill-name>/SKILL.md`.
+Read the matching file there when applying the workflows below. `.agents/skills`
+is a relative directory symlink to `../agent/skills` for Codex discovery;
+do not replace it with a copied skill tree. On Windows, checkouts must enable Git
+symlink support and allow symbolic-link creation to preserve native discovery.
+If a checkout materializes the link as a text file, load skills directly from
+`agent/skills/` using these instructions until the link is restored.
+Kilo loads `agent/skills` explicitly through `skills.paths` in root `kilo.json`.
+
+Current project context lives in `context/current/`; historical reviews and plans
+live in `context/archive/`. The physical-schema authority is
+`context/current/sql_minimal.sql`; `EmuKey/backend/database/schema.sql` remains its
+byte-identical runtime mirror. `EmuKey/` is tracked source in this review workspace,
+and its separate nested Git repository, when present, must be preserved.
+
 `AGENTS.md` contains durable repository rules. Skills contain task-specific workflows. Load the smallest set that covers the current task; do not load every skill merely because it is available. User and platform instructions always take precedence, and a skill never grants authority to expand scope, modify external systems, create commits, push, merge, delete data, or dispatch subagents when that action is not otherwise authorized.
 
 ### Baseline sequence for implementation work

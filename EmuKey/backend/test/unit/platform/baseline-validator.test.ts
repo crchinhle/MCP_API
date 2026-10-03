@@ -16,6 +16,86 @@ const matrix = resolve(
 const schema = resolve(process.cwd(), 'database', 'schema.sql');
 
 describe('baseline validator', () => {
+  it.each([
+    ['valid', ''],
+    ['chuc_nang_toan_he_thong_ver2.0.md', 'missing authority'],
+    ['APP_IMPLEMENTATION_PLAN.md', 'missing authority'],
+    ['cong_nghe_he_thong.md', 'missing authority'],
+    ['sql_minimal.sql', 'missing authority'],
+    ['invalid-header', 'header is not v5.1'],
+    ['schema-drift', 'schema.sql differ'],
+  ])(
+    'checks relocated authority files: %s',
+    async (scenario, expectedError) => {
+      const directory = await mkdtemp(join(tmpdir(), 'emukey-authority-'));
+      const repo = join(directory, 'EmuKey');
+      const current = join(directory, 'context', 'current');
+      const runtimeMatrix = join(repo, 'capabilities.json');
+
+      try {
+        await mkdir(repo, { recursive: true });
+        await mkdir(current, { recursive: true });
+        const document = JSON.parse(await readFile(matrix, 'utf8')) as {
+          capabilities: { testOwner: string }[];
+          cryptoVectorOwner: string;
+        };
+        for (const capability of document.capabilities) {
+          capability.testOwner = resolve(
+            process.cwd(),
+            '..',
+            capability.testOwner,
+          );
+        }
+        document.cryptoVectorOwner = resolve(
+          process.cwd(),
+          '..',
+          document.cryptoVectorOwner,
+        );
+        await writeFile(runtimeMatrix, JSON.stringify(document));
+        for (const name of [
+          'chuc_nang_toan_he_thong_ver2.0.md',
+          'APP_IMPLEMENTATION_PLAN.md',
+          'cong_nghe_he_thong.md',
+          'sql_minimal.sql',
+        ]) {
+          if (name === scenario) continue;
+          const content =
+            name === 'sql_minimal.sql'
+              ? Buffer.concat([
+                  await readFile(schema),
+                  Buffer.from(scenario === 'schema-drift' ? '\n' : ''),
+                ])
+              : Buffer.from(
+                  scenario === 'invalid-header'
+                    ? 'invalid header'
+                    : '# Baseline v5.1',
+                );
+          await writeFile(join(current, name), content);
+        }
+
+        const execution = execFileAsync(process.execPath, [
+          validator,
+          '--repo',
+          repo,
+          '--traceability',
+          runtimeMatrix,
+          '--schema',
+          schema,
+        ]);
+        if (expectedError) {
+          await expect(execution).rejects.toHaveProperty(
+            'stderr',
+            expect.stringContaining(expectedError),
+          );
+        } else {
+          expect((await execution).stdout).toContain('35 capabilities');
+        }
+      } finally {
+        await rm(directory, { force: true, recursive: true });
+      }
+    },
+  );
+
   it(
     'accepts the canonical Phase 1 traceability baseline',
     async () => {

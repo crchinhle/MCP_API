@@ -8,7 +8,7 @@
 
 **Tech Stack:** NestJS 12, TypeScript 6, PostgreSQL `pg` with explicit SQL, Redis/BullMQ where already configured, React 19 + TanStack Query + Ant Design, Expo React Native, Vitest/Jest, OpenAPI generated clients.
 
-**Spec:** `APP_IMPLEMENTATION_PLAN.md` Phase 7 section and `chuc_nang_toan_he_thong_ver2.0.md` sections 8.4, 9.10-9.12.
+**Spec:** `context/current/APP_IMPLEMENTATION_PLAN.md` Phase 7 section and `context/current/chuc_nang_toan_he_thong_ver2.0.md` sections 8.4, 9.10-9.12.
 
 ## Global Constraints
 

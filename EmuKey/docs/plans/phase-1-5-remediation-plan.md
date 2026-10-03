@@ -14,7 +14,7 @@ Ràng buộc bắt buộc:
 - Không dùng TypeORM hoặc ORM khác; PostgreSQL được truy cập bằng `pg` và SQL tường minh có version control.
 - Docker/Compose không khởi chạy PostgreSQL riêng. API, Worker và maintenance command dùng cùng `DATABASE_URL` bên ngoài.
 - Không chạy seed, schema change, fixture phá lỗi hoặc test ghi dữ liệu trên Neon. Mọi mutation test dùng PostgreSQL/Redis/Hardhat cô lập bằng Testcontainers hoặc process test tạm thời.
-- `backend/database/schema.sql` và `../sql_minimal.sql` phải luôn byte-identical sau mỗi thay đổi schema.
+- `backend/database/schema.sql` và `context/current/sql_minimal.sql` phải luôn byte-identical sau mỗi thay đổi schema.
 - Không khôi phục Contract PDF/signing, Kotlin test client, provider member model hoặc feature ngoài 36 capability.
 - Không coi UI mock, interface/port rỗng, bảng SQL hoặc test build là bằng chứng capability đã chạy qua boundary thật.
 - Không sửa/xóa các thay đổi Git có sẵn ngoài work package đang thực thi.
@@ -36,7 +36,7 @@ Ràng buộc bắt buộc:
 ### 2.1. Kiểm tra đã chạy
 
 - Baseline: tìm thấy đúng 36 capability unique trong FUNC v4.1.
-- Schema: `backend/database/schema.sql` và `../sql_minimal.sql` có cùng SHA-256.
+- Schema: `backend/database/schema.sql` và `context/current/sql_minimal.sql` có cùng SHA-256.
 - Neon, chỉ đọc: `db:verify` pass với 18 bảng, 41 foreign key, 79 index, 167 constraint và đủ `citext`, `pgcrypto`, `vector`.
 - Backend: frozen install, lint, typecheck, 10 test file/25 test, OpenAPI check và build pass.
 - Frontend: frozen install, lint, typecheck, 8 test file/26 test, OpenAPI check và build pass; Vite cảnh báo bundle khoảng 1.3 MB nhưng đây không phải blocker Phase 1–5.
@@ -49,9 +49,9 @@ Các test xanh hiện tại chủ yếu kiểm scaffold, validation unit hoặc 
 
 ### 2.2. Evidence map để lượt sau bắt đầu nhanh
 
-- Phase definitions/gates: `../APP_IMPLEMENTATION_PLAN.md:144-210`.
-- Canonical integrity rules: `../cong_nghe_he_thong.md:170-177`.
-- Canonical crypto encoding: `../cong_nghe_he_thong.md:190-210`, `357-370`.
+- Phase definitions/gates: `context/current/APP_IMPLEMENTATION_PLAN.md:144-210`.
+- Canonical integrity rules: `context/current/cong_nghe_he_thong.md:170-177`.
+- Canonical crypto encoding: `context/current/cong_nghe_he_thong.md:190-210`, `357-370`.
 - SQL Order/Payment: `backend/database/schema.sql:169-297`.
 - SQL License/Command/Event và pointer FK: `backend/database/schema.sql:299-534`.
 - Count-based verifier: `backend/src/platform/database/verify-baseline-database.ts:50-115`.
