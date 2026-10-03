@@ -270,14 +270,6 @@ Chưa thể kết luận toàn bộ luồng đã chuẩn UX. Phần còn mở g�
 - Entitlement issue/refresh/verify là device protocol; kiểm tra license lifecycle, device ACTIVE, binding generation, key version và proof, không kiểm tra purchaser identity. Device state vẫn do PostgreSQL sở hữu; không thêm blockchain wait hoặc per-device finality.
 - Các API list/license details/key retrieve/rotate/recover/renew/device management/lifecycle vẫn giữ ownership và role checks.
 
-## 11. B2B activation authorization 03/10/2026
-
-- License/customer ownership xác định tài khoản được quyền quản lý License; không dùng để cấp quyền activate phần mềm.
-- Activation key là bearer activation credential do quản trị viên doanh nghiệp cung cấp. Thiết bị không cần purchaser/customer session để tạo challenge hoặc activate.
-- Backend resolve License từ activation key commitment, kiểm tra License usable/quota, challenge một lần và EIP-191 device proof. Activation không chuyển ownership, không tạo customer và không cấp management permission.
-- Entitlement issue/refresh/verify là device protocol; kiểm tra license lifecycle, device ACTIVE, binding generation, key version và proof, không kiểm tra purchaser identity. Device state vẫn do PostgreSQL sở hữu; không thêm blockchain wait hoặc per-device finality.
-- Các API list/license details/key retrieve/rotate/recover/renew/device management/lifecycle vẫn giữ ownership và role checks.
-
 ## 12. Refactor kiến trúc thiết bị 02/10/2026
 
 - Individual device state is operational data owned by PostgreSQL. Blockchain does not store device identity. Blockchain stores only an asynchronously synchronized aggregate active-device count. License lifecycle finality remains on-chain.
