@@ -4,7 +4,6 @@ import { configVariable, defineConfig } from 'hardhat/config';
 export default defineConfig({
   paths: {
     sources: './solidity',
-    tests: './test',
   },
   plugins: [hardhatToolboxViemPlugin],
   networks: {

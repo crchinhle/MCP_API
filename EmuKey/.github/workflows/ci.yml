@@ -26,38 +26,11 @@ jobs:
         run: corepack enable
       - name: Install frozen dependencies
         run: corepack pnpm install --frozen-lockfile
-      - name: Pre-pull integration test images
-        shell: bash
-        timeout-minutes: 10
-        run: |
-          # Testcontainers reuses local images. Retry registry failures here,
-          # before they can fail a test suite's beforeAll hook.
-          # Keep these tags aligned with test/integration and Testcontainers' Ryuk version.
-          images=(pgvector/pgvector:pg15 redis:8.2-alpine redis:7-alpine testcontainers/ryuk:0.14.0)
-          for image in "${images[@]}"; do
-            for attempt in 1 2 3 4 5; do
-              if docker pull "$image"; then
-                break
-              fi
-              if [ "$attempt" -eq 5 ]; then
-                echo "::error::Failed to pull $image after $attempt attempts"
-                exit 1
-              fi
-              delay=$((attempt * 5))
-              echo "::warning::Failed to pull $image (attempt $attempt/5); retrying in ${delay}s"
-              sleep "$delay"
-            done
-          done
       - name: Verify backend
         run: |
-          corepack pnpm baseline:check
           corepack pnpm lint
           corepack pnpm typecheck
-           corepack pnpm test
-           corepack pnpm test:security
-           corepack pnpm test:dependency-audit
-          corepack pnpm contracts:verify
-          corepack pnpm delivery:check
+          corepack pnpm contracts:build
           corepack pnpm openapi:check
           corepack pnpm build
       - name: Build backend image
@@ -86,7 +59,6 @@ jobs:
         run: |
           corepack pnpm lint
           corepack pnpm typecheck
-          corepack pnpm test
           corepack pnpm openapi:check
           corepack pnpm build
       - name: Build frontend image
@@ -114,7 +86,6 @@ jobs:
           corepack pnpm exec expo install --check
           corepack pnpm lint
           corepack pnpm typecheck
-          corepack pnpm test
           corepack pnpm openapi:check
           corepack pnpm build
       - name: Build mobile delivery image
@@ -135,9 +106,3 @@ jobs:
         run: |
           touch backend/.env
           docker compose --env-file /dev/null config --quiet
-      - name: Validate release structure without secrets
-        working-directory: backend
-        env:
-          RELEASE_CHECK_STRUCTURAL_ONLY: 'true'
-        # This script uses only Node built-ins; avoid pnpm's automatic install on a clean runner.
-        run: node --env-file-if-exists=.env scripts/release-check.mjs

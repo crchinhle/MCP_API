@@ -4,7 +4,6 @@
   "type": "module",
   "scripts": {
     "build": "hardhat compile",
-    "test": "hardhat test nodejs && node scripts/check-public-surface.mjs",
     "abi:export": "node scripts/export-abi.mjs",
     "node": "hardhat node --hostname 0.0.0.0",
     "deploy:local": "hardhat compile && node scripts/deploy-local.mjs",

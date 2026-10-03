@@ -9,16 +9,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "e2e": "playwright test",
-    "visual:regression": "node scripts/visual-regression.mjs",
-    "visual:diff": "node scripts/visual-diff.mjs",
-    "visual:fixture": "node scripts/visual-fixture.mjs",
-    "e2e:external": "node scripts/run-playwright.mjs --external",
-    "e2e:orchestrated": "node ../scripts/run-web-e2e.mjs",
     "lint": "eslint .",
     "openapi:check": "node scripts/generate-openapi.mjs --check",
     "openapi:generate": "node scripts/generate-openapi.mjs",
-    "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

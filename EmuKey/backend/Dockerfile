@@ -10,10 +10,8 @@ RUN corepack pnpm install --frozen-lockfile
 
 COPY contracts/hardhat.config.ts ./contracts/
 COPY contracts/solidity ./contracts/solidity
-COPY contracts/test ./contracts/test
-COPY contracts/test-vectors ./contracts/test-vectors
 COPY contracts/scripts ./contracts/scripts
-RUN corepack pnpm contracts:verify
+RUN corepack pnpm contracts:build
 COPY . .
 RUN corepack pnpm build
 

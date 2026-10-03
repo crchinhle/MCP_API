@@ -5,7 +5,7 @@ import { createOpenApiDocument } from '../../platform/http/openapi.js';
 import { createApiApplication } from './create-api-application.js';
 
 const outputPath = resolve(
-  process.argv[2] ?? 'docs/openapi/openapi.json',
+  process.argv[2] ?? 'openapi/openapi.json',
 );
 const app = await createApiApplication({ logger: false });
 

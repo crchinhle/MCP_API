@@ -5,13 +5,15 @@
 > **Trạng thái:** **BUSINESS AUTHORITY v5.1-r4 — đã rà lại luồng Phase 1–6; không Customer Controller/KMS**  
 > **Mục tiêu:** Đơn hàng và License thuộc tài khoản EmuKey; activation key không mang hoặc chứng minh danh tính người mua.
 
+> Cập nhật kiến trúc 03/10/2026: Device chỉ có `ACTIVE`/`REVOKED`; PostgreSQL là source of truth. Activation/revoke/quota commit trong DB transaction. Blockchain nhận async `activeDeviceCount + deviceStateVersion`; entitlement không chờ aggregate finality. Public activation dùng bearer key và device proof, không cần purchaser session; private management vẫn kiểm tra owner.
+
 ---
 
 ## 1. Quy tắc sử dụng tài liệu
 
 1. Đây là **business authority** của baseline v5.1.
 2. Catalog có đúng **35 capability canonical**. UI Web/Android chỉ là surface sử dụng capability, không được đếm lại thành feature.
-3. Smart contract là authority cuối cùng cho **License/Device rights**; PostgreSQL là private store cho account/catalog/order/payment/audit và projection của chain.
+3. Smart contract là authority cuối cùng cho **License rights; individual Device state do PostgreSQL qu?n l?**; PostgreSQL là private store cho account/catalog/order/payment/audit và projection của chain.
 4. Không có chain-confirmed evidence thì không được coi License/Device usable, không giao activation key và không cấp/refresh entitlement.
 5. Không thêm role, capability, state, table hoặc external integration nếu không chỉ ra requirement và boundary độc lập.
 6. Không tối ưu schema theo một con số bảng cố định. Table chỉ tồn tại khi có lifecycle/query/invariant độc lập.
@@ -90,7 +92,7 @@ Web và Android là **surface**, không phải business module.
 | License administrative state (on-chain, sau issuance) | `ACTIVE`, `SUSPENDED`, `REVOKED` |
 | License temporal condition (derived) | `VALID`, `EXPIRED` |
 | Customer-held activation key usability/trust | `PENDING_FINALITY`, `TRUSTED`, `UNTRUSTED_REORG` |
-| LicenseDevice | `PENDING_ONCHAIN`, `ACTIVE`, `REVOKED` |
+| LicenseDevice (PostgreSQL authority) | `ACTIVE`, `REVOKED` |
 | ChainCommand | `PENDING`, `SUBMITTED`, `SUBMITTED_UNKNOWN`, `CONFIRMED`, `RETRYABLE_FAILED`, `DEAD_LETTER`, `ABANDONED`, `SUPERSEDED` |
 | ChainEvent finality | `PENDING`, `CONFIRMED`, `REORGED` |
 | KnowledgeDocument | `PENDING`, `PROCESSING`, `READY`, `FAILED`, `ARCHIVED` |
@@ -106,7 +108,7 @@ Với ISSUE ban đầu, `activation_commitment/version` là proposal và trust l
 - Administrative: issuance tạo `ACTIVE`; `ACTIVE -> SUSPENDED`; `SUSPENDED -> ACTIVE` chỉ khi temporal condition đã `VALID`; `ACTIVE | SUSPENDED -> REVOKED`; `REVOKED` là terminal.
 - Temporal: `VALID -> EXPIRED` khi canonical `expiresAt <= now`; `EXPIRED -> VALID` chỉ sau `LICENSE_RENEWED` finality đưa `expiresAt` về tương lai.
 - Projection có thể materialize `EXPIRED` khi administrative state là `ACTIVE`. License `SUSPENDED` quá hạn vẫn hiển thị administrative `SUSPENDED` kèm temporal `EXPIRED`; renewal chỉ làm temporal trở lại `VALID`, sau đó vẫn cần `RESUME_LICENSE` finality.
-- LicenseDevice cho phép bind lại cùng `device_ref`: `REVOKED -> PENDING_ONCHAIN -> ACTIVE`, mỗi lần bind mới tăng `binding_generation`. `REVOKED` chỉ terminal cho generation cũ, không terminal cho danh tính Device.
+- LicenseDevice cho phép bind lại cùng `device_ref`: `REVOKED -> ACTIVE`, mỗi lần bind mới tăng `binding_generation`. `REVOKED` chỉ terminal cho generation cũ, không terminal cho danh tính Device.
 - `PrivateResourceReadable = User ACTIVE/session hợp lệ + resource ownership`; Customer/Provider vẫn được đọc projection thuộc quyền của mình ở `PENDING_ONCHAIN`, `SUSPENDED`, `EXPIRED` hoặc `REVOKED`.
 - `MutationAuthorized = User ACTIVE/session hợp lệ + resource ownership + state/factor theo operation`; mỗi mutation tự quy định activation key, action token, device proof hoặc Provider policy cần thiết.
 - `RightsConsumable = ChainRightsUsable + Customer ownership + proof theo operation`; predicate này chỉ dùng cho activate/entitlement hoặc hành vi tiêu thụ quyền.
@@ -125,7 +127,7 @@ Các aggregate còn lại dùng graph chuyển trạng thái đóng sau để v�
 
 1. `PAYMENT_ACCEPTED` **không** đồng nghĩa License usable.
 2. `License.ACTIVE` chỉ do `LICENSE_ISSUED`/rights event đạt finality cập nhật.
-3. `LicenseDevice.ACTIVE` chỉ do `DEVICE_ACTIVATED` đạt finality cập nhật.
+3. `LicenseDevice.ACTIVE` được ghi trong PostgreSQL transaction sau khi kiểm tra bearer key, device proof và quota; không chờ blockchain finality.
 4. Không có License chain-confirmed thì không giao activation key; không có đồng thời License và Device chain-confirmed thì không cấp/refresh entitlement. Key được giao sau License finality để Customer có thể thực hiện bước activate Device, nên Device finality không phải precondition của key delivery.
 5. RPC timeout không được resend mù; phải reconcile tx hash/nonce/idempotency trước.
 6. Event `REORGED` không được dùng làm quyền; projection phải rollback/rebuild theo event canonical.
@@ -144,7 +146,7 @@ Các aggregate còn lại dùng graph chuyển trạng thái đóng sau để v�
 19. Provider chain address/namespace là identity đã approve và immutable trong MVP sau khi Provider có published Plan/License; rotation/migration nằm ngoài scope và cần change control.
 20. `payment_transactions.payment_attempt_id` nếu có phải thuộc đúng `order_id`; renewal Order phải target License cùng Provider và trình đúng activation key hiện hành.
 21. `last_applied_chain_event_id` của License/Device chỉ được trỏ tới ChainEvent của chính subject đó; chỉ event finality `CONFIRMED` mới được apply.
-22. Bearer activation secret được verify off-chain và **không bao giờ gửi lên chain**; smart contract kiểm tra current key version/state/expiry/device uniqueness/quota.
+22. Bearer activation secret được verify off-chain và **không bao giờ gửi lên chain**; smart contract kiểm tra current key version/state/expiry/PostgreSQL-enforced individual Device uniqueness/quota.
 23. `ISSUE_LICENSE` không được submit nếu encrypted activation envelope chưa tồn tại và commitment không khớp. Chỉ được regenerate khi command còn `PENDING` **và** `nonce`, `signed_transaction`, `transaction_hash` đều `NULL`; khi bất kỳ field nào đã có thì commitment immutable.
 24. `CAT-05` là owner duy nhất của ComparePlansQuery; AI chỉ reuse read-only, không tạo capability riêng.
 25. `BC-05` là owner duy nhất của public blockchain verification; `LIC-03` đọc projection qua Customer/Provider JWT.
@@ -163,7 +165,7 @@ Các aggregate còn lại dùng graph chuyển trạng thái đóng sau để v�
 38. Forward flow chỉ được **tạo** một rights-mutating ChainCommand chưa resolve cho mỗi License tại một thời điểm, gồm issue/renew/rotate/license lifecycle/device lifecycle. Tạo command dùng per-License lock; bất kỳ `SUBMITTED_UNKNOWN` hoặc `DEAD_LETTER` chưa resolve nào cũng chặn mutation mới. Deep reorg có thể demote nhiều command đã từng confirmed thành một recovery suffix `SUBMITTED_UNKNOWN`; đây không phải command mới và phải reconcile theo thứ tự nhân quả trước khi mở lane.
 39. Device challenge phải bind `protocolDomain + action + licenseId + opaqueDeviceRef + bindingGeneration + keyVersion + nonce + expiresAt`; challenge của protocol/domain hoặc activate/revoke/entitlement khác không dùng chéo operation.
 40. Chỉ payload IPN đã qua authentication và normalize được thành provider event có stable `provider_event_id`, positive amount, ISO currency code và `provider_occurred_at` hợp lệ mới ghi PaymentTransaction. Payload không parse/normalize được bị từ chối trước business durable effects (có security audit redacted). Event đã normalize nhưng semantic-invalid, unmatched, late, sai currency/state hoặc amount-mismatch phải lưu durable evidence + `OPEN` review; cùng `provider_event_id` chỉ trả kết quả cũ, không tạo row/effect mới. Mọi fulfillment VND phải chứng minh `transaction.amount_minor = attempt.amount_vnd = order.price_vnd_snapshot`, `provider_occurred_at` thuộc interval nửa kín `[max(terms_accepted_at, attempt.created_at), min(attempt.expires_at, payment_due_at))`, và `received_at < ipn_accept_until` đã snapshot bất biến trên Order. PostgreSQL tự đóng dấu `received_at` và các lifecycle timestamp bằng `statement_timestamp()`; caller không được backdate/future-date để đổi cutoff. Commerce admission/timeout dùng cùng trusted DB statement clock; payment effective time vẫn là verified provider time, còn `canonicalNow` từ finalized block chỉ điều khiển chain/License temporal state. Trong transaction fulfillment, thứ tự bắt buộc là ghi exact durable effect khi Order còn `WAITING_PAYMENT`, late-correct exact Attempt sang `SUCCEEDED` nếu cần, rồi mới project Order sang `PAYMENT_ACCEPTED`; late correction lưu immutable `corrected_from_status + correction_boundary_at`. License purchase phải bind chính effect đó, `period_start = provider_occurred_at`, exact quota snapshot và `ISSUE_LICENSE` trong cùng transaction; `ISSUE_LICENSE`/`RENEW_LICENSE` không được tồn tại nếu Order chưa có exact paid effect. Order snapshot/lifecycle fields bất biến; Order, PaymentAttempt và PaymentTransaction durable evidence không được delete/truncate; review chỉ được đi theo graph đã định.
-41. ChainEvent dùng để apply projection phải liên kết đúng ChainCommand, subject, expected event type, network, chain ID, contract address và transaction hash, đồng thời đạt `CONFIRMED`; event orphan, sai identity, `PENDING` hoặc `REORGED` không được apply. License/Device phải trỏ event canonical `CONFIRMED` mới nhất của chính subject và loại event phải tương thích projection status; Device `PENDING_ONCHAIN` không được đồng thời có applied pointer hoặc bất kỳ canonical `CONFIRMED` Device event. `licenses.expires_at` chỉ được đổi một lần khi pointer chuyển sang exact `LICENSE_RENEWED CONFIRMED`; chỉ được giảm khi pointer rời chính renewal event đã `REORGED` và command về `SUBMITTED_UNKNOWN`. ChainCommand/ChainEvent evidence không được delete/truncate; event mới luôn vào `PENDING`, identity/decoded evidence bất biến và reorg summary giữ latest timestamps + cumulative count đơn điệu, không được hiểu là full occurrence ledger. Mỗi command tối đa một canonical confirmation; event key còn normalize commitment/version mới và previous key cho rollback/promotion chính xác.
+41. ChainEvent dùng để apply projection phải liên kết đúng ChainCommand, subject, expected event type, network, chain ID, contract address và transaction hash, đồng thời đạt `CONFIRMED`; event orphan, sai identity, `PENDING` hoặc `REORGED` không được apply. License phải trỏ event canonical `CONFIRMED` mới nhất và đúng loại projection status; individual Device không có canonical event riêng, chỉ có ACTIVE/REVOKED do PostgreSQL quản lý. `licenses.expires_at` chỉ được đổi một lần khi pointer chuyển sang exact `LICENSE_RENEWED CONFIRMED`; chỉ được giảm khi pointer rời chính renewal event đã `REORGED` và command về `SUBMITTED_UNKNOWN`. ChainCommand/ChainEvent evidence không được delete/truncate; event mới luôn vào `PENDING`, identity/decoded evidence bất biến và reorg summary giữ latest timestamps + cumulative count đơn điệu, không được hiểu là full occurrence ledger. Mỗi command tối đa một canonical confirmation; event key còn normalize commitment/version mới và previous key cho rollback/promotion chính xác.
 42. Provider chain address/namespace, plan commitment và event/transaction identity phải được canonicalize trước khi so sánh hoặc tạo unique identity; EVM address/hash lưu lowercase, namespace so sánh case-insensitive.
 43. Mỗi ChainCommand có `license_command_sequence` liên tục theo License: sequence 1 là ISSUE đầu tiên, command sau phải trỏ đúng predecessor có sequence `current - 1`. Trừ ISSUE, `basis_chain_event_id` phải là confirmation event của command `CONFIRMED` có sequence lớn nhất đứng trước nó tại lúc tạo/reopen/submit; raw basis link được giữ khi event reorg để truy vết causal suffix. Mọi ISSUE sequence > 1 chỉ hợp lệ như reciprocal replacement của ISSUE cũ. `SUPERSEDED` và replacement phải link hai chiều, replacement có sequence lớn hơn và giữ cùng command type/logical subject/network. Forward admission dưới per-License lock chỉ cho một command actionable; reorg dùng sequence/dependency để reconcile theo thứ tự nhân quả.
 44. New purchase dùng `period_start = verified provider_occurred_at` và proposed expiry `addPlanDuration(period_start, duration_months)`. Giá trị ở License `PENDING_ONCHAIN` chỉ là proposal cho command; canonical expiry là giá trị contract/event sau finality. Nếu proposal không còn ở tương lai so với `canonicalNow` trước submit thì trong một transaction chuyển ISSUE chưa submit sang `ABANDONED` với reason `ISSUE_PROPOSAL_EXPIRED`, giữ License non-usable `PENDING_ONCHAIN` làm evidence và mở review trên PaymentTransaction `MATCHED`; không tự tính lại kỳ hạn. Review này chỉ kết thúc bằng `REFUND_CONFIRMED` hoặc `NO_ACTION` theo evidence, không dùng fulfillment để hồi sinh proposal đã hết hạn.
@@ -179,10 +181,10 @@ Các aggregate còn lại dùng graph chuyển trạng thái đóng sau để v�
 | 3 | CreatePaymentAttempt | Lock Order; nếu attempt `PENDING` còn hạn thì trả lại attempt đó; nếu hết hạn thì chuyển `EXPIRED`, hoặc `SUPERSEDED` khi chủ động thay thế, rồi mới insert attempt mới | Trả SePay reference/QR; không tạo attempt khi Order đã quá `payment_due_at` |
 | 4 | IPN NEW_PURCHASE | Chỉ từ Order `WAITING_PAYMENT` đã accept exact Terms; PostgreSQL statement-stamp và insert exact durable PaymentTransaction effect trước, prove exact amount/provider-time/cutoff (thêm supersede boundary khi có), late-correct exact Attempt `SUCCEEDED` nếu cần, rồi project Order `PAYMENT_ACCEPTED`. Trong cùng transaction create License `PENDING_ONCHAIN` với `period_start = effect.provider_occurred_at`, exact quota snapshot và sequenced `ISSUE_LICENSE`; License/ISSUE không được tồn tại thiếu paid effect | Sau commit chuẩn bị/kiểm tra encrypted activation envelope; Relayer chỉ submit khi envelope tồn tại, commitment khớp và proposed expiry còn hợp lệ; không giao key |
 | 5 | IPN RENEWAL | Composite-check Renewal Order↔đúng Customer/Provider/Product/Plan/commitment của target License; chỉ tạo `RENEW_LICENSE` khi exact Renewal Order có `PAYMENT_ACCEPTED` durable effect, rồi atomic handoff sang sequenced command với `addPlanDuration(max(canonical expiresAt, verified provider_occurred_at), duration_months)` | Relayer submit; chưa kéo dài quyền; lane conflict vào payment review |
-| 6 | ActivateDevice | Verify Customer ownership + bearer key off-chain + one-time device challenge/proof + quota snapshot; insert Device `PENDING_ONCHAIN`; create `ACTIVATE_DEVICE` command mang current key version, không mang secret | Smart contract enforce state/expiry/key-version/device uniqueness/quota; entitlement chỉ sau finality |
+| 6 | ActivateDevice | Public bearer key + fresh device proof; không cần purchaser session. DB transaction enforce quota và lưu Device ACTIVE, giữ nguyên owner | Blockchain chỉ nhận aggregate async `activeDeviceCount + deviceStateVersion` |
 | 7 | RotateKey | Verify Customer ownership + current activation key + recent password re-auth + one-time token bind `ROTATE_KEY`; lock License; giữ nguyên current commitment/version/trust, ghi pending next commitment/version + exact pending command pointer; không external Redis call trong DB transaction | Sau commit chuẩn bị/verify envelope; relayer submit khi khớp; `KEY_ROTATED` finality mới atomically promote exact pending và giao key mới một lần |
-| 8a | SelfRevokeDevice | Verify Customer ownership + activation key + fresh proof của target Device + one-time token bind `SELF_REVOKE_DEVICE + deviceRef + generation`; create request-scoped `REVOKE_DEVICE` command | Projection đổi sau finality |
-| 8b | RemoteRevokeDevice | Verify Customer ownership + recent password re-auth + current activation key + one-time token bind `REMOTE_REVOKE_DEVICE + deviceRef + generation`; không yêu cầu proof của thiết bị bị mất | Projection đổi sau finality; nếu mất cả activation key thì hoàn tất owner key-recovery trước |
+| 8a | SelfRevokeDevice | Owner + activation key + fresh device proof + action token; DB transaction ghi REVOKED | Aggregate sync async; entitlement kiểm tra DB ngay |
+| 8b | RemoteRevokeDevice | Owner + password re-auth + action token; không yêu cầu device proof; DB transaction ghi REVOKED | Aggregate sync async; không chờ finality |
 | 8c | OwnerKeyRecovery | Verify Customer ownership + recent password re-auth + one-time token bind `KEY_RECOVERY`; không yêu cầu current key; lock License, reject `REVOKED`/unresolved lane và create pending next-version recovery `ROTATE_KEY` | Same envelope/relayer/finality; one-time delivery sau finality, không sửa commitment cũ |
 | 9 | Suspend/Resume/Revoke | Provider ownership + policy + audit; create command | Projection đổi sau finality |
 | 10 | ChainEvent apply | Idempotent event insert/finality update; enforce one confirmed event/command, immutable evidence, exact key before/after evidence, projection transition + reverse command confirmation pointer | Notification sau commit |
@@ -228,7 +230,7 @@ Các aggregate còn lại dùng graph chuyển trạng thái đóng sau để v�
 | `LIC-01` | Request/cấp License | Worker/Chain | Payment accepted -> `PENDING_ONCHAIN`; `ACTIVE` chỉ sau `LICENSE_ISSUED` finality |
 | `LIC-02` | Activation key lifecycle | Customer owner/Worker/Chain | Commitment on-chain; owner JWT + step-up policy cho rotate/recovery; Customer owner nhận plaintext một lần sau issue/rotate finality; key không định danh người mua |
 | `LIC-03` | Xem License và trạng thái projection | Customer/Provider Admin | JWT + ownership; public verify thuộc `BC-05` |
-| `LIC-04` | Kích hoạt thiết bị | Customer owner/Backend/Chain | Backend xác minh owner JWT + bearer key + device proof off-chain; Device pending trước chain; contract enforce state/expiry/key-version/device uniqueness/quota |
+| `LIC-04` | Kích hoạt thiết bị | Public client/Backend | Bearer activation key + device proof; PostgreSQL transaction enforce quota và ACTIVE/REVOKED; không chuyển ownership |
 | `LIC-05` | Revoke thiết bị | Customer owner/Worker/Chain | Self-revoke cần owner JWT + action token + activation key + fresh device proof; remote revoke cần owner step-up và không yêu cầu proof của thiết bị bị mất; relayer-only on-chain |
 | `LIC-06` | Entitlement issue/refresh/verify | Customer owner/Device/Backend | Token 5 phút; issue/refresh cần fresh device proof; verify re-check chain-confirmed projection + current key/entitlement version |
 | `LIC-07` | Áp dụng renewal | Customer/Worker/Chain | Chỉ `LICENSE_RENEWED` finality mới kéo dài expiry |
@@ -238,7 +240,7 @@ Các aggregate còn lại dùng graph chuyển trạng thái đóng sau để v�
 
 | ID | Chức năng | Actor | Ràng buộc chính |
 |---|---|---|---|
-| `BC-01` | Smart Contract License/Device Registry | Chain | Enforce transition, expiry, current key-version, device uniqueness/quota và relayer authorization; bind provider address + plan commitment; chain là rights authority |
+| `BC-01` | Smart Contract License/Device Registry | Chain | Enforce transition, expiry, current key-version, PostgreSQL-enforced individual Device uniqueness/quota và relayer authorization; bind provider address + plan commitment; chain là rights authority |
 | `BC-02` | ChainCommand và Relayer | Backend/Worker | Stable idempotency, nonce, uncertain submit, retry/dead-letter |
 | `BC-03` | ChainEvent, Indexer và finality/reorg | Worker | Event identity duy nhất; confirmation; reorg không usable |
 | `BC-04` | Projection và reconcile | Worker/System Admin | Sở hữu toàn bộ reconcile logic; scheduled reconcile do Worker, manual reconcile chỉ System Admin và phải có audit |
@@ -311,12 +313,12 @@ Các cạnh state dùng để vẽ diagram:
 
 ### 9.2. Device activation
 
-1. Customer owner đăng nhập, nhập bearer activation key và yêu cầu challenge bind đủ `protocolDomain + action + licenseId + opaqueDeviceRef + bindingGeneration + keyVersion + nonce + expiresAt`.
-2. Device ký đúng challenge bằng private key cục bộ; backend atomically consume nonce, kiểm tra License ownership, activation commitment, device proof, purpose và quota sơ bộ. Secret/private key không đi vào command/calldata.
-3. Backend lưu signer address suy ra từ public key của Device, rồi tạo `LicenseDevice.PENDING_ONCHAIN` + `ACTIVATE_DEVICE` command mang current activation key version/device reference. Device private key không rời SecureStore.
-4. Smart contract tự enforce License state/expiry/current key version/device uniqueness/quota và relayer authorization.
-5. Chỉ `DEVICE_ACTIVATED` finality mới chuyển Device `ACTIVE` và cho phép cấp entitlement.
-6. Sau `DEVICE_REVOKED` finality, bind lại cùng `device_ref` tạo logical request mới, tăng `binding_generation`, chuyển `REVOKED -> PENDING_ONCHAIN`; chỉ finality mới đưa generation mới về `ACTIVE`.
+1. Client gọi public `/activations/challenge` bằng bearer activation key và device reference; không cần purchaser session. Challenge bind protocol/action/license/device/generation/keyVersion/nonce/expiry.
+2. Device ký challenge bằng private key cục bộ. Backend kiểm tra commitment, proof và atomically consume nonce.
+3. PostgreSQL transaction khóa License, kiểm tra state/expiry/current key version/quota và tạo Device ACTIVE. Không thay đổi customer ownership; private key không rời thiết bị.
+4. DB lưu signer address, device reference và binding generation. Blockchain không nhận individual device identity; worker chỉ đồng bộ async aggregate `activeDeviceCount + deviceStateVersion`.
+5. Entitlement kiểm tra license lifecycle/trust và Device ACTIVE trong DB, không chờ aggregate sync finality.
+6. Revoke ghi REVOKED trong DB transaction; bind lại tăng binding generation và trả ACTIVE sau kiểm tra quota. Management vẫn yêu cầu owner authorization.
 
 ### 9.3. Renewal
 

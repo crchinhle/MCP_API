@@ -5,6 +5,6 @@
     "noEmit": true,
     "types": ["jest"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "test/**/*.ts", "test/**/*.tsx"],
+  "include": ["App.tsx", "src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["node_modules", "dist", "build", "coverage"]
 }

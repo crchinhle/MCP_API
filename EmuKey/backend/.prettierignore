@@ -5,4 +5,4 @@ coverage/
 pnpm-lock.yaml
 contracts/artifacts/
 contracts/cache/
-docs/openapi/openapi.json
+openapi/openapi.json

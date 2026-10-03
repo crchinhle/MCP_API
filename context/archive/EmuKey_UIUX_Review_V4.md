@@ -1,5 +1,7 @@
 # EmuKey — Review UI/UX vòng 4 và kết quả sửa trực tiếp
 
+> Historical record: implementation status and commands below describe the dated review, not current acceptance. Current device authority is PostgreSQL; blockchain receives aggregate device-count/version sync only. Repository paths are updated where the referenced files moved.
+
 Ngày rà soát: 21/09/2026.
 
 File: [KLTN — 04_Screens_Web](https://www.figma.com/design/ys1A2io0Ozz1TvR2o9S4Nb/KLTN?node-id=47-96).

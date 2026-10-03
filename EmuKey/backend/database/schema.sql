@@ -1701,6 +1701,7 @@ BEGIN
         JOIN chain_commands c ON c.id = e.chain_command_id
         WHERE e.license_id = v_license_id
           AND e.license_device_id IS NULL
+          AND e.event_type <> 'ACTIVE_DEVICE_COUNT_SYNCED'
           AND e.finality_status = 'CONFIRMED'
           AND c.status = 'CONFIRMED'
           AND c.confirmation_chain_event_id = e.id

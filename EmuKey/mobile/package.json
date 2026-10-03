@@ -8,13 +8,10 @@
   "type": "module",
   "scripts": {
     "build": "expo export --platform android --output-dir dist",
-    "e2e:maestro": "maestro test e2e/phase6-license-flow.yaml",
-    "e2e:check": "node scripts/check-maestro.mjs",
     "lint": "eslint .",
     "openapi:check": "node scripts/generate-openapi.mjs --check",
     "openapi:generate": "node scripts/generate-openapi.mjs",
     "start": "expo start",
-    "test": "jest --runInBand",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

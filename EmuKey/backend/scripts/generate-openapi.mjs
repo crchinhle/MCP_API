@@ -10,7 +10,7 @@ const temporaryDirectory = check
   : undefined;
 const specification = temporaryDirectory
   ? join(temporaryDirectory, 'openapi.json')
-  : join(root, 'docs', 'openapi', 'openapi.json');
+  : join(root, 'openapi', 'openapi.json');
 
 const environment = {
   ...process.env,
@@ -85,7 +85,7 @@ try {
 
   if (check) {
     const expected = await readFile(
-      join(root, 'docs', 'openapi', 'openapi.json'),
+      join(root, 'openapi', 'openapi.json'),
       'utf8',
     );
     const actual = await readFile(specification, 'utf8');

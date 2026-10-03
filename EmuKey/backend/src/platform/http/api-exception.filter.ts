@@ -50,6 +50,14 @@ export class ApiExceptionFilter implements ExceptionFilter {
     const traceId = incomingTraceId?.trim() || randomUUID();
 
     const payload = exception instanceof HttpException ? errorPayload(exception) : {};
+    if (status === 429 && exception instanceof HttpException) {
+      const body = exception.getResponse();
+      const retryAfter = typeof body === 'object' && body !== null
+        ? (body as Record<string, unknown>).retryAfterSeconds : undefined;
+      if (typeof retryAfter === 'number' && Number.isFinite(retryAfter) && retryAfter > 0) {
+        response.setHeader('Retry-After', String(Math.ceil(retryAfter)));
+      }
+    }
     const safeMessage = status >= 500 ? publicMessage(status) : payload.message ?? publicMessage(status);
     response.status(status).json({
       error: {

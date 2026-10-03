@@ -10,7 +10,6 @@ export default tseslint.config(
       '**/coverage/**',
       '**/playwright-report/**',
       '**/test-results/**',
-      '**/generated/**',
     ],
   },
   eslint.configs.recommended,
@@ -24,15 +23,6 @@ export default tseslint.config(
       parserOptions: {
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
-      },
-    },
-  },
-  {
-    files: ['playwright.config.ts', 'e2e/**/*.ts'],
-    languageOptions: {
-      parserOptions: {
-        projectService: false,
-        project: './tsconfig.json',
       },
     },
   },

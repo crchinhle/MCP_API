@@ -7,7 +7,6 @@ const check = process.argv.includes('--check');
 const backendSpecification = join(
   root,
   'backend',
-  'docs',
   'openapi',
   'openapi.json',
 );

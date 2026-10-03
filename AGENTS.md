@@ -15,8 +15,8 @@ Kilo loads `agent/skills` explicitly through `skills.paths` in root `kilo.json`.
 
 Current project context lives in `context/current/`; historical reviews and plans
 live in `context/archive/`. The physical-schema authority is
-`context/current/sql_minimal.sql`; `EmuKey/backend/database/schema.sql` remains its
-byte-identical runtime mirror. `EmuKey/` is tracked source in this review workspace,
+`EmuKey/backend/database/schema.sql`, the sole version-controlled schema; context
+and workspace tooling reference this product-owned file without maintaining a copy. `EmuKey/` is tracked source in this review workspace,
 and its separate nested Git repository, when present, must be preserved.
 
 `AGENTS.md` contains durable repository rules. Skills contain task-specific workflows. Load the smallest set that covers the current task; do not load every skill merely because it is available. User and platform instructions always take precedence, and a skill never grants authority to expand scope, modify external systems, create commits, push, merge, delete data, or dispatch subagents when that action is not otherwise authorized.
@@ -76,6 +76,8 @@ For a dependency or external integration:
 `search-first -> compare candidates -> source/version verification -> security review -> adapter implementation -> integration tests -> observability -> verification`
 
 ## Product and architecture
+
+- Keep product build/runtime/deployment self-contained in `EmuKey/`. Workspace documentation lives in `docs/emukey/`, tests in `tests/emukey/`, and verification/fixtures in `tooling/emukey/`. Dependency direction is workspace tooling/tests ? EmuKey only.
 
 - Build a TypeScript-first license sales and key-management platform.
 - Use React + Vite + Ant Design + TanStack Query for web.

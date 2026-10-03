@@ -5,8 +5,10 @@ import {
   ParseUUIDPipe,
   Post,
   Get,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { ApiBearerAuth, ApiCreatedResponse, ApiForbiddenResponse, ApiOkResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
 
 import { CurrentUser, Roles } from '../identity-access/security.decorators.js';
@@ -44,7 +46,10 @@ export class LicensingController {
   @UseGuards(OptionalAuthGuard)
   @ApiOperation({ summary: 'Create a device challenge; activation challenges resolve the license from the bearer activation key and require no purchaser login' })
   @ApiCreatedResponse({ type: DeviceChallengeDto })
-  challenge(@CurrentUser() actor: AuthPrincipal | undefined, @Body() dto: ActivationChallengeDto) {
+  async challenge(@CurrentUser() actor: AuthPrincipal | undefined, @Body() dto: ActivationChallengeDto, @Req() request: Request) {
+    // Use the connected peer, not untrusted forwarded headers. A reverse proxy
+    // shares this budget and should also apply its own client-IP limit.
+    await this.service.limitPublicActivation(request.socket.remoteAddress ?? 'unknown');
     return this.service.challenge(actor ?? null, dto);
   }
 
@@ -52,7 +57,8 @@ export class LicensingController {
   @UseGuards(OptionalAuthGuard)
   @ApiOperation({ summary: 'Activate a device with a bearer activation key and device proof; no purchaser session is required' })
   @ApiCreatedResponse({ type: LicenseDeviceDto })
-  activate(@CurrentUser() actor: AuthPrincipal | undefined, @Body() dto: ActivateDeviceDto) {
+  async activate(@CurrentUser() actor: AuthPrincipal | undefined, @Body() dto: ActivateDeviceDto, @Req() request: Request) {
+    await this.service.limitPublicActivation(request.socket.remoteAddress ?? 'unknown');
     return this.service.activate(actor ?? null, dto);
   }
 

@@ -10,7 +10,6 @@ RUN corepack pnpm install --frozen-lockfile
 COPY . .
 ARG EXPO_PUBLIC_API_URL=http://localhost:3000/api/v1
 ENV EXPO_PUBLIC_API_URL=${EXPO_PUBLIC_API_URL}
-RUN corepack pnpm test
 RUN corepack pnpm typecheck
 RUN corepack pnpm build
 

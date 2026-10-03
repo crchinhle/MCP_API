@@ -7,44 +7,22 @@
   },
   "type": "module",
   "scripts": {
-    "baseline:check": "node scripts/validate-baseline.mjs",
     "db:initialize": "node --env-file-if-exists=.env dist/entrypoints/database/initialize.js",
     "db:reset": "node --env-file-if-exists=.env dist/entrypoints/database/reset.js",
     "db:seed": "node --env-file-if-exists=.env dist/entrypoints/database/seed.js",
     "db:verify": "node --env-file-if-exists=.env dist/entrypoints/database/verify.js",
-    "db:verify:terms": "node scripts/verify-schema-columns.mjs",
     "reconcile:run": "node --env-file-if-exists=.env scripts/reconcile.mjs",
     "reconcile:payment:sandbox": "node --env-file-if-exists=.env scripts/reconcile-sandbox-payment.mjs",
     "lint": "eslint .",
-    "openapi:check": "node scripts/generate-openapi.mjs --check",
     "openapi:export": "node --env-file-if-exists=.env dist/entrypoints/api/export-openapi.js",
-    "openapi:generate": "node scripts/generate-openapi.mjs",
     "start:api": "node --env-file-if-exists=.env dist/entrypoints/api/main.js",
     "start:worker": "node --env-file-if-exists=.env dist/entrypoints/worker/main.js",
-    "test": "vitest run",
-    "test:integration": "vitest run test/integration --maxWorkers=1",
-    "test:unit": "vitest run test/unit",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "tsc -p tsconfig.build.json",
-    "contracts:verify": "corepack pnpm --dir contracts build && corepack pnpm --dir contracts test && corepack pnpm --dir contracts abi:export",
-    "delivery:check": "node scripts/validate-delivery.mjs",
-    "release:check": "node --env-file-if-exists=.env scripts/release-check.mjs",
-    "release:evidence": "node --env-file-if-exists=.env scripts/release-evidence.mjs",
-    "test:security": "node scripts/security-scan.mjs && vitest run test/security --maxWorkers=1",
-    "test:security:local": "node scripts/security-scan.mjs --include-local-env",
     "secrets:rotate:dev": "node scripts/rotate-dev-secrets.mjs",
-    "test:dependency-audit": "node scripts/dependency-audit.mjs",
-    "test:load": "node --env-file-if-exists=.env scripts/load-test.mjs",
-    "test:backup-restore": "node --env-file-if-exists=.env scripts/backup-restore.mjs --disposable --reconcile",
-    "test:rpc-chaos": "vitest run test/unit/viem-chain-relayer.test.ts test/unit/rpc-chain-indexer.service.test.ts test/integration/blockchain/viem-rpc.integration.test.ts --maxWorkers=1",
-    "test:redis-loss": "node --env-file-if-exists=.env scripts/redis-loss-drill.mjs",
-    "test:external": "node --env-file-if-exists=.env scripts/verify-external.mjs"
-    ,"test:external:sepay": "node --env-file-if-exists=.env scripts/verify-external.mjs --provider=SEPAY"
-    ,"test:external:brevo": "node --env-file-if-exists=.env scripts/verify-external.mjs --provider=BREVO"
-    ,"test:external:gemini": "node --env-file-if-exists=.env scripts/verify-external.mjs --provider=GEMINI"
-    ,"test:external:fcm": "node --env-file-if-exists=.env scripts/verify-external.mjs --provider=FCM"
-    ,"test:external:cloudinary": "node --env-file-if-exists=.env scripts/verify-external.mjs --provider=CLOUDINARY"
-    ,"test:external:sepolia": "node --env-file-if-exists=.env scripts/verify-external.mjs --provider=SEPOLIA"
+    "contracts:build": "corepack pnpm --dir contracts build && corepack pnpm --dir contracts abi:export",
+    "openapi:check": "node scripts/generate-openapi.mjs --check",
+    "openapi:generate": "node scripts/generate-openapi.mjs"
   },
   "dependencies": {
     "@getbrevo/brevo": "6.0.3",

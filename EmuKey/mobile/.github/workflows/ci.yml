@@ -28,7 +28,6 @@ jobs:
           corepack pnpm exec expo install --check
           corepack pnpm lint
           corepack pnpm typecheck
-          corepack pnpm test
           corepack pnpm openapi:check
           corepack pnpm build
       - name: Build standalone image

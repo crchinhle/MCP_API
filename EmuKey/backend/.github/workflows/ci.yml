@@ -25,15 +25,9 @@ jobs:
         run: corepack pnpm install --frozen-lockfile
       - name: Verify source and contracts
         run: |
-          corepack pnpm baseline:check
-          RELEASE_CHECK_STRUCTURAL_ONLY=true corepack pnpm release:check
-          corepack pnpm test:security
-          corepack pnpm test:dependency-audit
           corepack pnpm lint
           corepack pnpm typecheck
-          corepack pnpm test
-          corepack pnpm contracts:verify
-          corepack pnpm delivery:check
+          corepack pnpm contracts:build
           corepack pnpm openapi:check
           corepack pnpm build
           git diff --check

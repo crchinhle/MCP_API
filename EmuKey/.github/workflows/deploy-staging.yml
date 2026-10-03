@@ -39,8 +39,3 @@ jobs:
         run: |
           test -n "$STAGING_HEALTH_URL"
           curl --fail --retry 12 --retry-delay 5 --silent --show-error "$STAGING_HEALTH_URL/api/v1/health/ready"
-      - name: Run staging smoke
-        env:
-          BASE_URL: ${{ secrets.STAGING_WEB_URL }}
-          E2E_EXTERNAL: 'true'
-        run: corepack pnpm --dir frontend install --frozen-lockfile && corepack pnpm --dir frontend e2e

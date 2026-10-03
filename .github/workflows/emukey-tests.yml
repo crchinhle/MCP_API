@@ -1,0 +1,36 @@
+name: EmuKey workspace tests
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22.21.0
+      - run: corepack enable
+      - name: Install existing product dependencies
+        run: |
+          corepack pnpm --dir EmuKey/backend install --frozen-lockfile
+          corepack pnpm --dir EmuKey/frontend install --frozen-lockfile
+          corepack pnpm --dir EmuKey/mobile install --frozen-lockfile
+      - name: Workspace verification
+        run: |
+          node tooling/emukey/run.mjs baseline
+          node tooling/emukey/run.mjs backend:unit
+          node tooling/emukey/run.mjs backend:contract
+          node tooling/emukey/run.mjs backend:security
+          RUN_PHASE7_INTEGRATION=true node tooling/emukey/run.mjs backend:integration
+          node tooling/emukey/run.mjs frontend:unit
+          node tooling/emukey/run.mjs mobile:unit
+          node tooling/emukey/run.mjs contracts
+      - name: Install browser
+        run: corepack pnpm --dir EmuKey/frontend exec playwright install --with-deps chromium
+      - name: Isolated web regressions
+        env:
+          E2E_WEB_ONLY: 'true'
+          BASE_URL: http://127.0.0.1:5173
+        run: node tooling/emukey/run.mjs frontend:e2e buyer-ui-recovery.spec.ts workspace-navigation.spec.ts payment-status-flow.spec.ts --workers=1

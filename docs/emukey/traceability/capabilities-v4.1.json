@@ -1,0 +1,413 @@
+{
+  "baseline": {
+    "functionCatalog": "v5.1-account-linked-buyer",
+    "sql": "v7.2",
+    "technology": "v5.1-account-linked-buyer",
+    "implementationPlan": "v5.1-account-linked-buyer",
+    "capabilityCount": 35
+  },
+  "currentTables": [
+    "users",
+    "products",
+    "plans",
+    "orders",
+    "payment_attempts",
+    "payment_transactions",
+    "licenses",
+    "license_devices",
+    "chain_commands",
+    "chain_indexer_checkpoints",
+    "chain_events",
+    "knowledge_documents",
+    "knowledge_chunks",
+    "conversations",
+    "messages",
+    "notifications",
+    "mobile_push_tokens",
+    "audit_logs"
+  ],
+  "uniqueOwners": {
+    "comparePlans": "CAT-05",
+    "publicBlockchainVerification": "BC-05",
+    "projectionReconcile": "BC-04"
+  },
+  "cryptoVectorOwner": "tests/emukey/contracts/test-vectors/crypto-v2.json",
+  "capabilities": [
+    {
+      "id": "AUTH-01",
+      "phase": 3,
+      "actor": "CUSTOMER",
+      "owner": "identity-access/customer-registration",
+      "api": "POST /auth/register; POST /auth/verify-email; POST /auth/resend-verification",
+      "tables": ["users", "audit_logs"],
+      "transaction": "create account pending email verification; activate exactly once",
+      "testOwner": "tests/emukey/backend/integration/identity/identity-flow.integration.test.ts"
+    },
+    {
+      "id": "AUTH-02",
+      "phase": 3,
+      "actor": "INTERNAL_USER",
+      "owner": "identity-access/session",
+      "api": "POST /auth/login; POST /auth/refresh; POST /auth/logout",
+      "tables": ["users", "audit_logs"],
+      "transaction": "rotate refresh family atomically; session_version is durable revocation",
+      "testOwner": "tests/emukey/backend/integration/identity/identity-flow.integration.test.ts"
+    },
+    {
+      "id": "AUTH-03",
+      "phase": 3,
+      "actor": "USER_OR_SYSTEM_ADMIN",
+      "owner": "identity-access/account-lifecycle",
+      "api": "GET/PUT /auth/profile; PUT /auth/password; POST /auth/users/:id/{lock|unlock|disable}",
+      "tables": ["users", "audit_logs"],
+      "transaction": "account mutation and audit commit together",
+      "testOwner": "tests/emukey/backend/integration/identity/identity-flow.integration.test.ts"
+    },
+    {
+      "id": "AUTH-04",
+      "phase": 3,
+      "actor": "BACKEND",
+      "owner": "identity-access/authorization",
+      "api": "guards and provider-owned application interfaces",
+      "tables": ["users"],
+      "transaction": "provider authority always derives from authenticated principal",
+      "testOwner": "tests/emukey/backend/integration/identity/identity-flow.integration.test.ts"
+    },
+    {
+      "id": "CAT-01",
+      "phase": 3,
+      "actor": "PROVIDER_ADMIN_OR_SYSTEM",
+      "owner": "identity-access/provider-profile",
+      "api": "GET/PUT /auth/profile and system provider provisioning",
+      "tables": ["users", "audit_logs"],
+      "transaction": "provider chain identity becomes immutable once referenced",
+      "testOwner": "tests/emukey/backend/integration/catalog/catalog-lifecycle.integration.test.ts"
+    },
+    {
+      "id": "CAT-02",
+      "phase": 3,
+      "actor": "PROVIDER_ADMIN",
+      "owner": "catalog/product-lifecycle",
+      "api": "/products provider mutations and public reads",
+      "tables": ["products", "audit_logs"],
+      "transaction": "provider-scoped product mutation and audit",
+      "testOwner": "tests/emukey/backend/integration/catalog/catalog-lifecycle.integration.test.ts"
+    },
+    {
+      "id": "CAT-03",
+      "phase": 3,
+      "actor": "PROVIDER_ADMIN",
+      "owner": "catalog/plan-lifecycle",
+      "api": "/plans provider mutations",
+      "tables": ["plans", "products", "audit_logs"],
+      "transaction": "provider-scoped version creation; published rows immutable",
+      "testOwner": "tests/emukey/backend/integration/catalog/catalog-lifecycle.integration.test.ts"
+    },
+    {
+      "id": "CAT-04",
+      "phase": 3,
+      "actor": "BACKEND_OR_PROVIDER_ADMIN",
+      "owner": "catalog/terms-and-plan-commitment",
+      "api": "plan publish application interface",
+      "tables": ["plans", "audit_logs"],
+      "transaction": "bind approved terms hash and deterministic commitment on publish",
+      "testOwner": "tests/emukey/backend/unit/platform/license-crypto.test.ts"
+    },
+    {
+      "id": "CAT-05",
+      "phase": 3,
+      "actor": "PUBLIC",
+      "owner": "catalog/compare-plans-query",
+      "api": "GET /products; GET /products/:slug; GET /plans/compare",
+      "tables": ["products", "plans"],
+      "transaction": "read-only published catalog query",
+      "testOwner": "tests/emukey/backend/unit/compare-plans.query.test.ts"
+    },
+    {
+      "id": "COM-01",
+      "phase": 4,
+      "actor": "CUSTOMER",
+      "owner": "commerce-payment/create-order",
+      "api": "POST /orders",
+      "tables": ["orders", "plans", "products", "users", "audit_logs"],
+      "transaction": "lock published plan and persist immutable server snapshot",
+      "testOwner": "tests/emukey/backend/integration/commerce/commerce-flow.integration.test.ts"
+    },
+    {
+      "id": "COM-02",
+      "phase": 4,
+      "actor": "CUSTOMER",
+      "owner": "commerce-payment/accept-service-terms",
+      "api": "POST /orders/:id/accept-service-terms",
+      "tables": ["orders", "audit_logs"],
+      "transaction": "lock owned order and record one DB-stamped Service Terms acceptance once",
+      "testOwner": "tests/emukey/backend/integration/commerce/commerce-flow.integration.test.ts"
+    },
+    {
+      "id": "COM-03",
+      "phase": 4,
+      "actor": "CUSTOMER",
+      "owner": "commerce-payment/checkout",
+      "api": "POST /orders/:id/checkout",
+      "tables": [
+        "orders",
+        "payment_attempts",
+        "audit_logs"
+      ],
+      "transaction": "persist owner attempt before external checkout call",
+      "testOwner": "tests/emukey/backend/integration/commerce/commerce-flow.integration.test.ts"
+    },
+    {
+      "id": "COM-04",
+      "phase": 4,
+      "actor": "SYSTEM",
+      "owner": "commerce-payment/sepay-ipn-classifier",
+      "api": "POST /payments/ipn",
+      "tables": [
+        "payment_transactions",
+        "payment_attempts",
+        "orders",
+        "licenses",
+        "chain_commands"
+      ],
+      "transaction": "durable idempotent classification and matched payment effects",
+      "testOwner": "tests/emukey/backend/integration/commerce/commerce-flow.integration.test.ts"
+    },
+    {
+      "id": "COM-05",
+      "phase": 4,
+      "actor": "CUSTOMER_OR_INTERNAL_USER",
+      "owner": "commerce-payment/payment-evidence",
+      "api": "payment history, review and derived receipt endpoints",
+      "tables": [
+        "payment_transactions",
+        "payment_attempts",
+        "orders",
+        "audit_logs"
+      ],
+      "transaction": "review mutation and audit commit together",
+      "testOwner": "tests/emukey/backend/integration/commerce/commerce-flow.integration.test.ts"
+    },
+    {
+      "id": "COM-06",
+      "phase": 4,
+      "actor": "CUSTOMER_OR_SYSTEM",
+      "owner": "commerce-payment/create-renewal-order",
+      "api": "POST /orders with targetLicenseId",
+      "tables": ["orders", "licenses", "plans", "chain_commands"],
+      "transaction": "snapshot owned license renewal; payment creates command without changing expiry",
+      "testOwner": "tests/emukey/backend/integration/commerce/commerce-flow.integration.test.ts"
+    },
+    {
+      "id": "LIC-01",
+      "phase": 5,
+      "actor": "SYSTEM_OR_CHAIN",
+      "owner": "licensing/license-issuance",
+      "api": "internal payment-success and chain-event application interfaces",
+      "tables": ["licenses", "orders", "chain_commands", "chain_events"],
+      "transaction": "payment creates pending license; confirmed event activates projection",
+      "testOwner": "tests/emukey/backend/integration/blockchain/phase5-golden-flow.integration.test.ts"
+    },
+    {
+      "id": "LIC-02",
+      "phase": 5,
+      "actor": "CUSTOMER_SYSTEM_OR_CHAIN",
+      "owner": "licensing/activation-key-lifecycle",
+      "api": "POST /licenses/:id/activation-key/retrieve and internal envelope interface",
+      "tables": ["licenses", "chain_commands", "chain_events"],
+      "transaction": "persist commitment before post-commit encrypted envelope preparation",
+      "testOwner": "tests/emukey/backend/integration/blockchain/phase5-golden-flow.integration.test.ts"
+    },
+    {
+      "id": "LIC-03",
+      "phase": 5,
+      "actor": "CUSTOMER_OR_PROVIDER_ADMIN",
+      "owner": "licensing/license-projection-query",
+      "api": "GET /licenses; GET /licenses/:id",
+      "tables": ["licenses", "license_devices", "chain_events"],
+      "transaction": "read-only tenant-scoped projection with freshness",
+      "testOwner": "tests/emukey/backend/integration/blockchain/phase5-golden-flow.integration.test.ts"
+    },
+    {
+      "id": "LIC-04",
+      "phase": 6,
+      "actor": "DEVICE_USER_BACKEND_OR_CHAIN",
+      "owner": "licensing/device-activation",
+      "api": "POST /activations",
+      "tables": ["licenses", "license_devices", "chain_commands"],
+      "transaction": "verify off-chain proof then persist pending device command",
+      "testOwner": "tests/emukey/backend/unit/licensing.service.test.ts"
+    },
+    {
+      "id": "LIC-05",
+      "phase": 6,
+      "actor": "ACTIVATION_KEY_HOLDER_OR_CHAIN",
+      "owner": "licensing/device-revocation",
+      "api": "POST /licenses/:licenseId/devices/:deviceId/revoke",
+      "tables": ["license_devices", "chain_commands", "chain_events"],
+      "transaction": "persist authorized revoke command and audit",
+      "testOwner": "tests/emukey/backend/unit/licensing.service.test.ts"
+    },
+    {
+      "id": "LIC-06",
+      "phase": 6,
+      "actor": "DEVICE_OR_BACKEND",
+      "owner": "licensing/entitlement",
+      "api": "POST /entitlements/issue; POST /entitlements/refresh",
+      "tables": ["licenses", "license_devices", "chain_events"],
+      "transaction": "read confirmed current projection before signing short token",
+      "testOwner": "tests/emukey/backend/unit/licensing.service.test.ts"
+    },
+    {
+      "id": "LIC-07",
+      "phase": 6,
+      "actor": "CUSTOMER_SYSTEM_OR_CHAIN",
+      "owner": "licensing/renewal-application",
+      "api": "internal confirmed LICENSE_RENEWED projection",
+      "tables": ["licenses", "orders", "chain_commands", "chain_events"],
+      "transaction": "only confirmed canonical event extends expiry",
+      "testOwner": "tests/emukey/backend/integration/commerce/commerce-flow.integration.test.ts"
+    },
+    {
+      "id": "LIC-08",
+      "phase": 6,
+      "actor": "PROVIDER_SYSTEM_OR_CHAIN",
+      "owner": "licensing/license-lifecycle",
+      "api": "license state request endpoints and expiry projection worker",
+      "tables": ["licenses", "chain_commands", "chain_events", "audit_logs"],
+      "transaction": "request creates command; canonical event controls projection",
+      "testOwner": "tests/emukey/backend/unit/blockchain-reconciliation.service.test.ts"
+    },
+    {
+      "id": "BC-01",
+      "phase": 5,
+      "actor": "CHAIN",
+      "owner": "contracts/license-device-registry",
+      "api": "Solidity ABI",
+      "tables": [],
+      "transaction": "on-chain transition enforces rights authority",
+      "testOwner": "tests/emukey/contracts/LicenseRegistry.ts"
+    },
+    {
+      "id": "BC-02",
+      "phase": 5,
+      "actor": "BACKEND_OR_WORKER",
+      "owner": "blockchain/chain-command-relayer",
+      "api": "internal chain-submit processor",
+      "tables": ["chain_commands", "audit_logs"],
+      "transaction": "durable claim/state before and after external RPC submit",
+      "testOwner": "tests/emukey/backend/integration/blockchain/phase5-golden-flow.integration.test.ts"
+    },
+    {
+      "id": "BC-03",
+      "phase": 5,
+      "actor": "WORKER",
+      "owner": "blockchain/chain-event-indexer",
+      "api": "internal chain-index-finality processor",
+      "tables": ["chain_events", "chain_commands"],
+      "transaction": "idempotent event ingest and canonical finality update",
+      "testOwner": "tests/emukey/backend/integration/blockchain/phase5-golden-flow.integration.test.ts"
+    },
+    {
+      "id": "BC-04",
+      "phase": 5,
+      "actor": "WORKER_OR_SYSTEM",
+      "owner": "blockchain/projection-reconcile",
+      "api": "POST /operations/blockchain/reconcile and internal processor",
+      "tables": [
+        "chain_events",
+        "chain_commands",
+        "licenses",
+        "license_devices",
+        "audit_logs"
+      ],
+      "transaction": "rebuild projection from canonical events and audit manual trigger",
+      "testOwner": "tests/emukey/backend/integration/blockchain/phase5-golden-flow.integration.test.ts"
+    },
+    {
+      "id": "BC-05",
+      "phase": 5,
+      "actor": "PUBLIC_OR_SYSTEM",
+      "owner": "blockchain/public-verification",
+      "api": "GET /public/licenses/:publicId/verify",
+      "tables": ["licenses", "plans", "products", "users", "chain_events"],
+      "transaction": "read-only public allowlist query",
+      "testOwner": "tests/emukey/backend/integration/blockchain/phase5-golden-flow.integration.test.ts"
+    },
+    {
+      "id": "AST-01",
+      "phase": 7,
+      "actor": "PROVIDER_ADMIN_OR_SYSTEM",
+      "owner": "assistance-support/knowledge-lifecycle",
+      "api": "knowledge document endpoints",
+      "tables": ["knowledge_documents", "knowledge_chunks"],
+      "transaction": "persist document state before async ingestion",
+      "testOwner": "tests/emukey/backend/integration/assistance/knowledge-lifecycle.integration.test.ts"
+    },
+    {
+      "id": "AST-02",
+      "phase": 7,
+      "actor": "CUSTOMER_OR_AI",
+      "owner": "assistance-support/grounded-advisory",
+      "api": "AI answer endpoint consuming CAT-05",
+      "tables": [
+        "knowledge_documents",
+        "knowledge_chunks",
+        "products",
+        "plans"
+      ],
+      "transaction": "read-only grounded query with source or refusal",
+      "testOwner": "tests/emukey/backend/integration/assistance/grounded-advisory.integration.test.ts"
+    },
+    {
+      "id": "AST-03",
+      "phase": 7,
+      "actor": "CUSTOMER_OR_SUPPORT_STAFF",
+      "owner": "assistance-support/conversation",
+      "api": "conversation/message endpoints and socket protocol",
+      "tables": ["conversations", "messages", "audit_logs"],
+      "transaction": "persist ordered message before socket emit",
+      "testOwner": "tests/emukey/backend/integration/assistance/conversation.integration.test.ts"
+    },
+    {
+      "id": "AST-04",
+      "phase": 7,
+      "actor": "SUPPORT_STAFF",
+      "owner": "assistance-support/support-assignment",
+      "api": "support queue/claim/close endpoints",
+      "tables": ["conversations", "messages", "audit_logs"],
+      "transaction": "CAS assignment and audit commit together",
+      "testOwner": "tests/emukey/backend/integration/assistance/support-assignment.integration.test.ts"
+    },
+    {
+      "id": "OPS-01",
+      "phase": 7,
+      "actor": "SYSTEM",
+      "owner": "operations/notification-delivery",
+      "api": "notification and push registration endpoints",
+      "tables": ["notifications", "mobile_push_tokens"],
+      "transaction": "durable notification before retryable delivery",
+      "testOwner": "tests/emukey/backend/integration/operations/notification.integration.test.ts"
+    },
+    {
+      "id": "OPS-02",
+      "phase": 2,
+      "actor": "BACKEND_OR_SYSTEM",
+      "owner": "operations/audit",
+      "api": "internal append-only audit interface",
+      "tables": ["audit_logs"],
+      "transaction": "audit participates in security/business mutation transaction",
+      "testOwner": "tests/emukey/backend/integration/database/baseline-schema.integration.test.ts"
+    },
+    {
+      "id": "OPS-03",
+      "phase": 7,
+      "actor": "PROVIDER_ADMIN_OR_SYSTEM",
+      "owner": "operations/dashboard-health",
+      "api": "health/dashboard endpoints consuming BC-04",
+      "tables": ["audit_logs", "chain_commands", "chain_events"],
+      "transaction": "read-only aggregate; manual reconcile delegates to BC-04",
+      "testOwner": "tests/emukey/backend/integration/operations/dashboard.integration.test.ts"
+    }
+  ]
+}

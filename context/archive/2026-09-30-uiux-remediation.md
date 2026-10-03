@@ -1,5 +1,7 @@
 # EmuKey — Kế hoạch sửa toàn bộ vấn đề UI/UX
 
+> Historical record: implementation status and commands below describe the dated review, not current acceptance. Current device authority is PostgreSQL; blockchain receives aggregate device-count/version sync only. Repository paths are updated where the referenced files moved.
+
 > **Dành cho người triển khai:** dùng skill `executing-plans`, triển khai tuần tự theo từng task và đánh dấu checkbox sau khi có bằng chứng kiểm thử. Không tự tạo commit, push, reset database hoặc gọi subagent.
 
 **Goal:** xử lý đầy đủ **120 ID duy nhất** trong `../current/EmuKey_UIUX_Issues.md`, xuyên suốt backend, frontend web và mobile. Checkpoint 105 đã thiếu AUTH-01–AUTH-15; ma trận mục 2 của báo cáo issue là nguồn trạng thái hiện tại. Giảm thao tác lặp và giữ kiểm soát dữ liệu/tài chính/bảo mật.
@@ -8,9 +10,9 @@
 
 **Tech Stack:** TypeScript; React/Vite/Ant Design/TanStack Query; NestJS/pg/PostgreSQL/Redis/BullMQ; React Native/Expo; Vitest/Supertest/Playwright/Jest/Maestro. Phiên bản lấy từ manifest/lockfile hiện có khi triển khai.
 
-**Spec:** [EmuKey_UIUX_Issues.md](../current/EmuKey_UIUX_Issues.md). Đối chiếu [nghiệp vụ](../current/chuc_nang_toan_he_thong_ver2.0.md), [SQL baseline](../current/sql_minimal.sql), [kế hoạch tổng](../current/APP_IMPLEMENTATION_PLAN.md), [HDSD](../current/HDSD.md).
+**Spec:** [EmuKey_UIUX_Issues.md](../current/EmuKey_UIUX_Issues.md). Đối chiếu [nghiệp vụ](../current/chuc_nang_toan_he_thong_ver2.0.md), [SQL baseline](../../EmuKey/backend/database/schema.sql), [kế hoạch tổng](../current/APP_IMPLEMENTATION_PLAN.md), [HDSD](../current/HDSD.md).
 
-**Vị trí chính thức:** file này ở `context/archive/2026-09-30-uiux-remediation.md` trong workspace `D:/TLHT/KLTN/UY/`. Không tạo lại bản kế hoạch trong `EmuKey/docs/`. Bổ sung lượt 2 tại mục 8–10; T00–T16 và 76 ID gốc được bảo toàn, T16 chạy cuối sau T17–T30; lượt 3 ngày 01/10/2026 nằm tại mục 11–12.
+**Vị trí chính thức:** file này ở `context/archive/2026-09-30-uiux-remediation.md` trong workspace `D:/TLHT/KLTN/UY/`. Không tạo lại bản kế hoạch trong `docs/emukey/`. Bổ sung lượt 2 tại mục 8–10; T00–T16 và 76 ID gốc được bảo toàn, T16 chạy cuối sau T17–T30; lượt 3 ngày 01/10/2026 nằm tại mục 11–12.
 
 **Ngày lập:** 30/09/2026. **Trạng thái triển khai:** xem checkpoint 02/10/2026 ở cuối tài liệu. Docker/Testcontainers đã chạy được; Android và external provider vẫn chưa nghiệm thu. Các mục 13–16 lưu bằng chứng lịch sử, không thay thế trạng thái hiện tại trong ma trận issue.
 
@@ -21,7 +23,7 @@
 - Frontend: `lint`, `typecheck`, test **15 file / 88 test pass**.
 - Mobile: `lint`, `typecheck`, test **4 suite / 12 test pass**.
 - Backend: `lint`, `typecheck`, test **33 file / 158 test pass**. Assertion baseline tại `license-query.service.test.ts:109` đã được sửa.
-- Contract fix: web gửi `clientMessageId` khi hỏi AI và `reason` khi chuyển hỗ trợ; test `frontend/test/assistance-contract.test.ts` **2 pass**.
+- Contract fix: web gửi `clientMessageId` khi hỏi AI và `reason` khi chuyển hỗ trợ; test `tests/emukey/frontend/assistance-contract.test.ts` **2 pass**.
 - SUP-01: customer có CTA chuyển nhân viên; SUP-21/22: queue preview/release đã nối vào support console.
 - AUTH-03: profile có flow đổi mật khẩu qua `PUT /auth/password`, logout local trong `finally`.
 - AUTH-15: mobile login có lối vào forgot-password, không tiết lộ email tồn tại.
@@ -66,20 +68,20 @@ Danh sách ID được chia theo lớp hệ thống và ghi rõ test owner:
 - **PAY-08** — terms snapshot/version/hash + migration → `test/unit/payment.controller.test.ts` (**chưa đóng** do `db:verify:terms` FAIL)
 
 **Frontend (10 ID):**
-- **AUTH-01, AUTH-02, AUTH-09** — session refresh, logout, 403 handling → `frontend/test/buyer-commerce.test.tsx`
-- **GBL-01, GBL-03** — error boundary, forbidden page → `frontend/test/app.test.tsx`
-- **PAY-04, PAY-12, PAY-13** — checkout intent, no auto-create → `frontend/test/checkout-intent.test.ts`, `frontend/test/buyer-commerce.test.tsx`
-- **LIC-01** — confirm trước khi consume key → `frontend/test/buyer-hub.test.tsx`
-- **LIC-03** — public verification error mapping → `frontend/test/license-error-mapping.test.ts`
-- **LIC-09, LIC-10** — provider command status/row-specific pending → `frontend/test/provider-workspace.test.tsx`
-- **CAT-01** — compare screen direct buy CTA → `frontend/test/buyer-commerce.test.tsx`
+- **AUTH-01, AUTH-02, AUTH-09** — session refresh, logout, 403 handling → `tests/emukey/frontend/buyer-commerce.test.tsx`
+- **GBL-01, GBL-03** — error boundary, forbidden page → `tests/emukey/frontend/app.test.tsx`
+- **PAY-04, PAY-12, PAY-13** — checkout intent, no auto-create → `tests/emukey/frontend/checkout-intent.test.ts`, `tests/emukey/frontend/buyer-commerce.test.tsx`
+- **LIC-01** — confirm trước khi consume key → `tests/emukey/frontend/buyer-hub.test.tsx`
+- **LIC-03** — public verification error mapping → `tests/emukey/frontend/license-error-mapping.test.ts`
+- **LIC-09, LIC-10** — provider command status/row-specific pending → `tests/emukey/frontend/provider-workspace.test.tsx`
+- **CAT-01** — compare screen direct buy CTA → `tests/emukey/frontend/buyer-commerce.test.tsx`
 
 **Mobile (17 ID):**
-- **PAY-22, PAY-23, PAY-19** — terms gate, server snapshot, boolean labels → `mobile/test/unit/phase3-phase4-screens.test.tsx`
-- **CAT-01, CAT-05, CAT-06** — compare CTA, catalog search, 4-plan limit → `mobile/test/unit/phase3-phase4-screens.test.tsx`
-- **LIC-05, LIC-07, LIC-08, LIC-12** — activation gate, retrieve CTA, renewal preview, poll backoff → `mobile/test/unit/phase3-phase4-screens.test.tsx`
-- **SUP-09, SUP-13, SUP-14, SUP-15, SUP-17, SUP-19** — polling, draft isolation, request generation, clientMessageId reuse, close conversation, maxLength → `mobile/test/unit/phase3-phase4-screens.test.tsx`
-- **GBL-06, GBL-07, GBL-09** — accessibility state, error clear, loading vs empty → `mobile/test/unit/phase3-phase4-screens.test.tsx`
+- **PAY-22, PAY-23, PAY-19** — terms gate, server snapshot, boolean labels → `tests/emukey/mobile/unit/phase3-phase4-screens.test.tsx`
+- **CAT-01, CAT-05, CAT-06** — compare CTA, catalog search, 4-plan limit → `tests/emukey/mobile/unit/phase3-phase4-screens.test.tsx`
+- **LIC-05, LIC-07, LIC-08, LIC-12** — activation gate, retrieve CTA, renewal preview, poll backoff → `tests/emukey/mobile/unit/phase3-phase4-screens.test.tsx`
+- **SUP-09, SUP-13, SUP-14, SUP-15, SUP-17, SUP-19** — polling, draft isolation, request generation, clientMessageId reuse, close conversation, maxLength → `tests/emukey/mobile/unit/phase3-phase4-screens.test.tsx`
+- **GBL-06, GBL-07, GBL-09** — accessibility state, error clear, loading vs empty → `tests/emukey/mobile/unit/phase3-phase4-screens.test.tsx`
 
 ### ID chưa đóng / bị chặn
 
@@ -168,7 +170,7 @@ Các ma trận ở mục 5, 9 và 12 giữ nguyên ID; chỉ những dòng có b
 - [ ] Với từng ID, ghi kết quả tái hiện vào bảng mục 5. Các lỗi timing phải kiểm tra refresh, back/forward, chạm đúp, hai tab, timeout sau server commit, offline và khởi động lại app.
 - [ ] Giữ trace/screenshot/log trong OS temp hoặc output directory đã ignored; không chụp key/mật khẩu/token thật.
 
-**Đầu ra:** bộ fixture và test mở rộng tại owner hiện có; không thêm test account vào dữ liệu thật. Dùng `backend/test/integration/*`, `frontend/test/*`, `mobile/test/unit/*` và các E2E liệt kê ở T16.
+**Đầu ra:** bộ fixture và test mở rộng tại owner hiện có; không thêm test account vào dữ liệu thật. Dùng `tests/emukey/backend/integration/*`, `tests/emukey/frontend/*`, `tests/emukey/mobile/unit/*` và các E2E liệt kê ở T16.
 
 ### T01 — Phiên, transport và phân quyền giao diện
 
@@ -186,7 +188,7 @@ Các ma trận ở mục 5, 9 và 12 giữ nguyên ID; chỉ những dòng có b
 - [ ] Chờ bootstrap trước guard; anonymous → login; authenticated sai role → 403 có đường về workspace hợp lệ. Chặn redirect ngoài origin, `//host`, route auth lặp và route không có quyền.
 - [ ] ErrorBoundary có nút tải lại/quay về; session expiry xử lý trong auth transport, không dựa vào ErrorBoundary để bắt lỗi async.
 
-**Test owner:** `frontend/test/app.test.tsx`, `completed-flows.test.tsx`, `internal-consoles.test.tsx`, `frontend/e2e/auth-reload.spec.ts`; `mobile/test/unit/app.test.tsx`.
+**Test owner:** `tests/emukey/frontend/app.test.tsx`, `completed-flows.test.tsx`, `internal-consoles.test.tsx`, `tests/emukey/e2e/web/auth-reload.spec.ts`; `tests/emukey/mobile/unit/app.test.tsx`.
 
 **Ca bắt buộc:** 5 request cùng 401 chỉ refresh một lần; refresh 401 thoát sạch; refresh timeout hiện retry; logout lỗi mạng rồi reload không tự vào lại; refresh về muộn sau logout không phục hồi phiên; login sai mật khẩu không kích hoạt refresh; role sai không flash login; crash render có fallback.
 
@@ -251,7 +253,7 @@ Các ma trận ở mục 5, 9 và 12 giữ nguyên ID; chỉ những dòng có b
 
 **Sửa:** backend commerce service/repository/DTO, `src/platform/terms/service-terms-content.ts`, `src/modules/commerce-payment/worker/order-timeout.processor.ts` nếu cần; web `application/orders/orderQueries.ts`, `screens/BuyerCheckoutScreen.tsx`, `screens/BuyerOrdersScreen.tsx`; mobile checkout/order detail trong `EmuKeyMobileApp.tsx`.
 
-**Tạo:** `backend/database/migrations/20260930-order-service-terms-snapshot.sql`. Đồng bộ `backend/database/schema.sql`, `../current/sql_minimal.sql` và baseline validator theo quy ước hiện có.
+**Tạo:** `backend/database/migrations/20260930-order-service-terms-snapshot.sql`. Cập nhật canonical `EmuKey/backend/database/schema.sql` và workspace baseline validator; bản mirror cũ đã được loại bỏ trong cleanup.
 
 **Contract đề xuất, phải cập nhật OpenAPI:** order có `serviceTermsVersion`, `serviceTermsHash`; GET điều khoản theo order trả `{content, version, hash}`; accept gửi `{accepted: true, version, hash}`. Server so với snapshot bất biến của order, không so với bản mới nhất toàn hệ thống. Deadline trả từ server gồm `paymentDueAt` và `expiresAt` của checkout attempt hiện tại.
 
@@ -261,7 +263,7 @@ Các ma trận ở mục 5, 9 và 12 giữ nguyên ID; chỉ những dòng có b
 - [ ] Hiện nút hủy cho các trạng thái backend cho phép, gồm WAITING_PAYMENT; confirm lý do/kết quả, invalidate order/list/checkout. Backend serialize cancel với IPN/timeout; nếu payment đã được chấp nhận thì trả conflict và UI refetch.
 - [ ] Hiện riêng hạn đơn và hạn phiên thanh toán, không hard-code 30/15 phút. Hết attempt nhưng đơn còn hạn thì cho tạo phiên mới; đơn hết hạn thì chặn theo server. Dùng server time/deadline để hạn chế lệch đồng hồ thiết bị.
 
-**Test owner:** `backend/test/integration/commerce/commerce-flow.integration.test.ts`, `test/integration/database/baseline-schema.integration.test.ts`; frontend `test/buyer-commerce.test.tsx`; mobile `test/unit/phase3-phase4-screens.test.tsx`.
+**Test owner:** `tests/emukey/backend/integration/commerce/commerce-flow.integration.test.ts`, `test/integration/database/baseline-schema.integration.test.ts`; frontend `test/buyer-commerce.test.tsx`; mobile `test/unit/phase3-phase4-screens.test.tsx`.
 
 **Nghiệm thu:** publish terms mới không đổi nội dung đơn cũ; sai hash bị 409; migration chạy trên dữ liệu cũ không bịa lịch sử; cancel/IPN cạnh tranh không phát hai kết quả nghiệp vụ; countdown phản ánh đúng hai deadline.
 
@@ -278,7 +280,7 @@ Các ma trận ở mục 5, 9 và 12 giữ nguyên ID; chỉ những dòng có b
 - [ ] Poll khi màn foreground và order còn nonterminal; backoff khi lỗi, dừng khi unmount/logout/terminal. License pending có poll riêng, không giữ WebView che kết quả.
 - [ ] Mobile OrderDetail có tên sản phẩm/gói, giá, deadline, terms, trạng thái tiếng Việt và action hợp lệ; sau mua nối luồng nhận key T08.
 
-**Test owner:** `frontend/e2e/payment-status-flow.spec.ts`, `user-purchase-flow.spec.ts`; `mobile/test/unit/phase3-phase4-screens.test.tsx`, `mobile/e2e/phase6-license-flow.yaml`; backend `test/unit/sepay-payment.gateway.test.ts`.
+**Test owner:** `tests/emukey/e2e/web/payment-status-flow.spec.ts`, `user-purchase-flow.spec.ts`; `tests/emukey/mobile/unit/phase3-phase4-screens.test.tsx`, `tests/emukey/e2e/mobile/phase6-license-flow.yaml`; backend `test/unit/sepay-payment.gateway.test.ts`.
 
 **Nghiệm thu:** back từ WebView, app bị kill rồi mở link, IPN đến trước/sau callback, callback giả success, thanh toán muộn và cancel đều cho kết quả đúng. Có bằng chứng Android thật/emulator; unit test không đủ để đóng PAY-03.
 
@@ -586,8 +588,8 @@ git status --short
 
 - Nếu đổi DTO/schema: regenerate OpenAPI bằng scripts hiện có ở backend rồi frontend/mobile; review diff contract trước `openapi:check`. Không sửa tay generated types.
 - Backend integration cần PostgreSQL/Redis và Docker/Testcontainers theo setup test; license E2E cần RPC/worker/indexer và fixture tài khoản. Test bị skip vì thiếu điều kiện không tính là pass nghiệp vụ.
-- Web E2E mở rộng tại `frontend/e2e/auth-reload.spec.ts`, `user-purchase-flow.spec.ts`, `payment-status-flow.spec.ts`, `buyer-ui-recovery.spec.ts`, `phase6-license-flow.spec.ts`, `user-license-run.spec.ts`. Giữ timing experiment riêng, không dùng nó thay regression thanh toán.
-- Mobile unit dùng `mobile/test/unit/*`; mở rộng Maestro `mobile/e2e/phase6-license-flow.yaml` và thêm flow auth/payment/support dưới cùng thư mục khi cần. `expo export` không thay được thử WebView/deep link trên Android.
+- Web E2E mở rộng tại `tests/emukey/e2e/web/auth-reload.spec.ts`, `user-purchase-flow.spec.ts`, `payment-status-flow.spec.ts`, `buyer-ui-recovery.spec.ts`, `phase6-license-flow.spec.ts`, `user-license-run.spec.ts`. Giữ timing experiment riêng, không dùng nó thay regression thanh toán.
+- Mobile unit dùng `tests/emukey/mobile/unit/*`; mở rộng Maestro `tests/emukey/e2e/mobile/phase6-license-flow.yaml` và thêm flow auth/payment/support dưới cùng thư mục khi cần. `expo export` không thay được thử WebView/deep link trên Android.
 - E2E Brevo/SePay/Gemini và blockchain external phải ghi môi trường thực tế; local fake/Hardhat chỉ chứng minh local, không chứng minh Sepolia hay production.
 
 ### Ca kiểm thử contract mẫu cho các lỗi khó
@@ -669,7 +671,7 @@ Authorization:
 - [ ] Sửa formatter giữ giá trị quyền lợi: false → Không hỗ trợ, true → Có hỗ trợ, 0 → 0, number/string → giá trị thật với nhãn. Có fallback hiển thị hợp lệ cho kiểu dữ liệu chưa được UI hỗ trợ; không bỏ mất âm thầm.
 - [ ] Test chọn từng gói đến đúng checkout, back/reload vẫn đúng ý định, gói vừa archive có giải thích/refetch.
 
-**Test owner:** `frontend/test/buyer-commerce.test.tsx`, `frontend/e2e/user-purchase-flow.spec.ts`; `mobile/test/unit/phase3-phase4-screens.test.tsx`; `backend/test/unit/compare-plans.query.test.ts`.
+**Test owner:** `tests/emukey/frontend/buyer-commerce.test.tsx`, `tests/emukey/e2e/web/user-purchase-flow.spec.ts`; `tests/emukey/mobile/unit/phase3-phase4-screens.test.tsx`; `tests/emukey/backend/unit/compare-plans.query.test.ts`.
 
 **Đầu ra:** chọn gói bất kỳ từ so sánh bằng một action. Không thay domain giá hoặc mặc định quyền sử dụng.
 
@@ -688,7 +690,7 @@ Authorization:
 - [ ] Cảnh báo home link `/buyer/licenses?expiringWithin=30`, dùng cùng quy tắc thời gian/status với metric. Hiển thị khoảng lọc và cho bỏ lọc. Client không tự suy canRenew nếu backend không cho.
 - [ ] Kiểm tra fixture 50 product, 10 license cùng tên sản phẩm; xác nhận không có secret trong URL, state người A không sang B sau logout.
 
-**Test owner:** `frontend/test/buyer-home-selectors.test.ts`, `buyer-hub.test.tsx`, `buyer-commerce.test.tsx`; `frontend/e2e/buyer-ui-recovery.spec.ts`; `mobile/test/unit/phase3-phase4-screens.test.tsx`, `license-screens.test.tsx`.
+**Test owner:** `tests/emukey/frontend/buyer-home-selectors.test.ts`, `buyer-hub.test.tsx`, `buyer-commerce.test.tsx`; `tests/emukey/e2e/web/buyer-ui-recovery.spec.ts`; `tests/emukey/mobile/unit/phase3-phase4-screens.test.tsx`, `license-screens.test.tsx`.
 
 ### T19 — Tạo/sửa gói theo nghiệp vụ, không bắt hiểu cấu trúc dữ liệu
 
@@ -704,7 +706,7 @@ Authorization:
 - [ ] Thêm imageUrl, preview và xóa ảnh vào form product; đồng bộ type/DTO nếu nullable khác nhau. Dùng URL policy hiện hữu, không bổ sung upload service/dependency ngoài phạm vi cần thiết.
 - [ ] Regenerate OpenAPI khi đổi contract; test role/provider ownership, price/entitlements snapshot của order cũ không bị thay sau tạo version mới.
 
-**Test owner:** `frontend/test/provider-workspace.test.tsx`; `backend/test/unit/catalog-admin.service.test.ts`, `test/integration/catalog/catalog-lifecycle.integration.test.ts`.
+**Test owner:** `tests/emukey/frontend/provider-workspace.test.tsx`; `tests/emukey/backend/unit/catalog-admin.service.test.ts`, `test/integration/catalog/catalog-lifecycle.integration.test.ts`.
 
 **Schema:** chưa mặc định cần bảng/migration mới. Nếu chính sách version hiện có không cho tạo nháp cùng code trong trường hợp cụ thể, ghi bằng chứng constraint và sửa contract/schema đồng bộ; không biến published update thành đường tắt.
 
@@ -718,7 +720,7 @@ Authorization:
 - [ ] Archive confirm nêu rõ đối tượng, ngừng xuất hiện trong catalog/khả năng mua-gia hạn theo backend và không có restore trong state machine hiện tại. Backend vẫn kiểm tra trạng thái/ownership lúc commit; 409 tải lại thay vì lặp action.
 - [ ] Không thêm confirm cho các thao tác đọc như xem, tìm kiếm, đổi tab hoặc chọn gói. Điều khiển dialog dùng keyboard/screen reader và trả focus đúng nút gọi.
 
-**Test owner:** `frontend/test/provider-workspace.test.tsx`, `backend/test/integration/catalog/catalog-lifecycle.integration.test.ts`. Nghiệm thu archive không đổi license/order đã tồn tại và dirty form không mất khi người dùng chọn tiếp tục sửa.
+**Test owner:** `tests/emukey/frontend/provider-workspace.test.tsx`, `tests/emukey/backend/integration/catalog/catalog-lifecycle.integration.test.ts`. Nghiệm thu archive không đổi license/order đã tồn tại và dirty form không mất khi người dùng chọn tiếp tục sửa.
 
 ### T21 — Cập nhật và công bố tri thức với version tường minh
 
@@ -733,7 +735,7 @@ Authorization:
 - [ ] Công bố mới cần xem lại thay thế nguồn; giữ old current khi transaction thất bại/conflict. Không gọi publish ngay sau upload.
 - [ ] Test tài liệu private vẫn private, public help T14 không truy được preview owner-only; ghi rõ trạng thái rỗng/trích xuất không thành công và cách tải tệp khác.
 
-**Test owner:** `backend/test/integration/assistance/phase7-assistance.integration.test.ts`, `test/unit/knowledge-response.test.ts`; `frontend/test/api-backed-screens.test.tsx`. Nếu cần test UI upload chuyên biệt, tạo `frontend/test/knowledge-workflow.test.tsx` với owner riêng, không nhân đôi fixtures API.
+**Test owner:** `tests/emukey/backend/integration/assistance/phase7-assistance.integration.test.ts`, `test/unit/knowledge-response.test.ts`; `tests/emukey/frontend/api-backed-screens.test.tsx`. Nếu cần test UI upload chuyên biệt, tạo `tests/emukey/frontend/knowledge-workflow.test.tsx` với owner riêng, không nhân đôi fixtures API.
 
 ### T22 — Gửi tin nhắn không mất bản nháp hoặc nhầm hội thoại
 
@@ -750,7 +752,7 @@ Authorization:
 - [ ] Composer hiển thị giới hạn 4.000 cho AI, 8.000 cho message; không truncate draft tự động, không clear khi validation/network lỗi. Khi gửi thành công chỉ clear snapshot draft đã gửi, không xóa nội dung mới đang soạn.
 - [ ] Khi T13 refetch/poll, draft và scroll không reset. Bộ UI gửi thống nhất theo trạng thái AI/support như mục 8.3 báo cáo, vẫn có chuyển người thật riêng.
 
-**Test owner:** `frontend/test/api-backed-screens.test.tsx`, `internal-consoles.test.tsx`; `mobile/test/unit/phase3-phase4-screens.test.tsx`; backend `test/unit/ai-assistance.service.test.ts`, `assistance-support.service.test.ts`, `test/integration/assistance/phase7-assistance.integration.test.ts`.
+**Test owner:** `tests/emukey/frontend/api-backed-screens.test.tsx`, `internal-consoles.test.tsx`; `tests/emukey/mobile/unit/phase3-phase4-screens.test.tsx`; backend `test/unit/ai-assistance.service.test.ts`, `assistance-support.service.test.ts`, `test/integration/assistance/phase7-assistance.integration.test.ts`.
 
 **Không coi pass nếu:** chỉ disable button mà timeout retry vẫn sinh ID mới; hoặc message đúng nhưng draft từ A bị chuyển sang B.
 
@@ -767,7 +769,7 @@ Authorization:
 - [ ] Nguồn AI có `id/title/version/excerpt` gắn message; endpoint đọc source kiểm tra conversation ownership/role và visibility. Preview đúng version đã trích; nếu bị thu hồi quyền thì trả thông báo unavailable, không tìm nguồn khác thay thế.
 - [ ] Không trả raw private storage URL, PII khách khác hoặc secret license trong context/nguồn. Regenerate DTO và test role âm.
 
-**Test owner:** `frontend/test/buyer-commerce.test.tsx`, `api-backed-screens.test.tsx`; `mobile/test/unit/phase3-phase4-screens.test.tsx`; backend `test/integration/assistance/phase7-assistance.integration.test.ts`, `test/security/http-authorization-negative.test.ts`.
+**Test owner:** `tests/emukey/frontend/buyer-commerce.test.tsx`, `api-backed-screens.test.tsx`; `tests/emukey/mobile/unit/phase3-phase4-screens.test.tsx`; backend `test/integration/assistance/phase7-assistance.integration.test.ts`, `test/security/http-authorization-negative.test.ts`.
 
 ### T24 — Thông báo đọc bền và mở đúng công việc
 
@@ -801,7 +803,7 @@ type NotificationView = {
 - [ ] Mark-read lỗi hiện retry nhưng không ngăn xem chi tiết khi người dùng có quyền; optimistic update nếu dùng phải rollback. Reload/app restart giữ trạng thái từ DB.
 - [ ] Kiểm tra notification của user B không list/read/open được từ user A và unreadCount không phụ thuộc 8 hàng preview.
 
-**Test owner:** `backend/test/integration/operations/phase7-notification.integration.test.ts`, `test/unit/notification.service.test.ts`, `test/security/http-authorization-negative.test.ts`; frontend `test/api-backed-screens.test.tsx`; mobile `test/unit/phase3-phase4-screens.test.tsx`.
+**Test owner:** `tests/emukey/backend/integration/operations/phase7-notification.integration.test.ts`, `test/unit/notification.service.test.ts`, `test/security/http-authorization-negative.test.ts`; frontend `test/api-backed-screens.test.tsx`; mobile `test/unit/phase3-phase4-screens.test.tsx`.
 
 ### T25 — Lối phục hồi, trạng thái tải và thao tác bằng bàn phím
 
@@ -818,7 +820,7 @@ type NotificationView = {
 - [ ] OPS-01: audit filter chuyển combobox có nhãn từ action codes thật trong code/audit, cho nhập mã nâng cao; không invent danh mục không tồn tại. Render fields/outcome/role thành nhãn dễ đọc, mã lạ có fallback; giữ audit readonly/metadata redaction.
 - [ ] Chạy unit/interaction test từng phần, Playwright keyboard tab carousel và unknown route, Android recovery/loading trên thiết bị hoặc emulator. Không ghi chuẩn accessibility đã đạt chỉ nhờ DOM snapshot.
 
-**Test owner:** `frontend/test/app.test.tsx`, `avatar-carousel.test.tsx`, `internal-consoles.test.tsx`; `mobile/test/unit/app.test.tsx`, `phase3-phase4-screens.test.tsx`; backend `test/unit/audit-api.test.ts` nếu đổi API. Tạo `frontend/e2e/navigation-accessibility.spec.ts` khi chưa có flow tương đương để kiểm tra focus/404/back-forward thực.
+**Test owner:** `tests/emukey/frontend/app.test.tsx`, `avatar-carousel.test.tsx`, `internal-consoles.test.tsx`; `tests/emukey/mobile/unit/app.test.tsx`, `phase3-phase4-screens.test.tsx`; backend `test/unit/audit-api.test.ts` nếu đổi API. Tạo `tests/emukey/e2e/web/navigation-accessibility.spec.ts` khi chưa có flow tương đương để kiểm tra focus/404/back-forward thực.
 
 
 ## 9. Ma trận 33 vấn đề bổ sung
@@ -943,7 +945,7 @@ Tổng hiện tại **120 ID**, **31 task T00–T30**. Mục 5 chứa 76 ID ban 
 - [ ] Không tự release khi đổi tab/route: trình duyệt có thể đóng bất ngờ và mạng chậm không chứng minh nghỉ ca. Luồng nghỉ ca dùng action rõ; trường hợp staff không còn hoạt động cần quy trình reassignment có quyền và audit trước khi thêm tự động hóa.
 - [ ] Test A release đồng thời close/B claim, chỉ có transition hợp lệ; A không đọc/gửi tiếp sau B claim; không mất queue item hoặc lộ thread cho người chưa nhận.
 
-**Test owner:** `backend/test/unit/assistance-support.service.test.ts`, `test/integration/assistance/phase7-assistance.integration.test.ts`, `test/security/http-authorization-negative.test.ts`; `frontend/test/internal-consoles.test.tsx`. SQL chỉ thêm migration nếu audit/idempotency thực sự thiếu dữ liệu, không tạo bảng queue mới thay conversations.
+**Test owner:** `tests/emukey/backend/unit/assistance-support.service.test.ts`, `test/integration/assistance/phase7-assistance.integration.test.ts`, `test/security/http-authorization-negative.test.ts`; `tests/emukey/frontend/internal-consoles.test.tsx`. SQL chỉ thêm migration nếu audit/idempotency thực sự thiếu dữ liệu, không tạo bảng queue mới thay conversations.
 
 ### T27 — AI giữ lịch sử và chỉ dùng nguồn phù hợp
 
@@ -961,7 +963,7 @@ Tổng hiện tại **120 ID**, **31 task T00–T30**. Mục 5 chứa 76 ID ban 
 - [ ] Tạo bộ đánh giá gồm câu hỏi đúng sản phẩm, sai sản phẩm, không liên quan, PLAN/ORDER của chính user, license cũ, khách mới, tài liệu private/public. Xác định expected source IDs; query không liên quan phải trả rỗng thay vì 5 đoạn gần nhất.
 - [ ] UI timeline dùng persistence thật, có pending/error theo request, retry cùng intent; source metadata/version theo T23. Không giữ câu hỏi chỉ ở local state.
 
-**Test owner:** `backend/test/unit/ai-assistance.service.test.ts`, `assistance-support.service.test.ts`, `knowledge-response.test.ts`, `test/integration/assistance/phase7-assistance.integration.test.ts`; frontend `test/api-backed-screens.test.tsx`; mobile `test/unit/phase3-phase4-screens.test.tsx`.
+**Test owner:** `tests/emukey/backend/unit/ai-assistance.service.test.ts`, `assistance-support.service.test.ts`, `knowledge-response.test.ts`, `test/integration/assistance/phase7-assistance.integration.test.ts`; frontend `test/api-backed-screens.test.tsx`; mobile `test/unit/phase3-phase4-screens.test.tsx`.
 
 **Schema/rollout:** nếu phải thêm AI request linkage/status, migration additive tại owner assistance, đồng bộ baseline schema; legacy answer không có question phải ghi rõ không có dữ liệu lịch sử, không sinh câu hỏi giả. Fake AI tests chỉ chứng minh orchestration; chất lượng Gemini cần bộ câu hỏi external riêng.
 
@@ -975,7 +977,7 @@ Tổng hiện tại **120 ID**, **31 task T00–T30**. Mục 5 chứa 76 ID ban 
 - [ ] UI giữ file/đích/version đang chọn khi upload lỗi; sửa file/retry không tạo version thừa (kết hợp T21). Công bố vẫn chờ READY/preview.
 - [ ] Test byte count của mọi chunk, nối nội dung theo quy tắc normalization, storage/DB rollback khi extraction/validation lỗi; không có orphan document/storage ngoài ý muốn.
 
-**Test owner:** `backend/test/integration/assistance/phase7-assistance.integration.test.ts`. Tạo có chủ đích `backend/test/unit/knowledge-chunking.test.ts` nếu tách helper nội bộ từ repository là cần thiết để test trực tiếp; không tạo utility Unicode dùng chung toàn project khi chưa có caller khác.
+**Test owner:** `tests/emukey/backend/integration/assistance/phase7-assistance.integration.test.ts`. Tạo có chủ đích `tests/emukey/backend/unit/knowledge-chunking.test.ts` nếu tách helper nội bộ từ repository là cần thiết để test trực tiếp; không tạo utility Unicode dùng chung toàn project khi chưa có caller khác.
 
 **Bằng chứng lượt review:** phép đếm cục bộ xác nhận 10.000 × ắ =30.000 byte; chưa chạy API upload hoặc PDF parser integration.
 
@@ -1009,7 +1011,7 @@ Tổng hiện tại **120 ID**, **31 task T00–T30**. Mục 5 chứa 76 ID ban 
 - [ ] CTA không tự submit SePay khi state chuyển; thanh toán và retry đi theo T06. Order terminal khi tải terms phải chuyển sang trạng thái terminal, không cho đồng ý trên order hết hạn.
 - [ ] Test catalog 100.000 → order 120.000, back/reload, terms stale, accept request response mất; server không tin giá client và không tạo order trùng.
 
-**Test owner:** `mobile/test/unit/phase3-phase4-screens.test.tsx`, `mobile/e2e/phase6-license-flow.yaml`; `backend/test/integration/commerce/commerce-flow.integration.test.ts`. Unit pass không thay Android WebView/SePay test thực.
+**Test owner:** `tests/emukey/mobile/unit/phase3-phase4-screens.test.tsx`, `tests/emukey/e2e/mobile/phase6-license-flow.yaml`; `tests/emukey/backend/integration/commerce/commerce-flow.integration.test.ts`. Unit pass không thay Android WebView/SePay test thực.
 
 
 ## 12. Ma trận 11 vấn đề lượt 3

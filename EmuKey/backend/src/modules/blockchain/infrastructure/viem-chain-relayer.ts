@@ -69,9 +69,10 @@ function requiredString(
 function requiredInteger(
   payload: Record<string, unknown>,
   name: string,
+  minimum = 1,
 ): bigint {
   const value = payload[name];
-  if (!Number.isSafeInteger(value) || Number(value) <= 0) {
+  if (!Number.isSafeInteger(value) || Number(value) < minimum) {
     throw new Error(`CHAIN_PAYLOAD_${name.toUpperCase()}_INVALID`);
   }
   return BigInt(Number(value));
@@ -161,7 +162,7 @@ export function encodeChainCommand(input: ChainCommandInput): Hex {
         args: [
           commandId,
           licenseId,
-          requiredInteger(payload, 'activeDeviceCount'),
+          requiredInteger(payload, 'activeDeviceCount', 0),
           requiredInteger(payload, 'deviceStateVersion'),
         ],
       });

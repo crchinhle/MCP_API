@@ -2,8 +2,18 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": ".",
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
-  "include": ["test/**/*.ts"],
-  "exclude": ["node_modules", "dist", "build", "coverage"]
+  "include": [
+    "hardhat.config.ts",
+    "ignition/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build",
+    "coverage"
+  ]
 }

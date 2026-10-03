@@ -1,6 +1,8 @@
 import {
   ConflictException,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -44,6 +46,19 @@ export class LicensingService {
     private readonly chain: LicenseCommandConfig,
     private readonly identity?: IdentityService,
   ) {}
+
+  async limitPublicActivation(subject: string): Promise<void> {
+    const key = `rate:public-activation:${createHash('sha256').update(subject).digest('hex')}`;
+    const count = await this.redis.incr(key);
+    if (count === 1) await this.redis.expire(key, 60);
+    if (count > 30) {
+      const remaining = await this.redis.ttl(key);
+      throw new HttpException({
+        code: 'RATE_LIMITED', message: 'Too many requests.',
+        retryAfterSeconds: remaining > 0 ? remaining : 60,
+      }, HttpStatus.TOO_MANY_REQUESTS);
+    }
+  }
 
   async resolveActionVerification(actor: AuthPrincipal, token: string) {
     this.requireCustomer(actor);

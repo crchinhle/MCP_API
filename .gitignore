@@ -37,3 +37,11 @@ Thumbs.db
 # Local configuration containing credentials
 /.kilo/kilo.jsonc
 /.kilo/agent-manager.json
+
+# Generated visual captures and comparison outputs (reference fixtures stay versioned)
+/docs/emukey/evidence/visual-regression/artifacts/
+/docs/emukey/evidence/visual-regression/diff/
+/docs/emukey/evidence/visual-regression/runtime-before/
+/docs/emukey/evidence/visual-regression/runtime-after/
+/docs/emukey/traceability/releases/**/postgres.dump
+/EmuKey/**/.openapi-check-*/

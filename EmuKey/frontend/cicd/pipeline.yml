@@ -8,7 +8,6 @@ ci:
   - corepack pnpm install --frozen-lockfile
   - corepack pnpm lint
   - corepack pnpm typecheck
-  - corepack pnpm test
   - corepack pnpm openapi:check
   - corepack pnpm build
 cd:

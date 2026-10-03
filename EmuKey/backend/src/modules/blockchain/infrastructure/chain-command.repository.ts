@@ -438,6 +438,16 @@ export class ChainCommandRepository {
 
   async markUnknown(id: string, transactionHash?: string): Promise<void> {
     await this.transaction(async (client) => {
+      // Broadcast can lose its response before markSubmitted runs. Record the
+      // attempted submission and uncertainty atomically, following the DB state
+      // machine while retaining the persisted nonce, hash, and signed bytes.
+      await client.query(
+        `UPDATE chain_commands SET status = 'SUBMITTED',
+           submitted_at = COALESCE(submitted_at, now()), updated_at = now()
+         WHERE id = $1 AND status = 'PENDING'
+           AND transaction_hash IS NOT NULL AND signed_transaction IS NOT NULL`,
+        [id],
+      );
       const result = await client.query(
         `UPDATE chain_commands SET status = 'SUBMITTED_UNKNOWN',
            transaction_hash = COALESCE($2, transaction_hash), locked_by = NULL,
