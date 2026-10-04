@@ -8,7 +8,7 @@
     "contracts": "REAL_VERIFIED",
     "frontendUnitTypecheckBuild": "REAL_VERIFIED",
     "mobileUnitTypecheckBuild": "REAL_VERIFIED",
-    "localHardhatRpcGoldenFlow": "REAL_VERIFIED",
+    "licenseDbInvariantsWithoutBlockchain": "REAL_VERIFIED",
     "externalSePayBrevoGeminiFcmCloudinarySepolia": "BLOCKED_EXTERNAL",
     "legacyMockRuntimeSurfaces": "REAL_VERIFIED",
     "phase8ReleaseCertification": "DEFERRED_BY_PHASE"
@@ -20,13 +20,15 @@
     "contracts: pnpm contracts:verify",
     "frontend: pnpm test && pnpm typecheck && pnpm build",
     "mobile: pnpm test && pnpm typecheck && pnpm build",
-    "local RPC: LOCAL_EVM_* pnpm exec vitest run test/integration/blockchain/viem-rpc.integration.test.ts test/integration/blockchain/phase5-golden-flow.integration.test.ts --maxWorkers=1",
+    "DB invariants: RUN_PHASE7_INTEGRATION=true node tooling/emukey/run.mjs backend:integration (Testcontainers PostgreSQL/Redis, no blockchain node)",
     "phase7 real containers: RUN_PHASE7_INTEGRATION=true pnpm exec vitest run test/integration/assistance/phase7-assistance.integration.test.ts test/integration/operations/phase7-notification.integration.test.ts --maxWorkers=1",
     "disposable database: PostgreSQL container + schema.sql + seedBaseline twice + verifyBaselineDatabase"
   ],
   "notes": [
     "No external provider credentials or device receipt were used.",
-    "Active Phase 1-7 screens no longer import mockWorkspace; future analytics widgets are explicitly deferred."
+    "Active Phase 1-7 screens no longer import mockWorkspace; future analytics widgets are explicitly deferred.",
     "The configured DATABASE_URL points to a hosted Neon database, so destructive reset was intentionally not run there; disposable PostgreSQL reset/apply/seed/idempotency was verified in Testcontainers."
-  ]
+  ],
+  "historical": true,
+  "currentSepoliaEvidence": "docs/emukey/traceability/sepolia-lifecycle-evidence.json"
 }

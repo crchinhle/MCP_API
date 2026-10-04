@@ -15,11 +15,11 @@ import {
 } from '../../../../EmuKey/backend/src/modules/blockchain/infrastructure/viem-chain-relayer.js';
 
 const input: ChainCommandInput = {
-  chainId: 31_337,
+  chainId: 11_155_111,
   commandId: '00000000-0000-4000-8000-000000000901',
   commandType: 'ISSUE_LICENSE',
   contractAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
-  network: 'hardhat',
+  network: 'sepolia',
   payload: {
     activationCommitment: `0x${'11'.repeat(32)}`,
     expiresAt: '2028-01-01T00:00:00.000Z',
@@ -66,7 +66,7 @@ describe('ViemChainRelayer', () => {
       return Promise.resolve(keccak256(raw));
     };
     const rpc: ViemRelayerRpc = {
-      getChainId: vi.fn().mockResolvedValue(31_337),
+      getChainId: vi.fn().mockResolvedValue(11_155_111),
       estimateFeesPerGas: vi.fn().mockResolvedValue({
         maxFeePerGas: 3_000_000_000n,
         maxPriorityFeePerGas: 1_000_000_000n,
@@ -85,8 +85,8 @@ describe('ViemChainRelayer', () => {
       sign: (digest: Hex) => account.sign({ hash: digest }),
     };
     const relayer = new ViemChainRelayer({
-      chainId: 31_337,
-      network: 'hardhat',
+      chainId: 11_155_111,
+      network: 'sepolia',
       rpc,
       rpcUrl: 'http://127.0.0.1:8545',
       signer,
@@ -104,7 +104,7 @@ describe('ViemChainRelayer', () => {
       keccak256(transaction.rawTransaction as Hex),
     );
     const parsed = parseTransaction(transaction.rawTransaction as Hex);
-    expect(parsed).toMatchObject({ chainId: 31_337, gas: 120_000n, nonce: 9 });
+    expect(parsed).toMatchObject({ chainId: 11_155_111, gas: 120_000n, nonce: 9 });
     const decoded = decodeFunctionData({
       abi: licenseRegistryAbi,
       data: parsed.data!,
@@ -118,7 +118,7 @@ describe('ViemChainRelayer', () => {
   it('classifies an uncertain RPC broadcast so reconciliation can reuse the raw transaction', async () => {
     const account = privateKeyToAccount(`0x${'42'.repeat(32)}`);
     const rpc = {
-      getChainId: vi.fn().mockResolvedValue(31_337),
+      getChainId: vi.fn().mockResolvedValue(11_155_111),
       estimateFeesPerGas: vi.fn().mockResolvedValue({
         maxFeePerGas: 3n,
         maxPriorityFeePerGas: 1n,
@@ -129,8 +129,8 @@ describe('ViemChainRelayer', () => {
       sendRawTransaction: vi.fn().mockRejectedValue(new Error('socket closed')),
     } satisfies ViemRelayerRpc;
     const relayer = new ViemChainRelayer({
-      chainId: 31_337,
-      network: 'hardhat',
+      chainId: 11_155_111,
+      network: 'sepolia',
       rpc,
       rpcUrl: 'http://127.0.0.1:8545',
       signer: {
@@ -149,7 +149,7 @@ describe('ViemChainRelayer', () => {
   it('refuses to reserve a nonce when the RPC is connected to another chain', async () => {
     const account = privateKeyToAccount(`0x${'42'.repeat(32)}`);
     const rpc = {
-      getChainId: vi.fn().mockResolvedValue(11_155_111),
+      getChainId: vi.fn().mockResolvedValue(1),
       estimateFeesPerGas: vi.fn(),
       estimateGas: vi.fn(),
       getTransactionCount: vi.fn(),
@@ -157,8 +157,8 @@ describe('ViemChainRelayer', () => {
       sendRawTransaction: vi.fn(),
     } satisfies ViemRelayerRpc;
     const relayer = new ViemChainRelayer({
-      chainId: 31_337,
-      network: 'hardhat',
+      chainId: 11_155_111,
+      network: 'sepolia',
       rpc,
       rpcUrl: 'http://127.0.0.1:8545',
       signer: {

@@ -1,24 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-const argumentsWithoutSeparator = process.argv
-  .slice(2)
-  .filter((argument) => argument !== '--');
-const chainId = argumentsWithoutSeparator[0] ?? '31337';
-if (!/^\d+$/.test(chainId)) {
-  throw new Error(`Invalid chain ID: ${chainId}`);
+const metadata = JSON.parse(await readFile(resolve(import.meta.dirname, '../deployments/sepolia-v3.json'), 'utf8'));
+if (metadata.network !== 'sepolia' || metadata.chainId !== 11155111 || !/^0x[0-9a-fA-F]{40}$/.test(metadata.contractAddress) || !Number.isSafeInteger(metadata.deploymentBlock)) {
+  throw new Error('SEPOLIA_V3_METADATA_INVALID');
 }
-const path = resolve(
-  'ignition',
-  'deployments',
-  `chain-${chainId}`,
-  'deployed_addresses.json',
-);
-const deployments = JSON.parse(await readFile(path, 'utf8'));
-const v2Path = resolve('deployments', 'sepolia-v2.json');
-const v2 = chainId === '11155111' ? JSON.parse(await readFile(v2Path, 'utf8')) : null;
-const address = v2?.contractAddress ?? deployments['LicenseRegistryModule#LicenseRegistry'];
-if (typeof address !== 'string') {
-  throw new Error('LicenseRegistry deployment address was not found');
-}
-process.stdout.write(`EVM_CONTRACT_ADDRESS=${address}\n`);
+process.stdout.write(`EVM_NETWORK=sepolia\nEVM_CHAIN_ID=11155111\nEVM_CONTRACT_ADDRESS=${metadata.contractAddress}\nEVM_DEPLOYMENT_BLOCK=${metadata.deploymentBlock}\n`);

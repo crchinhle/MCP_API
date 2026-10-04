@@ -32,7 +32,7 @@ describe('customer commerce and payment flow', () => {
   const admin = { role: 'SYSTEM_ADMIN' as const, sessionVersion: 1, sub: '00000000-0000-4000-8000-000000000001' };
   function sandboxService(receiptTiming: boolean) {
     const envelopes = new RedisActivationEnvelope(redis, '00'.repeat(32));
-    return new CommerceService(new CommerceRepository(pool), new SePayPaymentGateway({ environment: 'sandbox', merchantId: 'test', secretKey: webhookSecret, webAppUrl: 'https://demo.test', sandboxReceiptTiming: receiptTiming }), envelopes, new ActivationEnvelopeRecoveryService(new ChainCommandRepository(pool), envelopes), { chainId: 31337, contractAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3', network: 'hardhat' });
+    return new CommerceService(new CommerceRepository(pool), new SePayPaymentGateway({ environment: 'sandbox', merchantId: 'test', secretKey: webhookSecret, webAppUrl: 'https://demo.test', sandboxReceiptTiming: receiptTiming }), envelopes, new ActivationEnvelopeRecoveryService(new ChainCommandRepository(pool), envelopes), { chainId: 11155111, contractAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3', network: 'sepolia' });
   }
   function sandboxPayload(reference: string, amount: number, eventId: string) {
     return { notification_type: 'ORDER_PAID', order: { order_amount: String(amount), order_currency: 'VND', order_invoice_number: reference, order_status: 'CAPTURED' }, transaction: { id: eventId, transaction_amount: String(amount), transaction_currency: 'VND', transaction_id: `bank-${eventId}`, transaction_status: 'APPROVED', transaction_type: 'PAYMENT', transaction_date: '2025-09-01 00:00:15' } };
@@ -78,9 +78,9 @@ describe('customer commerce and payment flow', () => {
       envelopes,
       new ActivationEnvelopeRecoveryService(new ChainCommandRepository(pool), envelopes),
       {
-        chainId: 31_337,
+        chainId: 11_155_111,
         contractAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
-        network: 'hardhat',
+        network: 'sepolia',
       },
     );
   }, 120_000);
@@ -148,7 +148,7 @@ describe('customer commerce and payment flow', () => {
     expect((await pool.query<{ n: number }>("SELECT count(*)::int AS n FROM audit_logs WHERE action='ORDER_AUTO_CANCELLED' AND target_id=$1", [overdueId])).rows[0]!.n).toBe(1);
     const payment = { amountVnd: original.priceVndSnapshot, protocolVersion: 1 as const, eventId: 'late-timeout', occurredAt, providerReference: checkout.checkoutReference };
     const issuance = { activationCommitment: `0x${'77'.repeat(32)}` as const, commandId: '00000000-0000-4000-8000-000000000712', licenseId: '00000000-0000-4000-8000-000000000713', payload: {}, payloadHash: `0x${'88'.repeat(32)}` as const };
-    const chain = { chainId: 31337, contractAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3', network: 'hardhat' };
+    const chain = { chainId: 11155111, contractAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3', network: 'sepolia' };
     const tooLate = (await pool.query<{ at: Date }>('SELECT statement_timestamp() AS at')).rows[0]!.at;
     expect((await repo.ingestPayment({ ...payment, eventId: 'paid-after-deadline', occurredAt: tooLate }, {}, issuance, chain)).classification).toBe('UNMATCHED');
     const manual = await service.createOrder(customer, '00000000-0000-4000-8000-000000000714', undefined, { planId });
@@ -252,7 +252,7 @@ describe('customer commerce and payment flow', () => {
     await commands.markFailure(payment.commandId!, 5, 'Invalid UUID');
     const recovered = await commands.recoverDeadLetter(payment.commandId!, 'REQUEUE_NO_SUBMISSION', 'Fixed catalog UUID encoding', undefined, { userId: admin.sub, role: admin.role });
     expect(recovered).toMatchObject({ status: 'PENDING', nonce: 27, relayerAddress: relayer, signedTransaction: null, transactionHash: null });
-    await commands.markPrepared(payment.commandId!, { network: 'hardhat', nonce: 27, relayerAddress: relayer, rawTransaction: '0x02aabb', transactionHash: `0x${'aa'.repeat(32)}` });
+    await commands.markPrepared(payment.commandId!, { network: 'sepolia', nonce: 27, relayerAddress: relayer, rawTransaction: '0x02aabb', transactionHash: `0x${'aa'.repeat(32)}` });
     await commands.markFailure(payment.commandId!, 5, 'Broadcast failed');
     await expect(commands.recoverDeadLetter(payment.commandId!, 'REQUEUE_NO_SUBMISSION', 'Must reconcile same raw')).rejects.toThrow('DEAD_LETTER_SUBMISSION_EVIDENCE_EXISTS');
   });

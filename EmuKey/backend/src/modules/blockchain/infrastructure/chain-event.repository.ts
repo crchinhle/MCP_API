@@ -146,7 +146,7 @@ export class ChainEventRepository {
       const result = await client.query<Record<string, unknown>>(
         `UPDATE chain_events SET finality_status='CONFIRMED',
            confirmation_count=GREATEST(confirmation_count,$2), finalized_at=now(),
-           reorged_at=NULL, updated_at=now()
+           updated_at=now()
          WHERE id=$1 AND finality_status = 'PENDING' AND block_hash=$3
          RETURNING *`,
         [eventId, confirmations, canonicalBlockHash],
@@ -218,7 +218,20 @@ export class ChainEventRepository {
            AND descendant.status IN ('PENDING','SUBMITTED','RETRYABLE_FAILED')`,
         [row.license_id, row.chain_command_id],
       );
-      if (['LICENSE_ISSUED', 'KEY_ROTATED'].includes(String(row.event_type))) {
+      if (row.event_type === 'LICENSE_ISSUED') {
+        // A previously trusted ISSUE cannot return to initial PENDING_FINALITY.
+        // Retain its exact key proposal and invalidate trust until reconfirmed.
+        await client.query(
+          `UPDATE licenses SET status='PENDING_ONCHAIN', suspended_at=NULL,
+             revoked_at=NULL, last_applied_chain_event_id=NULL,
+             pending_activation_commitment=NULL, pending_activation_key_version=NULL,
+             pending_activation_command_id=NULL,
+             activation_key_trust_status='UNTRUSTED_REORG',
+             entitlement_version=entitlement_version + 1, updated_at=now()
+           WHERE id=$1`,
+          [row.license_id],
+        );
+      } else if (row.event_type === 'KEY_ROTATED') {
         await this.rebuildProjection(client, String(row.license_id));
       } else {
          await this.rebuildProjectionWithoutKeyReset(client, String(row.license_id));

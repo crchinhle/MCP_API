@@ -14,8 +14,8 @@ The removed Kotlin test client and the old Contract PDF/signing flow are not par
 
 - Docker Desktop with Docker Compose.
 - Node.js `22.21.x` and Corepack.
-- An external PostgreSQL database (the current development environment uses Neon).
-- An ignored `backend/.env` created from `backend/.env.example`, with a valid external `DATABASE_URL` and the remaining backend settings.
+- PostgreSQL and Redis may run locally or on managed services. The provided Compose files manage Redis; supply your PostgreSQL instance through `DATABASE_URL`.
+- An ignored `backend/.env` created from `backend/.env.example`, with a valid `DATABASE_URL` and the remaining backend settings.
 
 Each delivery unit owns its package manifest, lockfile, lint configuration, build and container contract. Install dependencies from the unit directory:
 
@@ -37,7 +37,7 @@ corepack pnpm start:api
 ```
 
 The backend Compose file publishes Redis only on `127.0.0.1:${REDIS_PORT:-6379}`
-for this workflow. PostgreSQL continues to use the external `DATABASE_URL` from
+for this workflow. PostgreSQL uses the configured local or managed `DATABASE_URL` from
 `backend/.env`; no local PostgreSQL service is started.
 
 ## Start the local platform
@@ -136,7 +136,7 @@ node tooling/emukey/run.mjs mobile:unit
 node tooling/emukey/run.mjs contracts
 ```
 
-The runner links installed product dependencies into ignored workspace `node_modules` directories; it never copies product source. Integration tests use disposable Docker containers. Set `RUN_PHASE7_INTEGRATION=true` to include assistance/notification cases. Local chain tests require `LOCAL_EVM_RPC_URL`, `LOCAL_EVM_CONTRACT_ADDRESS`, and the disposable node's `LOCAL_EVM_RELAYER_PRIVATE_KEY`. External providers are not part of cleanup verification.
+The runner links installed product dependencies into ignored workspace `node_modules` directories; it never copies product source. Integration tests use disposable Docker containers. Set `RUN_PHASE7_INTEGRATION=true` to include assistance/notification cases. Integration suites cover DB/application invariants (concurrency, idempotency, replay, projection repair, reorg state) without any blockchain node; real Sepolia transactions run only through explicitly invoked external verification or the manual external workflow.
 
 For isolated browser regressions, start the frontend with `corepack pnpm --dir EmuKey/frontend dev`, set `E2E_EXTERNAL=true` and `BASE_URL`, then run `frontend:e2e buyer-ui-recovery.spec.ts workspace-navigation.spec.ts`. The `payment-status-flow.spec.ts` suite also uses isolated API fixtures. These tests mock the API; they are not live payment/provider evidence.
 
@@ -147,3 +147,28 @@ The activation load scenario runs with `node tooling/emukey/load/load-test.mjs -
 The current schema includes the aggregate-sync projection fix. Existing databases require explicit application of `EmuKey/backend/database/migrations/20261003-device-sync-canonical-projection.sql` through the normal migration procedure. Cleanup verification applies it only to disposable PostgreSQL; no real database was migrated.
 
 Visual helpers run from UY, for example `node tooling/emukey/run.mjs frontend:visual-regression`; mobile readiness is `node tooling/emukey/run.mjs mobile:check-maestro`. Captures and generated reports are ignored under `docs/emukey/evidence/`; reference images and fixtures remain versioned.
+
+## Sepolia runtime and deployment
+
+The application (frontend/mobile/backend/PostgreSQL/Redis) may run locally, but blockchain runtime and integration use Ethereum Sepolia only (`11155111`). Hardhat is retained for Solidity compile, contract unit tests, ABI export and Ignition deployment. RPC failure blocks blockchain work; it never selects another chain.
+
+After all local tests pass, from UY:
+
+```powershell
+corepack pnpm --dir EmuKey/backend contracts:build
+corepack pnpm --dir EmuKey/backend/contracts deploy:sepolia
+corepack pnpm --dir EmuKey/backend/contracts deployment:show
+```
+
+Deployment verifies chain ID, the funded non-development account, receipt and exact runtime bytecode. Ignition uses deployment ID `sepolia-v3`, preserving v2 history. Metadata is written only after a successful verified receipt. Copy the public address/block printed by `deployment:show` into the ignored runtime environment and GitHub variables `SEPOLIA_CONTRACT_ADDRESS` / `SEPOLIA_DEPLOYMENT_BLOCK`; no v2 fallback exists.
+
+Run the isolated lifecycle smoke with Docker available:
+
+```powershell
+corepack pnpm --dir EmuKey/backend build
+node --env-file=EmuKey/backend/.env tooling/emukey/run.mjs verify:verify-sepolia
+```
+
+This creates disposable PostgreSQL/Redis, uses the real application commerce path with a test payment adapter, then sends real Sepolia ISSUE and aggregate-sync transactions. Public activation and entitlement use the actual HTTP API without purchaser login. Evidence records receipt/event/projection plus T0-T4; payment evidence here does not claim a real payment-provider callback. The script removes its disposable services at exit and never initializes or resets the configured application database.
+
+Normal CI runs no real blockchain transactions. `.github/workflows/emukey-external.yml` uses manual `run_sepolia=true`, the Sepolia RPC/relayer secrets and v3 address/block variables. Its blockchain smoke owns disposable DB/Redis containers; it does not require staging database credentials.

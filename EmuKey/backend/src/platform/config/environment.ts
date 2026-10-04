@@ -20,6 +20,7 @@ const LOCAL_ADAPTERS = [
   'PUSH_ADAPTER',
   'STORAGE_ADAPTER',
 ] as const;
+
 const HARDHAT_DEVELOPMENT_RELAYER_KEY =
   '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 
@@ -165,10 +166,9 @@ function assertHttpUrl(value: string, name: string): void {
   }
 }
 
-function assertNetworkChain(network: string, chainId: number): void {
-  const expected = network === 'hardhat' ? 31_337 : network === 'sepolia' ? 11_155_111 : undefined;
-  if (expected !== undefined && chainId !== expected) {
-    throw new Error(`EVM_NETWORK_${network.toUpperCase()}_CHAIN_ID_MISMATCH`);
+function assertSepoliaRuntime(network: string, chainId: number): void {
+  if (network !== 'sepolia' || chainId !== 11_155_111) {
+    throw new Error('EVM_RUNTIME_MUST_BE_SEPOLIA');
   }
 }
 
@@ -361,7 +361,7 @@ export function validateEnvironment(
     throw new Error('EVM_CONTRACT_ADDRESS must contain a 20-byte address');
   }
   result.EVM_CONTRACT_ADDRESS = result.EVM_CONTRACT_ADDRESS.toLowerCase();
-  assertNetworkChain(result.EVM_NETWORK, result.EVM_CHAIN_ID);
+  assertSepoliaRuntime(result.EVM_NETWORK, result.EVM_CHAIN_ID);
   if (!/^[0-9a-fA-F]{64}$/.test(result.ACTIVATION_ENVELOPE_KEY)) {
     throw new Error('ACTIVATION_ENVELOPE_KEY must contain exactly 32 bytes');
   }

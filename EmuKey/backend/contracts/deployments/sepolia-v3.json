@@ -1,0 +1,17 @@
+{
+  "network": "sepolia",
+  "chainId": 11155111,
+  "contractName": "LicenseRegistry",
+  "contractAddress": "0x4d30200F3D0791e0aE34Fa6075A4e4b03f4d1cBC",
+  "deploymentTransaction": "0xc6e2b95b577734f448215372c8b731a6fb6676622bdf73904e9b69b0fed02937",
+  "deploymentBlock": 11842365,
+  "deployerAddress": "0xeC3Aa982a569812471b337D5b8CA67f5C7A2FCfe",
+  "deployedAt": "2026-10-04T13:12:24.000Z",
+  "abiPath": "../../src/modules/blockchain/infrastructure/generated/license-registry.abi.json",
+  "deploymentVersion": 3,
+  "protocolVersion": 2,
+  "domain": "DOMAIN_PLAN_V2",
+  "deviceAggregateSync": true,
+  "ignitionDeploymentId": "sepolia-v3",
+  "bytecodeVerified": true
+}

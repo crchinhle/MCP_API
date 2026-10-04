@@ -184,6 +184,9 @@ describe('LicenseRegistry', async () => {
       now + 86_400n,
     ]);
 
+    await assert.rejects(registry.write.syncActiveDeviceCount([
+      bytes16('00000000-0000-0000-0000-000000000503'), licenseId, 1n, 1n,
+    ], { account: wallets[1].account }));
     await registry.write.syncActiveDeviceCount([
       bytes16('00000000-0000-0000-0000-000000000503'), licenseId, 1n, 1n,
     ]);
@@ -197,6 +200,18 @@ describe('LicenseRegistry', async () => {
         bytes16('00000000-0000-0000-0000-000000000506'), licenseId, 2n, 2n,
       ]),
     );
+    const populated = await registry.read.getLicense([licenseId]);
+    assert.equal(populated.activeDevices, 1n);
+    assert.equal(populated.deviceStateVersion, 1n);
+    await registry.write.syncActiveDeviceCount([
+      bytes16('00000000-0000-0000-0000-000000000517'), licenseId, 0n, 2n,
+    ]);
+    const empty = await registry.read.getLicense([licenseId]);
+    assert.equal(empty.activeDevices, 0n);
+    assert.equal(empty.deviceStateVersion, 2n);
+    await assert.rejects(registry.write.syncActiveDeviceCount([
+      bytes16('00000000-0000-0000-0000-000000000518'), licenseId, 1n, 1n,
+    ]));
     await registry.write.suspendLicense([
       bytes16('00000000-0000-4000-8000-000000000505'),
       licenseId,

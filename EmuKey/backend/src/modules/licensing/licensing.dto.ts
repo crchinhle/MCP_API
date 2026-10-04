@@ -12,16 +12,19 @@ import {
 
 export class ActivateDeviceDto {
   /** Deprecated client hint retained for one compatibility window; authorization always resolves from activationKey. */
+  @ApiPropertyOptional({ format: 'uuid', deprecated: true })
+  @IsOptional()
+  @IsUUID()
   licenseId?: string;
   @ApiProperty({ pattern: '^0x[0-9a-fA-F]{64}$', description: 'Bearer activation credential supplied by the enterprise administrator' })
   @IsString()
   @Matches(/^0x[0-9a-fA-F]{64}$/)
   activationKey!: `0x${string}`;
 
-  @ApiProperty()
+  @ApiProperty({ minLength: 16, maxLength: 512 })
   @IsString()
   @MinLength(16)
-  @MaxLength(128)
+  @MaxLength(512)
   challenge!: string;
 
   @ApiProperty({ minLength: 1, maxLength: 128 })

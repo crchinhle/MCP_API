@@ -99,7 +99,7 @@ describe.skipIf(!runIntegration)('Phase 7 assistance PostgreSQL integration', ()
     const occurredAt = (await client.query<{ at: Date }>('SELECT statement_timestamp() AS at')).rows[0]!.at;
     await commerce.ingestPayment({ amountVnd: 100000, protocolVersion: 1, eventId: 'retrieval-payment', occurredAt, providerReference: checkout.checkoutReference }, {}, {
       activationCommitment: `0x${'77'.repeat(32)}`, commandId: '00000000-0000-4000-8000-000000000085', licenseId: '00000000-0000-4000-8000-000000000086', payload: {}, payloadHash: `0x${'88'.repeat(32)}`,
-    }, { chainId: 31337, contractAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3', network: 'hardhat' });
+    }, { chainId: 11155111, contractAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3', network: 'sepolia' });
     expect(await search(orderConversation.id)).toMatchObject([{ content: 'Activation instructions' }]);
     expect(await search(planConversation.id)).toMatchObject([{ content: 'Activation instructions' }]);
     expect(await search(orderConversation.id, otherCustomerId)).toEqual([]);

@@ -10,7 +10,7 @@ import {
 import type { ChainCommandRepository } from '../../../../EmuKey/backend/src/modules/blockchain/infrastructure/chain-command.repository.js';
 
 const transaction: PreparedChainTransaction = {
-  network: 'hardhat',
+  network: 'sepolia',
   nonce: 7,
   rawTransaction: `0x${'ab'.repeat(80)}`,
   relayerAddress: '0x0000000000000000000000000000000000001337',
@@ -19,12 +19,12 @@ const transaction: PreparedChainTransaction = {
 
 const command = {
   attemptCount: 1,
-  chainId: 31_337,
+  chainId: 11_155_111,
   commandId: '00000000-0000-4000-8000-000000000901',
   commandType: 'RENEW_LICENSE',
   contractAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
   licenseId: '00000000-0000-4000-8000-000000000401',
-  network: 'hardhat',
+  network: 'sepolia',
   nonce: null,
   payload: { expiresAt: '2028-01-01T00:00:00.000Z' },
   payloadHash: `0x${'11'.repeat(32)}`,

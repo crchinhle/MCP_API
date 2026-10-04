@@ -1,44 +1,6 @@
 name: emukey-backend
 
 services:
-  chain:
-    profiles: [local-chain]
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: build
-    command: ['corepack', 'pnpm', '--dir', 'contracts', 'node']
-    ports:
-      - '127.0.0.1:${EVM_RPC_PORT:-8545}:8545'
-    healthcheck:
-      test:
-        [
-          'CMD',
-          'node',
-          '-e',
-          "fetch('http://127.0.0.1:8545',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'eth_chainId',params:[]})}).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    networks:
-      - backend-network
-
-  chain-deploy:
-    profiles: [local-chain]
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: build
-    command: ['corepack', 'pnpm', '--dir', 'contracts', 'deploy:local']
-    environment:
-      LOCAL_RPC_URL: http://chain:8545
-    depends_on:
-      chain:
-        condition: service_healthy
-    networks:
-      - backend-network
-
   redis:
     image: redis:8.2-alpine
     command: ['redis-server', '--appendonly', 'yes']

@@ -63,18 +63,24 @@ jobs:
           SEPAY_SECRET_KEY: ${{ secrets.SEPAY_SANDBOX_SECRET_KEY }}
           EVM_NETWORK: sepolia
           EVM_CHAIN_ID: '11155111'
-          EVM_DEPLOYMENT_BLOCK: '11738092'
+          EVM_DEPLOYMENT_BLOCK: ${{ vars.SEPOLIA_DEPLOYMENT_BLOCK }}
           EVM_INDEXER_BATCH_SIZE: '500'
           EVM_RPC_HTTP_URL: ${{ secrets.SEPOLIA_RPC_HTTP_URL }}
           EVM_RPC_FALLBACK_HTTP_URL: ${{ secrets.SEPOLIA_RPC_FALLBACK_HTTP_URL }}
-          EVM_CONTRACT_ADDRESS: ${{ vars.SEPOLIA_CONTRACT_ADDRESS || '0xAf61c3712e0A5fe9d5be0b3Fe080C786076e2845' }}
+          EVM_CONTRACT_ADDRESS: ${{ vars.SEPOLIA_CONTRACT_ADDRESS }}
           EVM_RELAYER_PRIVATE_KEY: ${{ secrets.SEPOLIA_RELAYER_PRIVATE_KEY }}
           E2E_TEST_EMAIL_RECIPIENT: ${{ secrets.E2E_TEST_EMAIL_RECIPIENT }}
           E2E_TEST_FCM_TOKEN: ${{ secrets.E2E_TEST_FCM_TOKEN }}
-        run: pnpm --dir EmuKey/backend build && node tooling/emukey/run.mjs verify:verify-external
+        run: |
+          pnpm --dir EmuKey/backend build
+          pnpm --dir EmuKey/backend contracts:build
+          node tooling/emukey/run.mjs verify:verify-external
       - name: Upload redacted evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: phase8-external-evidence
-          path: docs/emukey/traceability/external-provider-evidence.json
+          path: |
+            docs/emukey/traceability/external-provider-evidence.json
+            docs/emukey/traceability/sepolia-lifecycle-evidence.json
           if-no-files-found: error

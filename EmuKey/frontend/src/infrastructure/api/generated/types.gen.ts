@@ -628,6 +628,10 @@ export type DeviceChallengeDto = {
 
 export type ActivateDeviceDto = {
   /**
+   * @deprecated
+   */
+  licenseId?: string;
+  /**
    * Bearer activation credential supplied by the enterprise administrator
    */
   activationKey: string;

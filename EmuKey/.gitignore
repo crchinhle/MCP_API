@@ -51,3 +51,9 @@ Thumbs.db
 /skills/
 kilo.json
 skills-lock.json
+
+# Contract tooling compilation output; keep Ignition journals and addresses.
+/backend/contracts/artifacts/
+/backend/contracts/cache/
+/backend/contracts/ignition/deployments/*/artifacts/
+/backend/contracts/ignition/deployments/*/build-info/

@@ -36,6 +36,15 @@ jobs:
           node tooling/emukey/run.mjs frontend:unit
           node tooling/emukey/run.mjs mobile:unit
           node tooling/emukey/run.mjs contracts
+      - name: Product quality gates
+        run: |
+          pnpm --dir EmuKey/backend contracts:build
+          for component in backend frontend mobile; do
+            for check in lint typecheck build openapi:check; do
+              pnpm --dir EmuKey/$component $check
+            done
+          done
+          pnpm --dir EmuKey/mobile exec expo install --check
       - name: Install browser
         run: pnpm --dir EmuKey/frontend exec playwright install --with-deps chromium
       - name: Isolated web regressions

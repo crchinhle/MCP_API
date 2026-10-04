@@ -14,13 +14,13 @@ const validEnvironment = {
   EMAIL_ADAPTER: 'fake',
   PUSH_ADAPTER: 'fake',
   EVM_ADAPTER: 'viem',
-  EVM_NETWORK: 'hardhat',
-  EVM_CHAIN_ID: '31337',
+  EVM_NETWORK: 'sepolia',
+  EVM_CHAIN_ID: '11155111',
   EVM_CONFIRMATIONS: '2',
-  EVM_CONTRACT_ADDRESS: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
-  EVM_DEPLOYMENT_BLOCK: '1',
+  EVM_CONTRACT_ADDRESS: '0xAf61c3712e0A5fe9d5be0b3Fe080C786076e2845',
+  EVM_DEPLOYMENT_BLOCK: '11738092',
   EVM_INDEXER_BATCH_SIZE: '500',
-  EVM_RPC_HTTP_URL: 'http://localhost:8545',
+  EVM_RPC_HTTP_URL: 'https://ethereum-sepolia-rpc.publicnode.com',
   EVM_RELAYER_PRIVATE_KEY: `0x${'11'.repeat(32)}`,
   STORAGE_ADAPTER: 'local',
   ACTIVATION_ENVELOPE_ADAPTER: 'redis',
@@ -65,7 +65,7 @@ describe('validateEnvironment', () => {
     expect(result.OTEL_ENABLED).toBe(false);
     expect(result.IPN_DELIVERY_GRACE_SECONDS).toBe(86_400);
     expect(result.EVM_CONTRACT_ADDRESS).toBe(
-      '0x5fbdb2315678afecb367f032d93f642f64180aa3',
+      '0xaf61c3712e0a5fe9d5be0b3fe080c786076e2845',
     );
     expect(result.CORS_ORIGINS).toEqual([
       'http://localhost:5173',
@@ -175,7 +175,7 @@ describe('validateEnvironment', () => {
       NODE_ENV: 'test',
     });
     expect(result.EVM_RELAYER_PRIVATE_KEY).toBe(`0x${'11'.repeat(32)}`);
-    expect(result.EVM_RPC_HTTP_URL).toBe('http://localhost:8545');
+    expect(result.EVM_RPC_HTTP_URL).toBe('https://ethereum-sepolia-rpc.publicnode.com');
   });
 
   it('rejects malformed relayer private keys', () => {
@@ -219,6 +219,15 @@ describe('validateEnvironment', () => {
     ).toThrow(
       'EVM_RELAYER_PRIVATE_KEY cannot use the public Hardhat development key in production',
     );
+  });
+
+  it('rejects non-Sepolia runtime configuration', () => {
+    for (const invalid of [
+      { EVM_NETWORK: 'hardhat', EVM_CHAIN_ID: '31337' },
+      { EVM_NETWORK: 'sepolia', EVM_CHAIN_ID: '1' },
+    ]) {
+      expect(() => validateEnvironment({ ...validEnvironment, ...invalid })).toThrow('EVM_RUNTIME_MUST_BE_SEPOLIA');
+    }
   });
 
   it('rejects local storage in production', () => {

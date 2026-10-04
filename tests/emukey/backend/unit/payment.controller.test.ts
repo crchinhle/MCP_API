@@ -42,7 +42,7 @@ function service(repository: Partial<CommerceRepository>) {
     {} as PaymentGatewayPort,
     {} as ActivationEnvelopePort,
     {} as ActivationEnvelopeRecoveryService,
-    { chainId: 31_337, contractAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3', network: 'hardhat' },
+    { chainId: 11_155_111, contractAddress: '0xAf61c3712e0A5fe9d5be0b3Fe080C786076e2845', network: 'sepolia' },
     new ServiceTermsContent(),
   );
 }

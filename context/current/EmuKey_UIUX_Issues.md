@@ -241,7 +241,7 @@ DB có dữ liệu chưa được áp dụng migration snapshot. Android/device,
 |---|---|
 | Backend lint/typecheck/build/OpenAPI | Pass |
 | Backend unit | 33 files / 166 tests pass |
-| Backend PostgreSQL/Redis integration | 6 files / 27 tests pass; 2 blockchain tests skip vì thiếu LOCAL_EVM_* |
+| Backend PostgreSQL/Redis integration | 6 files / 27 tests pass; DB/application invariants tested without blockchain runtime |
 | Security scan + negative tests | Pass; 2 files / 15 tests |
 | Frontend lint/typecheck/build/OpenAPI | Pass |
 | Frontend unit/component | 15 files / 90 tests pass |

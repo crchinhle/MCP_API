@@ -577,7 +577,7 @@ SELECT
   id,
   md5(current_setting('emukey.seed_namespace') || ':chain-idempotency:' || i)::uuid,
   'ISSUE_LICENSE', provider_user_id, origin_order_id, license_id,
-  1, 'demo-local', 31337,
+  1, 'sepolia', 11155111,
   '0x' || substr(md5(current_setting('emukey.seed_namespace') || ':contract-a') || md5(current_setting('emukey.seed_namespace') || ':contract-b'), 1, 40),
   jsonb_build_object('seedNamespace', current_setting('emukey.seed_namespace'), 'licenseId', license_id),
   digest(current_setting('emukey.seed_namespace') || ':payload:' || i, 'sha256'),
@@ -599,7 +599,7 @@ INSERT INTO chain_indexer_checkpoints (
 )
 SELECT
   'demo-indexer-' || lpad(checkpoint.i::text, 2, '0'),
-  31337 + checkpoint.i,
+  11155111,
   '0x' || substr(
     md5(current_setting('emukey.seed_namespace') || ':checkpoint-contract-a:' || checkpoint.i) ||
     md5(current_setting('emukey.seed_namespace') || ':checkpoint-contract-b:' || checkpoint.i),
@@ -639,7 +639,7 @@ INSERT INTO chain_events (
 )
 SELECT
   id, chain_command_id, 'LICENSE_ISSUED', provider_user_id, license_id,
-  'demo-local', 31337,
+  'sepolia', 11155111,
   '0x' || substr(md5(current_setting('emukey.seed_namespace') || ':contract-a') || md5(current_setting('emukey.seed_namespace') || ':contract-b'), 1, 40),
   '0x' || encode(digest(current_setting('emukey.seed_namespace') || ':transaction:' || i, 'sha256'), 'hex'),
   0, 1000 + i,

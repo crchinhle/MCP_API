@@ -7,14 +7,8 @@ export default defineConfig({
   },
   plugins: [hardhatToolboxViemPlugin],
   networks: {
-    localhost: {
-      chainType: 'l1',
-      type: 'http',
-      url: configVariable('LOCAL_RPC_URL', {
-        default: 'http://127.0.0.1:8545',
-      }),
-    },
     sepolia: {
+      chainId: 11_155_111,
       // One dedicated demo account owns the contract and relays transactions.
       // deploy:sepolia loads the same backend secret used by the runtime.
       accounts: [configVariable('EVM_RELAYER_PRIVATE_KEY')],

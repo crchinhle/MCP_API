@@ -22,7 +22,7 @@ flowchart TB
     API --> Redis[(Redis)]
     Worker[Worker NestJS] --> PostgreSQL
     Worker --> Redis
-    Worker --> EVM[Hardhat local hoặc Sepolia]
+    Worker --> EVM[Ethereum Sepolia - chainId 11155111]
     API --> SePay[SePay Payment Gateway]
     SePay -->|IPN HTTPS| API
     API --> Brevo[Brevo Email API]
@@ -49,7 +49,7 @@ flowchart TB
 | Android navigation/security | React Navigation 7, Expo SecureStore | Navigation; lưu access session, activation key, random device reference và device private key bằng `WHEN_UNLOCKED_THIS_DEVICE_ONLY` |
 | Android notification | Expo Notifications | Package đã cài nhưng chưa có runtime registration/delivery flow; production push còn mở |
 | Blockchain contract | Solidity, OpenZeppelin Contracts 5.6.1 | `LicenseRegistry` quản lý quyền License/Device trên EVM |
-| Blockchain tooling | Hardhat 3.15.0, Hardhat Ignition, Hardhat Toolbox Viem | Compile/test; local deploy bằng script `viem`, Sepolia deploy bằng Ignition |
+| Blockchain tooling | Hardhat 3.15.0, Hardhat Ignition, Hardhat Toolbox Viem | Solidity compile/unit tests, ABI export, Sepolia deployment with Ignition |
 | Blockchain client | viem 2.56.3 | RPC, ABI calls, signing, EIP-1559 transaction, relayer và indexer |
 | Payment | `sepay-pg-node` 1.0.0, SePay Sandbox/Production adapter | Tạo checkout form có ký và xác thực IPN; fake adapter vẫn dùng cho local/test |
 | Email | Brevo SDK `@getbrevo/brevo` 6.0.3 | Gửi email khi `EMAIL_ADAPTER=brevo`; fake adapter dùng trong test/local |
@@ -141,11 +141,10 @@ Smart contract không lưu plaintext activation secret, Terms content, giá, pay
 
 ### 5.2. Mạng và relayer
 
-- `hardhat`: local EVM chain dùng trong Docker Compose profile `local-chain`; deploy local deterministic bằng `contracts/scripts/deploy-local.mjs` qua `viem`.
-- `sepolia`: Hardhat network/testnet triển khai bằng Ignition. Evidence hiện có gồm deploy contract và các bằng chứng riêng lẻ của ISSUE transaction qua relayer/indexer trên Sepolia; đây chưa phải bằng chứng toàn bộ lifecycle Phase 6 và chưa có một automated browser → SePay IPN → backend → Sepolia E2E duy nhất.
+- `sepolia`: mạng blockchain runtime duy nhất (chainId `11155111`). Hardhat chỉ còn contract tooling: compile Solidity, unit test contract, generate ABI, và deploy contract lên Sepolia bằng Hardhat Ignition. Backend local vẫn kết nối Sepolia; không có local EVM node, không có fallback local.
 - `viem`: RPC client, đọc contract, ký và broadcast raw EIP-1559 transaction.
-- RPC có primary + optional fallback; cả readiness và relayer kiểm tra đúng chain ID/contract, không silently dùng fallback khác network cho command.
-- Relayer thật dùng private key inject từ `EVM_RELAYER_PRIVATE_KEY`; không lưu credential thật trong database, source code, log hoặc image. Public Hardhat development key trong `.env.example`/local deploy script chỉ là fixture không có giá trị.
+- RPC có primary + optional fallback Sepolia; cả readiness và relayer kiểm tra đúng chain ID/contract, không silently dùng fallback khác network cho command.
+- Relayer thật dùng private key inject từ `EVM_RELAYER_PRIVATE_KEY`; không lưu credential thật trong database, source code, log hoặc image.
 - Worker lưu durable per-License command sequence/predecessor/latest-confirmed basis event, nonce, raw transaction, transaction hash/receipt và xử lý `SUBMITTED_UNKNOWN`, finality, reorg và reconcile. Với command không phải ISSUE, basis phải là confirmation của command `CONFIRMED` có sequence lớn nhất đứng trước tại lúc tạo/reopen/submit; ISSUE/replacement ISSUE luôn có basis `NULL`. Chỉ command mất matching canonical event của chính nó bị demote. Deep reorg có thể tạo ordered recovery set, lùi pending-key pointer về earliest unresolved ROTATE và khóa command mới. Reserved nonce đơn lẻ có thể `DEAD_LETTER -> PENDING` với nguyên nonce/payload sau revalidation; nếu basis vĩnh viễn không trở lại thì typed `NONCE_RESERVATION_RELEASED` giải phóng reservation và cho reuse đúng nonce. Signed raw+hash có outcome uncertain phải `-> SUBMITTED_UNKNOWN`; raw cũ immutable và chỉ same-raw reconcile. Terminal resolution dùng typed immutable JSON: pre-submit abort trước nonce, nonce reservation release trước raw, reverted receipt, hoặc finalized nonce-consumption + canonical no-effect proof. PostgreSQL tự đóng dấu `resolved_at`; no-effect proof không được có receipt `SUCCESS/REVERTED`, và `checkedAt` phải là valid RFC3339 nằm trong biên evidence đến `resolved_at`. Definitive proof resolve command cũ; retry mới dùng reciprocal replacement, không sửa raw cũ. `SUPERSEDED` phải có reciprocal later replacement cùng operation/subject; ISSUE sequence > 1 bắt buộc là reciprocal replacement; sau khi `ABANDONED/SUPERSEDED`, toàn bộ row command bất biến.
 
 - Security factor không thay ownership: owner JWT luôn được kiểm tra trước bearer key/proof/token. Action token Redis one-time/TTL bind `userId + licenseId + action`; device action bind thêm `deviceRef + generation`. Challenge bind protocol/domain/action/license/device/generation/keyVersion/nonce/expiry. Self-revoke dùng fresh target-device proof, còn remote revoke không cần target proof nhưng cần recent password re-auth; rotate/key-recovery cũng có recent re-auth theo policy.
@@ -198,13 +197,9 @@ Compose root hiện có các service/profile sau:
 | `api` | Backend NestJS HTTP API |
 | `worker` | Backend Worker dùng chung image/mã nguồn |
 | `web` | Frontend static app chạy trên Caddy |
-| `chain` | Hardhat node, chỉ trong profile `local-chain` |
-| `chain-deploy` | Deploy contract local, chỉ trong profile `local-chain` |
 | `database-initialize` | Maintenance profile, không chạy mặc định |
 
-PostgreSQL là external service và không có service PostgreSQL trong Compose. Các port mặc định được khai báo ở root `.env.example`: API `3000`, Web `5173`, Redis `6379`, local EVM RPC `8545`.
-
-Profile `local-chain` không tự bảo đảm API/Worker chờ `chain-deploy`: phải start chain, deploy contract, rồi truyền đúng address/block trước khi xử lý command. Khi API/Worker chạy trong container, local RPC là `http://chain:8545`, không phải `http://localhost:8545`. RPC fallback Sepolia không thể thay Hardhat chain `31337`; chain-ID validation phải fail thay vì silently đổi network.
+PostgreSQL là external service và không có service PostgreSQL trong Compose. Các port mặc định được khai báo ở root `.env.example`: API `3000`, Web `5173`, Redis `6379`. Blockchain runtime luôn dùng Sepolia RPC từ `EVM_RPC_HTTP_URL` kể cả khi backend chạy local; không có service chain hoặc deploy contract local.
 
 ## 8. CI và kiểm thử
 
@@ -213,9 +208,9 @@ GitHub Actions hiện làm CI validation/build riêng backend, frontend, mobile 
 - Backend: baseline/schema check, lint, typecheck, Vitest, contract verification, delivery check, OpenAPI check và build.
 - Frontend: lint, typecheck, Vitest, OpenAPI check và Vite build.
 - Mobile: Expo dependency check, lint, typecheck, Jest, OpenAPI check và Android export.
-- Contract: Hardhat compile/test, public surface check, ABI export và deploy script local.
+- Contract: Hardhat compile/test, public surface check, ABI export.
 - Container: build image độc lập cho backend/frontend/mobile; backend image không chứa `.env`, maintenance SQL hoặc source contracts trong runtime image.
-- Integration: Testcontainers cung cấp PostgreSQL/Redis cô lập; golden flow dùng local Hardhat JSON-RPC thật. Các RPC spec bị skip nếu thiếu `LOCAL_EVM_*`; CI hiện chưa start Hardhat cho chúng.
+- Integration: Testcontainers cung cấp PostgreSQL/Redis cô lập; DB/application invariants (concurrency, idempotency, replay, canonical projection repair, reorg state) test không cần blockchain. Sepolia real transaction test chạy external workflow với manual input, không chạy mỗi push.
 
 Playwright có real activation spec nhưng cần `E2E_CUSTOMER_EMAIL`, `E2E_CUSTOMER_PASSWORD`, `E2E_ACTIVATION_KEY` và backend/chain chạy. Mobile có Maestro YAML nhưng cần Maestro CLI, Android device và môi trường tích hợp. Hai flow này chưa được chạy mặc định trong CI, nên không phải bằng chứng full UI E2E hiện tại.
 
@@ -243,20 +238,20 @@ STORAGE_ADAPTER=local
 ACTIVATION_ENVELOPE_ADAPTER=redis
 ACTIVATION_ENVELOPE_KEY=
 EVM_ADAPTER=viem
-EVM_NETWORK=hardhat|sepolia
-EVM_CHAIN_ID=
-EVM_RPC_HTTP_URL=
-EVM_RPC_FALLBACK_HTTP_URL=
+EVM_NETWORK=sepolia
+EVM_CHAIN_ID=11155111
+EVM_RPC_HTTP_URL=https://sepolia-provider
+EVM_RPC_FALLBACK_HTTP_URL=https://sepolia-fallback
 EVM_DEPLOYMENT_BLOCK=
 EVM_INDEXER_BATCH_SIZE=
-EVM_CONTRACT_ADDRESS=
+EVM_CONTRACT_ADDRESS=0x...
 EVM_RELAYER_PRIVATE_KEY=
 EVM_CONFIRMATIONS=
 TERMS_VERSION=
 TERMS_APPROVED_HASH=
 ```
 
-Giá trị secret thật không được commit. Production phải dùng secret manager/injection phù hợp; không dùng Hardhat development private key.
+Giá trị secret thật không được commit. Production phải dùng secret manager/injection phù hợp.
 
 ## 10. Phạm vi chưa phải công nghệ đang sử dụng
 
@@ -272,7 +267,7 @@ Các công nghệ sau không nên được mô tả là thành phần hiện t�
 
 ## 11. Trạng thái và giới hạn
 
-Baseline hiện tại có API, Worker, Redis, PostgreSQL external và local Hardhat integration. SePay Sandbox flow, Sepolia contract deployment và ISSUE relayer/indexer evidence riêng lẻ đã được kiểm tra độc lập; chưa có bằng chứng automated full SePay-to-Sepolia Web/Mobile E2E hoặc toàn bộ lifecycle Phase 6 trên Sepolia. Target SQL v7.3 đã pass disposable clean-room, representative Order/payment/chain negative fixtures, reset/apply database Neon thật và seed-twice idempotency; còn toàn bộ negative matrix. Hệ thống chưa production-ready vì còn ownership hardening Phase 6, key-unavailable recovery, order/payment lifecycle acceptance tests, Mobile refresh, E2E external, CD/TLS/monitoring, merchant Production, secret/RPC/finality production, approved Terms và adapter thật cho AI/push/object storage.
+Baseline hiện tại có API, Worker, Redis, PostgreSQL external và Sepolia-only blockchain. SePay Sandbox flow, Sepolia contract deployment và ISSUE relayer/indexer evidence riêng lẻ đã được kiểm tra độc lập; chưa có bằng chứng automated full SePay-to-Sepolia Web/Mobile E2E hoặc toàn bộ lifecycle Phase 6 trên Sepolia. Target SQL v7.3 đã pass disposable clean-room, representative Order/payment/chain negative fixtures, reset/apply database Neon thật và seed-twice idempotency; còn toàn bộ negative matrix. Hệ thống chưa production-ready vì còn ownership hardening Phase 6, key-unavailable recovery, order/payment lifecycle acceptance tests, Mobile refresh, E2E external, CD/TLS/monitoring, merchant Production, secret/RPC/finality production, approved Terms và adapter thật cho AI/push/object storage.
 
 Các mismatch runtime quan trọng phải giữ trong implementation plan thay vì che bằng sơ đồ target: Support route còn quyền payment/reconcile vượt actor authority; reset/change password chưa đồng nhất policy 8 ký tự; runtime payment chưa có evidence dùng đúng target `provider_occurred_at/received_at`; renewal chưa CLOSED atomic handoff/per-License admission/recovery; Device rebind chưa có đủ generation evidence; dead-letter chưa có manual recovery/compensation hoàn chỉnh; Terms loader mới có một approved hash hiện hành. Đây là status theo PLAN, không được suy target SQL đã hoàn tất runtime.
 

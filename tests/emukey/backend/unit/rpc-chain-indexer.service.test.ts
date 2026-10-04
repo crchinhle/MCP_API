@@ -22,9 +22,9 @@ describe('RpcChainIndexerService', () => {
     await expect(
       repository.claimRange(
         {
-          chainId: 31_337,
+          chainId: 11_155_111,
           contractAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
-          network: 'hardhat',
+          network: 'sepolia',
         },
         'worker-1',
         1,
@@ -87,10 +87,10 @@ describe('RpcChainIndexerService', () => {
     };
     const service = new RpcChainIndexerService(checkpoints, indexer, rpc, {
       batchSize: 100,
-      chainId: 31_337,
+      chainId: 11_155_111,
       contractAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
       deploymentBlock: 1,
-      network: 'hardhat',
+      network: 'sepolia',
       requiredConfirmations: 2,
     });
 
@@ -150,10 +150,10 @@ describe('RpcChainIndexerService', () => {
       rpc,
       {
         batchSize: 25,
-        chainId: 31_337,
+        chainId: 11_155_111,
         contractAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
         deploymentBlock: 1,
-        network: 'hardhat',
+        network: 'sepolia',
         requiredConfirmations: 2,
       },
     );
@@ -194,10 +194,10 @@ describe('RpcChainIndexerService', () => {
       rpc,
       {
         batchSize: 25,
-        chainId: 31_337,
+        chainId: 11_155_111,
         contractAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
         deploymentBlock: 1,
-        network: 'hardhat',
+        network: 'sepolia',
         requiredConfirmations: 2,
       },
     );
@@ -229,10 +229,10 @@ describe('RpcChainIndexerService', () => {
       rpc,
       {
         batchSize: 100,
-        chainId: 31_337,
+        chainId: 11_155_111,
         contractAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
         deploymentBlock: 1,
-        network: 'hardhat',
+        network: 'sepolia',
         requiredConfirmations: 2,
       },
     );

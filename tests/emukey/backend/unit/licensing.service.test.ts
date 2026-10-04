@@ -1,4 +1,5 @@
-import { ConflictException, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, NotFoundException, UnauthorizedException, ValidationPipe } from '@nestjs/common';
+import { ActivateDeviceDto } from '../../../../EmuKey/backend/src/modules/licensing/licensing.dto.js';
 import type { Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { createHmac } from 'node:crypto';
@@ -63,12 +64,23 @@ function fixture() {
     {} as never,
     redis as never,
     new TextEncoder().encode('test-secret'),
-    { chainId: 31_337, contractAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3', network: 'hardhat' },
+    { chainId: 11_155_111, contractAddress: '0xAf61c3712e0A5fe9d5be0b3Fe080C786076e2845', network: 'sepolia' },
   );
   return { challenge, deviceAddress, redis, repository, service };
 }
 
 describe('LicensingService Phase 6 boundaries', () => {
+  it('accepts its issued activation challenge through HTTP DTO validation', async () => {
+    const { service } = fixture();
+    const { challenge } = await service.challenge(null, {
+      activationKey: secret, deviceRef: 'external-device', purpose: 'ACTIVATE_DEVICE',
+    });
+    const dto = { activationKey: secret, deviceRef: 'external-device', devicePublicKey: deviceAddress,
+      challenge, proof: await privateKeyToAccount(devicePrivateKey).signMessage({ message: challenge }) };
+    const pipe = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true });
+    await expect(pipe.transform(dto, { type: 'body', metatype: ActivateDeviceDto })).resolves.toMatchObject({ challenge });
+    await expect(pipe.transform({ ...dto, challenge: 'x'.repeat(513) }, { type: 'body', metatype: ActivateDeviceDto })).rejects.toMatchObject({ status: 400 });
+  });
   it.each([null, { ...customer, sub: '00000000-0000-4000-8000-000000000099' }])(
     'accepts the bearer key without purchaser identity or ownership transfer: %s',
     async (actor) => {
@@ -168,7 +180,7 @@ describe('LicensingService Phase 6 boundaries', () => {
       deviceAddress,
       expect.any(String),
       1,
-      expect.objectContaining({ chainId: 31_337 }),
+      expect.objectContaining({ chainId: 11_155_111 }),
     );
     expect(repository.findActivationLicense).toHaveBeenCalledWith(activationCommitment(secret));
   });
@@ -228,7 +240,7 @@ describe('LicensingService Phase 6 boundaries', () => {
       {} as never,
       {} as never,
       new TextEncoder().encode('test-secret'),
-      { chainId: 31_337, contractAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3', network: 'hardhat' },
+      { chainId: 11_155_111, contractAddress: '0xAf61c3712e0A5fe9d5be0b3Fe080C786076e2845', network: 'sepolia' },
     );
 
     await expect(gated.issueEntitlement(customer, { licenseId, deviceId: '00000000-0000-4000-8000-000000000902', challenge: 'challenge', proof: `0x${'44'.repeat(65)}` }))
@@ -255,7 +267,7 @@ describe('LicensingService Phase 6 boundaries', () => {
       {} as never,
       {} as never,
       jwtSecret,
-      { chainId: 31_337, contractAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3', network: 'hardhat' },
+      { chainId: 11_155_111, contractAddress: '0xAf61c3712e0A5fe9d5be0b3Fe080C786076e2845', network: 'sepolia' },
     );
     const staleToken = await new SignJWT({
       deviceId: '00000000-0000-4000-8000-000000000902',
@@ -301,7 +313,7 @@ describe('LicensingService Phase 6 boundaries', () => {
       {} as never,
       {} as never,
       new TextEncoder().encode('test-secret'),
-      { chainId: 31_337, contractAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3', network: 'hardhat' },
+      { chainId: 11_155_111, contractAddress: '0xAf61c3712e0A5fe9d5be0b3Fe080C786076e2845', network: 'sepolia' },
       identity as never,
     );
 
@@ -318,7 +330,7 @@ describe('LicensingService Phase 6 boundaries', () => {
        'lost-device',
        '00000000-0000-4000-8000-000000000902',
        4,
-      expect.objectContaining({ chainId: 31_337 }),
+      expect.objectContaining({ chainId: 11_155_111 }),
     );
   });
 
@@ -342,7 +354,7 @@ describe('LicensingService Phase 6 boundaries', () => {
       envelopes as never,
       {} as never,
       new TextEncoder().encode('test-secret'),
-      { chainId: 31_337, contractAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3', network: 'hardhat' },
+      { chainId: 11_155_111, contractAddress: '0xAf61c3712e0A5fe9d5be0b3Fe080C786076e2845', network: 'sepolia' },
       identity as never,
     );
 
@@ -358,7 +370,7 @@ describe('LicensingService Phase 6 boundaries', () => {
       licenseId,
       expect.stringMatching(/^0x[0-9a-f]{64}$/),
       2,
-      expect.objectContaining({ chainId: 31_337 }),
+      expect.objectContaining({ chainId: 11_155_111 }),
     );
     expect(envelopes.prepare).toHaveBeenCalledWith(
       expect.objectContaining({ commandId: '00000000-0000-4000-8000-000000000904', keyVersion: 2, licenseId }),
@@ -384,7 +396,7 @@ describe('LicensingService Phase 6 boundaries', () => {
     const service = new LicensingService(
       repository as never, {} as never, {} as never, {} as never,
       new TextEncoder().encode('test-secret'),
-      { chainId: 31_337, contractAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3', network: 'hardhat' },
+      { chainId: 11_155_111, contractAddress: '0xAf61c3712e0A5fe9d5be0b3Fe080C786076e2845', network: 'sepolia' },
       identity as never,
     );
 
@@ -401,7 +413,7 @@ describe('LicensingService Phase 6 boundaries', () => {
     const service = new LicensingService(
       {} as never, {} as never, {} as never, {} as never,
       new TextEncoder().encode('test-secret'),
-      { chainId: 31_337, contractAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3', network: 'hardhat' },
+      { chainId: 11_155_111, contractAddress: '0xAf61c3712e0A5fe9d5be0b3Fe080C786076e2845', network: 'sepolia' },
       identity as never,
     );
 

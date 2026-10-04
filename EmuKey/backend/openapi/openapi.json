@@ -5349,13 +5349,20 @@
       "ActivateDeviceDto": {
         "type": "object",
         "properties": {
+          "licenseId": {
+            "type": "string",
+            "format": "uuid",
+            "deprecated": true
+          },
           "activationKey": {
             "type": "string",
             "pattern": "^0x[0-9a-fA-F]{64}$",
             "description": "Bearer activation credential supplied by the enterprise administrator"
           },
           "challenge": {
-            "type": "string"
+            "type": "string",
+            "minLength": 16,
+            "maxLength": 512
           },
           "deviceRef": {
             "type": "string",

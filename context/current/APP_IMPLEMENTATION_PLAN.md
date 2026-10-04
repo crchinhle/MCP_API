@@ -1,5 +1,7 @@
 # APP IMPLEMENTATION PLAN — Account-linked Customer baseline v5.1-r4
 
+> Current architecture (2026-10-04): application services, PostgreSQL and Redis may run locally; blockchain runtime/integration is Ethereum Sepolia (11155111) only. Hardhat is contract tooling. Local-chain results below are historical evidence, not current execution instructions. Current DB invariants: `tests/emukey/backend/integration/blockchain/license-db-invariants.integration.test.ts`; current external verification: `tooling/emukey/verification/verify-sepolia.mjs`.
+
 > **Đề tài:** Xây dựng hệ thống quản lý và phân phối bản quyền phần mềm ứng dụng Blockchain  
 > **Ngày cập nhật:** 17/09/2026  
 > **Trạng thái:** **Baseline v5.1-r4 + implementation audit — M1 còn OPEN; không Customer Controller/per-account key/KMS**  

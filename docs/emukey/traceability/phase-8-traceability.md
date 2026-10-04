@@ -4,6 +4,21 @@ This matrix is the release-hardening index for the existing Phase 1-7 baseline.
 It does not add business capability or replace the canonical owners documented in
 `context/current/APP_IMPLEMENTATION_PLAN.md`.
 
+## Current Sepolia-only verification (2026-10-04 to 2026-10-05)
+
+Application services, PostgreSQL and Redis may run locally. All blockchain runtime/integration uses Ethereum Sepolia, chainId 11155111. Hardhat is retained only for compile, contract unit tests, ABI export and Ignition deployment.
+
+- Deployment: `EmuKey/backend/contracts/deployments/sepolia-v3.json`; address `0x4d30200F3D0791e0aE34Fa6075A4e4b03f4d1cBC`, block `11842365`. Runtime bytecode exactly matches the compiled artifact. V2 metadata remains historical.
+- Real external evidence: `sepolia-lifecycle-evidence.json`. Application-created ISSUE, successful receipt with two confirmations, indexed event and ACTIVE projection; public HTTP activation and entitlement work before aggregate sync; real sync event and DB/on-chain count/version agree. The commerce path uses an isolated test payment adapter, not a real payment-provider callback.
+- DB invariants: `tests/emukey/backend/integration/blockchain/license-db-invariants.integration.test.ts`. Quota two / three concurrent requests gives two success and one rejection. Replay, idempotency, owner isolation, binding generation and ISSUE reorg/reconfirmation run without any blockchain node.
+- Normal verification: baseline; backend unit (180), contract/API (12), security (16), DB integration (33); frontend unit (90), browser regressions (31); mobile unit (16); Solidity contract tests (6). Product lint/typecheck/build, ABI export, all OpenAPI checks and Expo dependency check passed locally. GitHub Actions itself was not dispatched; changes remain uncommitted.
+- Regression fixes found during verification: activation HTTP DTO accepts the server-issued challenge and optional legacy license hint; ISSUE reorg invalidates key trust correctly and reconfirmation retains its reorg timestamp. Production rejection of the public development relayer key is preserved.
+- Current runners: `tooling/emukey/run.mjs` and `tooling/emukey/verification/verify-sepolia.mjs`. External CI is manually invoked with `run_sepolia=true` and requires Sepolia secrets plus the v3 address/block variables. Its DB/Redis are disposable containers.
+
+## Historical September 2026 release matrix
+
+The following matrix records earlier runs, including retired local-chain tooling and v2 deployments. It is historical evidence, not current setup or verification instructions. Use the current runners above.
+
 Status vocabulary: `LOCAL_VERIFIED`, `STAGING_VERIFIED`, `EXTERNAL_VERIFIED`,
 `PRODUCTION_READY`, `BLOCKED_EXTERNAL`, `FAIL`, `OPEN`.
 

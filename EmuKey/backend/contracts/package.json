@@ -5,9 +5,7 @@
   "scripts": {
     "build": "hardhat compile",
     "abi:export": "node scripts/export-abi.mjs",
-    "node": "hardhat node --hostname 0.0.0.0",
-    "deploy:local": "hardhat compile && node scripts/deploy-local.mjs",
-    "deploy:sepolia": "node --env-file-if-exists=../.env ./node_modules/hardhat/dist/src/cli.js ignition deploy ignition/modules/LicenseRegistry.ts --network sepolia",
+    "deploy:sepolia": "node --env-file-if-exists=../.env scripts/deploy-sepolia.mjs",
     "deployment:show": "node scripts/print-deployment.mjs"
   },
   "devDependencies": {

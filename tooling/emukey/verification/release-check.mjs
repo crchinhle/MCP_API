@@ -6,7 +6,7 @@ const requiredFiles = [
   'backend/database/schema.sql',
   'backend/src/modules/blockchain/infrastructure/generated/license-registry.abi.json',
   'backend/src/modules/blockchain/infrastructure/license-registry-contract.ts',
-  'backend/contracts/deployments/sepolia-v2.json',
+  'backend/contracts/deployments/sepolia-v3.json',
   'frontend/openapi/openapi.json',
   'mobile/openapi/openapi.json',
   '../docs/emukey/traceability/phase-8-traceability.md',
@@ -61,14 +61,23 @@ if (!structuralOnly) {
 const value = (key) => process.env[key] ?? environment.match(new RegExp(`^${key}=(.*)$`, 'm'))?.[1]?.trim();
 const chainId = value('EVM_CHAIN_ID');
 const network = value('EVM_NETWORK');
-if (chainId === '11155111' && network !== 'sepolia') {
-  failures.push('EVM_NETWORK must be sepolia when EVM_CHAIN_ID is 11155111');
-}
-if (chainId === '31337' && network !== 'hardhat') {
-  failures.push('EVM_NETWORK must be hardhat when EVM_CHAIN_ID is 31337');
+if (!structuralOnly && (chainId !== '11155111' || network !== 'sepolia')) {
+  failures.push('Blockchain runtime must use Sepolia (EVM_NETWORK=sepolia, EVM_CHAIN_ID=11155111)');
 }
 
 const contractAddress = value('EVM_CONTRACT_ADDRESS');
+try {
+  const deployment = JSON.parse(await readFile(resolve(root, 'backend/contracts/deployments/sepolia-v3.json'), 'utf8'));
+  if (deployment.chainId !== 11155111 || deployment.network !== 'sepolia' || deployment.deploymentVersion !== 3) {
+    failures.push('Sepolia v3 metadata is invalid');
+  }
+  if (!structuralOnly && (contractAddress?.toLowerCase() !== deployment.contractAddress.toLowerCase() ||
+      Number(value('EVM_DEPLOYMENT_BLOCK')) !== deployment.deploymentBlock)) {
+    failures.push('Runtime contract address/block must match Sepolia v3 metadata');
+  }
+} catch {
+  failures.push('Sepolia v3 deployment metadata is missing or unreadable');
+}
 if (contractAddress && !/^0x[0-9a-fA-F]{40}$/.test(contractAddress)) {
   failures.push('EVM_CONTRACT_ADDRESS is not a 20-byte hex address');
 }
