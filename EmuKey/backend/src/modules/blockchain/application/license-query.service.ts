@@ -20,6 +20,7 @@ export class LicenseQueryService {
     private readonly repository: LicenseProjectionRepository,
     private readonly envelopes: ActivationEnvelopePort,
     private readonly redis: Redis,
+    private readonly publicVerifyRateLimit = 30,
   ) {}
 
   async list(actor: AuthPrincipal) {
@@ -61,7 +62,7 @@ export class LicenseQueryService {
     const key = `public-license-verify:${requester}`;
     const count = await this.redis.incr(key);
     if (count === 1) await this.redis.expire(key, 60);
-    if (count > 30)
+    if (count > this.publicVerifyRateLimit)
       throw new HttpException(
         'Too many requests',
         HttpStatus.TOO_MANY_REQUESTS,

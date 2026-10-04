@@ -64,6 +64,7 @@ describe('public activation rate limit', () => {
         .post('/activations/challenge')
         .send({ activationKey: `0x${'22'.repeat(32)}`, purpose: 'ACTIVATE_DEVICE', deviceRef: 'device' });
       expect(response.status).toBe(expected);
+      if (expected === 429) expect(response.headers['retry-after']).toBe('12');
     }
     await configuredApp.close();
   });

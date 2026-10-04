@@ -183,12 +183,13 @@ import {
     },
     {
       provide: LicenseQueryService,
-      inject: [LicenseProjectionRepository, ACTIVATION_ENVELOPE, Redis],
+      inject: [LicenseProjectionRepository, ACTIVATION_ENVELOPE, Redis, ConfigService],
       useFactory: (
         repository: LicenseProjectionRepository,
         envelopes: ActivationEnvelopePort,
         redis: Redis,
-      ) => new LicenseQueryService(repository, envelopes, redis),
+        config: ConfigService,
+      ) => new LicenseQueryService(repository, envelopes, redis, config.getOrThrow<number>('PUBLIC_VERIFY_RATE_LIMIT_PER_MINUTE')),
     },
     {
       provide: BlockchainReconciliationService,

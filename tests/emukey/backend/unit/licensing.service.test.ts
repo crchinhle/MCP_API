@@ -84,6 +84,54 @@ describe('LicensingService Phase 6 boundaries', () => {
     },
   );
 
+  it('returns an idempotent active device without exposing a command id on reuse', async () => {
+    const { challenge, deviceAddress, repository, service } = fixture();
+    repository.createDeviceCommand.mockResolvedValueOnce({
+      commandId: null,
+      deviceId: '00000000-0000-4000-8000-000000000902',
+      licenseId,
+      status: 'ACTIVE',
+      reused: true,
+    });
+    repository.findDevice.mockResolvedValueOnce({
+      bindingGeneration: 1,
+      devicePublicKey: deviceAddress,
+      id: '00000000-0000-4000-8000-000000000902',
+      status: 'ACTIVE',
+    });
+    repository.findDeviceById.mockResolvedValueOnce({
+      activatedAt: new Date('2026-10-04T00:00:00.000Z'),
+      bindingGeneration: 1,
+      devicePublicKey: deviceAddress,
+      deviceRef: 'opaque-device-1',
+      id: '00000000-0000-4000-8000-000000000902',
+      licenseId,
+      revokedAt: null,
+      status: 'ACTIVE',
+    });
+
+    const proof = await privateKeyToAccount(devicePrivateKey).signMessage({ message: challenge });
+    const result = await service.activate(null, {
+      activationKey: secret,
+      challenge,
+      devicePublicKey: deviceAddress,
+      deviceRef: 'opaque-device-1',
+      licenseId,
+      proof,
+    });
+
+    expect(result).toEqual({
+      activatedAt: '2026-10-04T00:00:00.000Z',
+      bindingGeneration: 1,
+      deviceRef: createHmac('sha256', new TextEncoder().encode('test-secret')).update('device-ref:opaque-device-1').digest('hex'),
+      id: '00000000-0000-4000-8000-000000000902',
+      licenseId,
+      revokedAt: null,
+      status: 'ACTIVE',
+    });
+    expect(result).not.toHaveProperty('commandId');
+    expect(repository.createDeviceCommand).toHaveBeenCalledTimes(1);
+  });
   it('rejects a bearer key that does not match the current commitment', async () => {
     const { service } = fixture();
 

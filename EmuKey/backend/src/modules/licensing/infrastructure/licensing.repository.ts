@@ -21,6 +21,14 @@ export interface LicenseCommandResult {
   reused?: boolean;
 }
 
+export interface DeviceMutationResult {
+  commandId: string | null;
+  deviceId: string;
+  licenseId: string;
+  status: string;
+  reused?: boolean;
+}
+
 export interface LicenseSecurityRecord {
   activationCommitment: Hex;
   activationKeyVersion: number;
@@ -157,7 +165,7 @@ export class LicensingRepository {
     deviceId: string,
     expectedBindingGeneration: number,
     config: LicenseCommandConfig,
-  ): Promise<LicenseCommandResult> {
+  ): Promise<DeviceMutationResult> {
     return this.transaction(async (client) => {
       const license = await this.lockLicense(client, licenseId);
       if (actorUserId) this.requireCustomer(license, actorUserId);
@@ -169,9 +177,12 @@ export class LicensingRepository {
       );
       const currentStatus = currentDevice.rows[0]?.status;
       if (currentStatus === 'ACTIVE') {
+        // Idempotent replay: the device row is already ACTIVE, so no aggregate
+        // changed and no SYNC_DEVICE_COUNT command was created. Reporting a
+        // chain command id here would be a lie, so the command id stays null.
         const existingDeviceId = String(currentDevice.rows[0]?.id);
         return {
-          commandId: existingDeviceId,
+          commandId: null,
           deviceId: existingDeviceId,
           licenseId,
           status: 'ACTIVE',
@@ -223,7 +234,7 @@ export class LicensingRepository {
         targetId: licenseId,
         targetType: 'LICENSE',
       });
-      return command;
+      return { commandId: command.commandId, deviceId: storedDeviceId, licenseId, status: command.status };
     });
   }
 
@@ -234,7 +245,7 @@ export class LicensingRepository {
     deviceId: string,
     expectedBindingGeneration: number,
     config: LicenseCommandConfig,
-  ): Promise<LicenseCommandResult> {
+  ): Promise<DeviceMutationResult> {
     return this.transaction(async (client) => {
       const license = await this.lockLicense(client, licenseId);
       this.requireCustomer(license, actorUserId);
@@ -245,7 +256,7 @@ export class LicensingRepository {
       const row = device.rows[0];
       if (!row) throw new Error('DEVICE_NOT_FOUND');
       if (String(row.status) === 'REVOKED') {
-        return { commandId: String(row.id), deviceId: String(row.id), licenseId, status: 'REVOKED', reused: true };
+        return { commandId: null, deviceId: String(row.id), licenseId, status: 'REVOKED', reused: true };
       }
       if (String(row.status) !== 'ACTIVE') throw new Error('DEVICE_NOT_ACTIVE');
       if (Number(row.binding_generation) !== expectedBindingGeneration) throw new Error('STALE_DEVICE_GENERATION');
@@ -275,7 +286,7 @@ export class LicensingRepository {
         targetId: licenseId,
         targetType: 'LICENSE',
       });
-      return command;
+      return { commandId: command.commandId, deviceId: String(row.id), licenseId, status: command.status };
     });
   }
 

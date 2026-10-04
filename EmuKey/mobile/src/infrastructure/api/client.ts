@@ -5,10 +5,7 @@ import { bytesToHex } from '@noble/hashes/utils';
 import type {
   ActivationChallengeDto,
   ActivationKeyDto,
-  ActivateDeviceDto,
   DeviceChallengeDto,
-  EntitlementDto,
-  EntitlementValidationDto,
   CheckoutSessionDto,
   ComparePlansResponseDto,
   CreateOrderDto,
@@ -324,10 +321,6 @@ export async function createActivationChallenge(input: ActivationChallengeDto, a
   return json(await request('/activations/challenge', { method: 'POST', body: JSON.stringify(input) }, authenticated));
 }
 
-export async function activateDevice(input: ActivateDeviceDto): Promise<LicenseDeviceDto> {
-  return json(await request('/activations', { method: 'POST', body: JSON.stringify(input) }, false));
-}
-
 export async function revokeDevice(licenseId: string, deviceId: string, input: RevokeDeviceDto): Promise<LicenseDeviceDto> {
   return json(await request(`/licenses/${encodeURIComponent(licenseId)}/devices/${encodeURIComponent(deviceId)}/revoke`, { method: 'POST', body: JSON.stringify(input) }));
 }
@@ -336,27 +329,12 @@ export async function remoteRevokeDevice(licenseId: string, deviceId: string, in
   return json(await request(`/licenses/${encodeURIComponent(licenseId)}/devices/${encodeURIComponent(deviceId)}/remote-revoke`, { method: 'POST', body: JSON.stringify(input) }));
 }
 
-export async function issueEntitlement(licenseId: string, deviceId: string, challenge: string, proof: string): Promise<EntitlementDto> {
-  return json(await request('/entitlements/issue', { method: 'POST', body: JSON.stringify({ challenge, deviceId, licenseId, proof }) }, false));
-}
-
 export async function rotateActivationKey(licenseId: string, input: RotateActivationKeyDto): Promise<Phase6CommandDto> {
   return json(await request(`/licenses/${encodeURIComponent(licenseId)}/activation-key/rotate`, { method: 'POST', body: JSON.stringify(input) }));
 }
 
 export async function recoverActivationKey(licenseId: string, input: { actionToken: string; currentPassword: string }): Promise<Phase6CommandDto> {
   return json(await request(`/licenses/${encodeURIComponent(licenseId)}/activation-key/recover`, { method: 'POST', body: JSON.stringify(input) }));
-}
-
-export async function refreshEntitlement(licenseId: string, deviceId: string, challenge: string, proof: string): Promise<EntitlementDto> {
-  return json(await request('/entitlements/refresh', { method: 'POST', body: JSON.stringify({ challenge, deviceId, licenseId, proof }) }, false));
-}
-
-export async function verifyEntitlement(token: string): Promise<EntitlementValidationDto> {
-  return json(await request('/entitlements/verify', {
-    method: 'POST',
-    body: JSON.stringify({ token }),
-  }, false));
 }
 
 export async function verifyPublicLicense(

@@ -29,6 +29,28 @@ const validEnvironment = {
 };
 
 describe('validateEnvironment', () => {
+  it('keeps activation and public verification rate limits independent', () => {
+    const result = validateEnvironment({
+      ...validEnvironment,
+      PUBLIC_VERIFY_RATE_LIMIT_PER_MINUTE: '7',
+      PUBLIC_ACTIVATION_RATE_LIMIT_PER_MINUTE: '2',
+    });
+
+    expect(result.PUBLIC_VERIFY_RATE_LIMIT_PER_MINUTE).toBe(7);
+    expect(result.PUBLIC_ACTIVATION_RATE_LIMIT_PER_MINUTE).toBe(2);
+  });
+
+  it('defaults the activation rate limit without changing public verification', () => {
+    const result = validateEnvironment({
+      ...validEnvironment,
+      PUBLIC_VERIFY_RATE_LIMIT_PER_MINUTE: '9',
+    });
+
+    expect(result.PUBLIC_VERIFY_RATE_LIMIT_PER_MINUTE).toBe(9);
+    expect(result.PUBLIC_ACTIVATION_RATE_LIMIT_PER_MINUTE).toBe(30);
+  });
+
+
   it('rejects receipt timing outside SePay sandbox and rejects mixing clock policies', () => {
     const sepay = { ...validEnvironment, PAYMENT_ADAPTER: 'sepay', SEPAY_ENV: 'sandbox', SEPAY_MERCHANT_ID: 'test', SEPAY_SECRET_KEY: 'secret', WEB_APP_URL: 'https://demo.test', SEPAY_SANDBOX_RECEIPT_TIMING: 'true' };
     expect(validateEnvironment(sepay).SEPAY_SANDBOX_RECEIPT_TIMING).toBe(true);

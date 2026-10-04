@@ -43,7 +43,7 @@ import { ACTIVATION_ENVELOPE, type ActivationEnvelopePort } from '../blockchain/
           network: config.getOrThrow<string>('EVM_NETWORK'),
         },
         identity,
-        config.getOrThrow<number>('PUBLIC_VERIFY_RATE_LIMIT_PER_MINUTE'),
+        config.getOrThrow<number>('PUBLIC_ACTIVATION_RATE_LIMIT_PER_MINUTE'),
       ),
     },
   ],
