@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, symlinkSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, readdirSync, rmSync, symlinkSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 
 const workspace = resolve(import.meta.dirname, '../..');
@@ -9,6 +9,17 @@ const [task, ...extra] = process.argv.slice(2);
 
 // Reuse the product's installed dependencies. These ignored links contain no
 // copied source and are never needed by a standalone product checkout.
+function isMissing(link) {
+  try {
+    lstatSync(link);
+  } catch (error) {
+    if (error.code === 'ENOENT') return true;
+    throw error;
+  }
+  // A dangling symlink exists as a directory entry but resolves to nothing.
+  return !existsSync(link);
+}
+
 function dependencies(directory, component) {
   const target = join(product, component, 'node_modules');
   if (!existsSync(target)) throw new Error(`Install dependencies in ${join(product, component)} first.`);
@@ -17,13 +28,11 @@ function dependencies(directory, component) {
   for (const entry of readdirSync(target, { withFileTypes: true })) {
     if (entry.name.startsWith('.')) continue;
     const link = join(destination, entry.name);
-    if (!existsSync(link)) {
-      try {
-        symlinkSync(join(target, entry.name), link, process.platform === 'win32' ? 'junction' : 'dir');
-      } catch (error) {
-        if (error.code !== 'EEXIST') throw error;
-      }
-    }
+    if (!isMissing(link)) continue;
+    // Remove a stale entry so a previously dangling link cannot keep pointing
+    // at an uninstalled dependency on an incremental or reused workspace.
+    rmSync(link, { force: true, recursive: true });
+    symlinkSync(join(target, entry.name), link, process.platform === 'win32' ? 'junction' : 'dir');
   }
 }
 

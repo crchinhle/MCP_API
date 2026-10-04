@@ -94,11 +94,9 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export function LoginScreen({
   onAuthenticated,
   onVerify,
-  onActivate,
 }: {
   readonly onAuthenticated: (session: MobileSession) => void;
   readonly onVerify: () => void;
-  readonly onActivate: () => void;
 }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -137,7 +135,6 @@ export function LoginScreen({
       <Button disabled={!email.trim() || password.length < 8} onPress={() => void submit()} title="Đăng nhập" />
       <Button onPress={() => { setForgotMode(true); setError(null); }} title="Quên mật khẩu" />
       <Button onPress={onVerify} title="Xác minh License công khai" />
-      <Button onPress={onActivate} title="Kích hoạt bằng mã doanh nghiệp" />
     </ScrollView>
   );
 }
@@ -719,33 +716,6 @@ export function PaymentScreen({ navigation, route }: NativeStackScreenProps<Root
   );
 }
 
-export function ActivationScreen({ onComplete }: { readonly onComplete: () => void }) {
-  const [key, setKey] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const submit = async () => {
-    setError(null);
-    setMessage(null);
-    try {
-      const identity = await createOrLoadDeviceIdentity('activation-session');
-      const challenge = await createActivationChallenge({ activationKey: key.trim(), deviceRef: identity.deviceRef, purpose: 'ACTIVATE_DEVICE' }, false);
-      const device = await activateDevice({ activationKey: key.trim(), challenge: challenge.challenge, devicePublicKey: identity.address, deviceRef: identity.deviceRef, proof: identity.signMessage(challenge.challenge) });
-      setMessage(`Thiết bị đã kích hoạt (${device.status}).`);
-      onComplete();
-    } catch (cause) {
-      setError(cause instanceof MobileApiError && cause.status === 429 ? 'Có quá nhiều yêu cầu. Vui lòng thử lại sau.' : 'Mã bản quyền không hợp lệ hoặc không thể sử dụng.');
-    }
-  };
-  return <ScrollView contentContainerStyle={styles.content}>
-    <Text accessibilityRole="header" style={styles.heading}>Kích hoạt phần mềm</Text>
-    <Text>Nhập mã bản quyền do quản trị viên doanh nghiệp cung cấp. Không cần đăng nhập tài khoản người mua.</Text>
-    <TextInput accessibilityLabel="Mã bản quyền" autoCapitalize="none" onChangeText={setKey} placeholder="0x…" style={styles.input} value={key} />
-    {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-    {message ? <Text accessibilityRole="alert" style={styles.success}>{message}</Text> : null}
-    <Button disabled={key.trim().length === 0} onPress={() => void submit()} title="Kích hoạt" />
-  </ScrollView>;
-}
-
 export function LicensesScreen({
   navigation,
 }: {
@@ -1082,13 +1052,11 @@ export function EmuKeyMobileApp() {
   const [session, setSession] = useState<MobileSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [publicVerify, setPublicVerify] = useState(false);
-  const [activationMode, setActivationMode] = useState(false);
   useEffect(() => { void restoreSession().then(setSession).finally(() => setLoading(false)); }, []);
   if ((!fontsLoaded && !fontError) || loading) return <View style={styles.container}><Text>Đang khôi phục phiên đăng nhập...</Text></View>;
   if (!session) {
     if (publicVerify) return <View style={styles.publicContainer}><VerifyLicenseScreen /><Button onPress={() => setPublicVerify(false)} title="Quay lại đăng nhập" /></View>;
-    if (activationMode) return <View style={styles.publicContainer}><ActivationScreen onComplete={() => setActivationMode(false)} /><Button onPress={() => setActivationMode(false)} title="Quay lại đăng nhập" /></View>;
-    return <LoginScreen onAuthenticated={setSession} onVerify={() => setPublicVerify(true)} onActivate={() => setActivationMode(true)} />;
+    return <LoginScreen onAuthenticated={setSession} onVerify={() => setPublicVerify(true)} />;
   }
   return (
     <NavigationContainer>

@@ -45,4 +45,26 @@ describe('public activation rate limit', () => {
     expect(repository.findActivationLicense.mock.calls.length).toBe(before);
     expect(new Set(redis.incr.mock.calls.map((args) => args[0])).size).toBe(1);
   });
+
+  it('honors a configured per-minute activation budget', async () => {
+    attempts = 0;
+    const configuredRedis = { incr: vi.fn(async (key: string) => { void key; return ++attempts; }), expire: vi.fn(), ttl: vi.fn().mockResolvedValue(12) };
+    const configured = new LicensingService(repository as never, {} as never, {} as never, configuredRedis as never, new Uint8Array(32), {} as never, undefined, 2);
+    const configuredModule = await Test.createTestingModule({
+      controllers: [LicensingController], providers: [{ provide: LicensingService, useValue: configured }],
+    }).overrideGuard(OptionalAuthGuard).useValue({ canActivate: () => true })
+      .overrideGuard(AuthGuard).useValue({ canActivate: () => false })
+      .overrideGuard(RolesGuard).useValue({ canActivate: () => false }).compile();
+    const configuredApp = configuredModule.createNestApplication();
+    configuredApp.useGlobalFilters(new ApiExceptionFilter());
+    await configuredApp.init();
+
+    for (const expected of [401, 401, 429]) {
+      const response = await request(configuredApp.getHttpServer() as Server)
+        .post('/activations/challenge')
+        .send({ activationKey: `0x${'22'.repeat(32)}`, purpose: 'ACTIVATE_DEVICE', deviceRef: 'device' });
+      expect(response.status).toBe(expected);
+    }
+    await configuredApp.close();
+  });
 });

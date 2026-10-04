@@ -45,13 +45,14 @@ export class LicensingService {
     private readonly jwtSecret: Uint8Array,
     private readonly chain: LicenseCommandConfig,
     private readonly identity?: IdentityService,
+    private readonly publicActivationRateLimit = 30,
   ) {}
 
   async limitPublicActivation(subject: string): Promise<void> {
     const key = `rate:public-activation:${createHash('sha256').update(subject).digest('hex')}`;
     const count = await this.redis.incr(key);
     if (count === 1) await this.redis.expire(key, 60);
-    if (count > 30) {
+    if (count > this.publicActivationRateLimit) {
       const remaining = await this.redis.ttl(key);
       throw new HttpException({
         code: 'RATE_LIMITED', message: 'Too many requests.',

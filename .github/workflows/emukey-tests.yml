@@ -11,12 +11,21 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22.21.0
-      - run: corepack enable
-      - name: Install existing product dependencies
+      - name: Pin pnpm
+        env:
+          COREPACK_DEFAULT_TO_LATEST: '0'
         run: |
-          corepack pnpm --dir EmuKey/backend install --frozen-lockfile
-          corepack pnpm --dir EmuKey/frontend install --frozen-lockfile
-          corepack pnpm --dir EmuKey/mobile install --frozen-lockfile
+          corepack enable
+          corepack prepare pnpm@11.25.0 --activate
+          node --version
+          pnpm --version
+      - name: Install existing product dependencies
+        env:
+          COREPACK_DEFAULT_TO_LATEST: '0'
+        run: |
+          pnpm --dir EmuKey/backend install --frozen-lockfile
+          pnpm --dir EmuKey/frontend install --frozen-lockfile
+          pnpm --dir EmuKey/mobile install --frozen-lockfile
       - name: Workspace verification
         run: |
           node tooling/emukey/run.mjs baseline
@@ -28,7 +37,7 @@ jobs:
           node tooling/emukey/run.mjs mobile:unit
           node tooling/emukey/run.mjs contracts
       - name: Install browser
-        run: corepack pnpm --dir EmuKey/frontend exec playwright install --with-deps chromium
+        run: pnpm --dir EmuKey/frontend exec playwright install --with-deps chromium
       - name: Isolated web regressions
         env:
           E2E_WEB_ONLY: 'true'

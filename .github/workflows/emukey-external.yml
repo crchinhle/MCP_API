@@ -34,11 +34,16 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22.21.0
-      - name: Enable Corepack and install dependencies
+      - name: Pin pnpm and install dependencies
+        env:
+          COREPACK_DEFAULT_TO_LATEST: '0'
         run: |
           corepack enable
-          corepack pnpm --dir EmuKey/backend install --frozen-lockfile
-          corepack pnpm --dir EmuKey/frontend install --frozen-lockfile
+          corepack prepare pnpm@11.25.0 --activate
+          node --version
+          pnpm --version
+          pnpm --dir EmuKey/backend install --frozen-lockfile
+          pnpm --dir EmuKey/frontend install --frozen-lockfile
       - name: Validate release structure
         env:
           RELEASE_CHECK_STRUCTURAL_ONLY: 'true'
@@ -66,7 +71,7 @@ jobs:
           EVM_RELAYER_PRIVATE_KEY: ${{ secrets.SEPOLIA_RELAYER_PRIVATE_KEY }}
           E2E_TEST_EMAIL_RECIPIENT: ${{ secrets.E2E_TEST_EMAIL_RECIPIENT }}
           E2E_TEST_FCM_TOKEN: ${{ secrets.E2E_TEST_FCM_TOKEN }}
-        run: corepack pnpm --dir EmuKey/backend build && node tooling/emukey/run.mjs verify:verify-external
+        run: pnpm --dir EmuKey/backend build && node tooling/emukey/run.mjs verify:verify-external
       - name: Upload redacted evidence
         uses: actions/upload-artifact@v4
         with:
