@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import { LicensesScreen, VerifyLicenseScreen } from '../../../../EmuKey/mobile/src/presentation/EmuKeyMobileApp';
 import {
   listLicenses,
+  listDevices,
   retrieveActivationKey,
   verifyPublicLicense,
 } from '../../../../EmuKey/mobile/src/infrastructure/api/client';
@@ -10,48 +11,61 @@ import {
 jest.mock('../../../../EmuKey/mobile/src/infrastructure/api/client', () => ({
   listLicenses: jest.fn(),
   loadActivationKey: jest.fn().mockResolvedValue(null),
+  listDevices: jest.fn().mockResolvedValue([]),
   retrieveActivationKey: jest.fn(),
   verifyPublicLicense: jest.fn(),
 }));
 
 const listLicensesMock = listLicenses as jest.MockedFunction<typeof listLicenses>;
+const listDevicesMock = listDevices as jest.MockedFunction<typeof listDevices>;
 const retrieveActivationKeyMock = retrieveActivationKey as jest.MockedFunction<typeof retrieveActivationKey>;
 const verifyPublicLicenseMock = verifyPublicLicense as jest.MockedFunction<typeof verifyPublicLicense>;
+
+const activeLicense = {
+  activationKeyTrustStatus: 'TRUSTED',
+  activeDeviceCount: 0,
+  deviceStateVersion: 0,
+  confirmationCount: 3,
+  createdAt: '2026-09-10T00:00:00.000Z',
+  entitlementVersion: 1,
+  expiresAt: '2027-09-10T00:00:00.000Z',
+  finality: 'CHAIN_CONFIRMED',
+  id: 'license-1',
+  keyVersion: 1,
+  maxActiveDevices: 2,
+  originOrderId: 'order-1',
+  periodStart: '2026-09-10T00:00:00.000Z',
+  plan: { commitment: `0x${'11'.repeat(32)}`, name: 'Pro', version: 1 },
+  productName: 'Emukey Desktop',
+  provider: { displayName: 'Emukey' },
+  publicLicenseId: 'EMU-LICENSE-1',
+  status: 'ACTIVE',
+  updatedAt: '2026-09-10T00:00:00.000Z',
+};
 
 describe('mobile License screens', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('retrieves an activation key through the authenticated customer session', async () => {
-    listLicensesMock.mockResolvedValue([
+  it('manages licenses and devices without exposing an activation-key retrieval or self-activation CTA', async () => {
+    listLicensesMock.mockResolvedValue([activeLicense]);
+    listDevicesMock.mockResolvedValue([
       {
-         activationKeyTrustStatus: 'TRUSTED',
-         activeDeviceCount: 0,
-         deviceStateVersion: 0,
-         confirmationCount: 3,
-        createdAt: '2026-09-10T00:00:00.000Z',
-        entitlementVersion: 1,
-        expiresAt: '2027-09-10T00:00:00.000Z',
-        finality: 'CHAIN_CONFIRMED',
-        id: 'license-1',
-        keyVersion: 1,
-        maxActiveDevices: 2,
-        originOrderId: 'order-1',
-        periodStart: '2026-09-10T00:00:00.000Z',
-        plan: { commitment: `0x${'11'.repeat(32)}`, name: 'Pro', version: 1 },
-        productName: 'Emukey Desktop',
-        provider: { displayName: 'Emukey' },
-        publicLicenseId: 'EMU-LICENSE-1',
+        id: 'device-1',
+        deviceRef: 'playwright-device',
         status: 'ACTIVE',
-        updatedAt: '2026-09-10T00:00:00.000Z',
+        bindingGeneration: 1,
+        activatedAt: '2026-09-10T00:01:00.000Z',
+        revokedAt: null,
       },
     ]);
-    retrieveActivationKeyMock.mockResolvedValue({
-      activationKey: `0x${'aa'.repeat(32)}`,
-      keyVersion: 1,
-    });
     await render(<LicensesScreen />);
-    await act(async () => fireEvent.press(await screen.findByText('Nhận activation key')));
-    expect(retrieveActivationKeyMock).toHaveBeenCalledWith('license-1');
+    expect(await screen.findByText('EMU-LICENSE-1')).toBeOnTheScreen();
+    expect(screen.queryByText('Nhận activation key')).toBeNull();
+    expect(screen.queryByText('Kích hoạt thiết bị này')).toBeNull();
+    expect(retrieveActivationKeyMock).not.toHaveBeenCalled();
+    await act(async () => fireEvent.press(await screen.findByText('Xem thiết bị')));
+    expect(listDevicesMock).toHaveBeenCalledWith('license-1');
+    expect(await screen.findByText(/playwright-device · ACTIVE/)).toBeOnTheScreen();
   });
 
   it('verifies a public license without authentication data', async () => {

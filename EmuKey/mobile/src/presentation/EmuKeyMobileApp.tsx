@@ -28,7 +28,6 @@ import {
   createCheckout,
   createOrder,
   getOrder,
-  getCommandStatus,
   getOrderTerms,
   getProfile,
   getRenewalPreview,
@@ -40,19 +39,15 @@ import {
   listProducts,
   listNotifications,
   markNotificationRead,
-  createActivationChallenge,
   createConversation,
   appendConversationMessage,
   askConversationAi,
-  loadActivationKey,
   login,
   logout,
   restoreSession,
-  retrieveActivationKey,
   requestLicensingActionVerification,
-  revokeDevice,
   rotateActivationKey,
-  storeActivationKey,
+  remoteRevokeDevice,
   type MobileDevice,
   type MobileCheckoutSession,
   verifyPublicLicense,
@@ -68,7 +63,6 @@ import {
   type MobileConversationMessage,
   updateProfile,
 } from '../infrastructure/api/client';
-import { createOrLoadDeviceIdentity } from '../infrastructure/device-identity';
 
 type RootStackParamList = {
   Assistance: undefined;
@@ -717,24 +711,14 @@ export function LicensesScreen({
   readonly navigation?: NativeStackScreenProps<RootStackParamList, 'Licenses'>['navigation'];
 } = {}) {
   const [licenses, setLicenses] = useState<MobileLicense[]>([]);
-  const [activationKey, setActivationKey] = useState<{ key: string; licenseId: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [devices, setDevices] = useState<Record<string, MobileDevice[]>>({});
   const [actionToken, setActionToken] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
   const [message, setMessage] = useState<string | null>(null);
-  const [commandId, setCommandId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const loadLicenses = async (refresh = false) => { if (refresh) setRefreshing(true); setError(null); try { setLicenses(await listLicenses()); } catch { setError('Không thể tải danh sách License.'); } finally { setRefreshing(false); } };
   useEffect(() => { void loadLicenses(); }, []);
-  const retrieve = async (license: MobileLicense) => {
-    try {
-      const result = await retrieveActivationKey(license.id);
-      await storeActivationKey(license.id, result.activationKey);
-      setActivationKey({ key: result.activationKey, licenseId: license.id });
-    } catch {
-      setError('Activation key không còn khả dụng hoặc đã được nhận trước đó.');
-    }
-  };
   const loadDevices = async (licenseId: string) => {
     try {
       const result = await listDevices(licenseId);
@@ -743,16 +727,6 @@ export function LicensesScreen({
       setError('Không thể tải danh sách thiết bị.');
     }
   };
-  useEffect(() => {
-    let active = true;
-    void Promise.all(licenses.map(async (license) => [license.id, await loadActivationKey(license.id)] as const))
-      .then((values) => {
-        if (!active) return;
-        const saved = values.find(([, key]) => key !== null);
-        if (saved?.[1]) setActivationKey({ key: saved[1], licenseId: saved[0] });
-      });
-    return () => { active = false; };
-  }, [licenses]);
   const revoke = async (licenseId: string, device: MobileDevice) => {
     setError(null);
     try {
