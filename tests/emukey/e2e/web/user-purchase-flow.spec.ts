@@ -11,7 +11,7 @@ test.describe('real customer purchase journey', () => {
     test.setTimeout(120_000);
     await page.goto('/products');
     await expect(page.getByRole('heading', { name: 'Bản quyền phần mềm được xác lập on-chain' })).toBeVisible();
-    await page.getByRole('link', { name: 'Chọn gói' }).first().click();
+    await page.getByRole('link', { name: 'Xem gói & chi tiết' }).first().click();
     await expect(page.getByRole('heading', { name: /Emukey Desktop|Sản phẩm/ })).toBeVisible();
     const productResponse = await page.request.get(`${process.env.E2E_API_BASE_URL ?? 'http://localhost:3000/api/v1'}/products/EMUKEY_DESKTOP`);
     const product = await productResponse.json() as { plans: Array<{ id: string }> };
@@ -27,7 +27,7 @@ test.describe('real customer purchase journey', () => {
     // the same public purchase entry point rather than bypassing the UI.
     await page.getByRole('link', { name: 'Emukey - Trang sản phẩm' }).click();
     await page.waitForURL('**/products');
-    await page.getByRole('link', { name: 'Chọn gói' }).first().click();
+    await page.getByRole('link', { name: 'Xem gói & chi tiết' }).first().click();
     await page.getByRole('button', { name: 'Mua ngay' }).click();
     await page.waitForURL('**/buyer/checkout**');
 

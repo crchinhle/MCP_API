@@ -1,7 +1,9 @@
 export const REDACTED_LOG_PATHS = [
   'req.headers.authorization',
   'req.headers.cookie',
+  'req.headers["x-api-key"]',
   'req.headers["x-license-key"]',
+  'req.headers["x-secret-key"]',
   'req.body.password',
   'req.body.activationCode',
   'req.body.activationKey',

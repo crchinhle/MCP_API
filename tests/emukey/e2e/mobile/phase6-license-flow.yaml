@@ -13,11 +13,8 @@ env:
 - tapOn: Đăng nhập
 - tapOn: License
 - assertVisible: License của tôi
-- tapOn: Nhận activation key
-- assertVisible: Kích hoạt thiết bị này
-- tapOn: Kích hoạt thiết bị này
-- extendedWaitUntil:
-    visible: "Thiết bị ACTIVE, binding generation.*"
-    timeout: 30000
-- tapOn: Xem thiết bị
 - assertVisible: ".*ACTIVE.*"
+- tapOn: Xem thiết bị
+- extendedWaitUntil:
+    visible: ".*ACTIVE.*"
+    timeout: 30000

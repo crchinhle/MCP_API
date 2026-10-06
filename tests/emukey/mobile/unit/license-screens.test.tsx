@@ -4,21 +4,21 @@ import { LicensesScreen, VerifyLicenseScreen } from '../../../../EmuKey/mobile/s
 import {
   listLicenses,
   listDevices,
-  retrieveActivationKey,
+  remoteRevokeDevice,
   verifyPublicLicense,
 } from '../../../../EmuKey/mobile/src/infrastructure/api/client';
 
 jest.mock('../../../../EmuKey/mobile/src/infrastructure/api/client', () => ({
   listLicenses: jest.fn(),
-  loadActivationKey: jest.fn().mockResolvedValue(null),
   listDevices: jest.fn().mockResolvedValue([]),
-  retrieveActivationKey: jest.fn(),
+  remoteRevokeDevice: jest.fn(),
+  requestLicensingActionVerification: jest.fn().mockResolvedValue({ accepted: true }),
   verifyPublicLicense: jest.fn(),
 }));
 
 const listLicensesMock = listLicenses as jest.MockedFunction<typeof listLicenses>;
 const listDevicesMock = listDevices as jest.MockedFunction<typeof listDevices>;
-const retrieveActivationKeyMock = retrieveActivationKey as jest.MockedFunction<typeof retrieveActivationKey>;
+const remoteRevokeDeviceMock = remoteRevokeDevice as jest.MockedFunction<typeof remoteRevokeDevice>;
 const verifyPublicLicenseMock = verifyPublicLicense as jest.MockedFunction<typeof verifyPublicLicense>;
 
 const activeLicense = {
@@ -62,10 +62,27 @@ describe('mobile License screens', () => {
     expect(await screen.findByText('EMU-LICENSE-1')).toBeOnTheScreen();
     expect(screen.queryByText('Nhận activation key')).toBeNull();
     expect(screen.queryByText('Kích hoạt thiết bị này')).toBeNull();
-    expect(retrieveActivationKeyMock).not.toHaveBeenCalled();
+    expect(remoteRevokeDeviceMock).not.toHaveBeenCalled();
     await act(async () => fireEvent.press(await screen.findByText('Xem thiết bị')));
     expect(listDevicesMock).toHaveBeenCalledWith('license-1');
     expect(await screen.findByText(/playwright-device · ACTIVE/)).toBeOnTheScreen();
+    await act(async () => fireEvent.changeText(screen.getByLabelText('Mật khẩu hiện tại'), 'CurrentPassword1!'));
+    await act(async () => fireEvent.changeText(screen.getByLabelText('Action token'), 'remote-action-token'));
+    remoteRevokeDeviceMock.mockResolvedValue({
+      ...listDevicesMock.mock.results[0]?.value,
+      activatedAt: '2026-09-10T00:01:00.000Z',
+      bindingGeneration: 1,
+      deviceRef: 'playwright-device',
+      id: 'device-1',
+      licenseId: 'license-1',
+      revokedAt: '2026-09-10T00:02:00.000Z',
+      status: 'REVOKED',
+    } as Awaited<ReturnType<typeof remoteRevokeDevice>>);
+    await act(async () => fireEvent.press(screen.getByText('Thu hồi thiết bị')));
+    await waitFor(() => expect(remoteRevokeDeviceMock).toHaveBeenCalledWith('license-1', 'device-1', {
+      actionToken: 'remote-action-token',
+      currentPassword: 'CurrentPassword1!',
+    }));
   });
 
   it('verifies a public license without authentication data', async () => {

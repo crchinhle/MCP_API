@@ -35,7 +35,9 @@ describe('structured log redaction', () => {
         headers: {
           authorization: sentinel,
           cookie: sentinel,
+          'x-api-key': sentinel,
           'x-license-key': sentinel,
+          'x-secret-key': sentinel,
         },
       },
     });

@@ -1,0 +1,49 @@
+{
+  "status": "BLOCKED",
+  "failedPhase": "payment-provider",
+  "failureCode": "SEPAY_PROVIDER_UI_BLOCKED",
+  "executionMode": "OPERATOR_ASSISTED_EXTERNAL_PROVIDER",
+  "realIpn": false,
+  "runId": "canonical-20261005150657879",
+  "PAYMENT_IPN_BACKEND_PATH_WORKING": true,
+  "PAYMENT_TO_LICENSE_ISSUE_PATH_WORKING": true,
+  "historicalRealIpnPathWorking": true,
+  "historicalPaymentToLicenseIssuePathWorking": true,
+  "historicalSepoliaIssueEvidence": "docs/emukey/traceability/sepolia-lifecycle-evidence.json",
+  "historicalRealIpnEvidence": "docs/emukey/traceability/releases/fresh-ipn-offset-20260920-2050/payment-evidence.json",
+  "historicalRealIpnEvidenceId": "37340",
+  "purchase": {
+    "orderId": "53e4ec90-37fe-4dc6-a876-0813c86f488e",
+    "paymentAttemptId": "50688635-7d49-41e0-a5d7-bcbb63d75060"
+  },
+  "payment": {
+    "provider": "SePay Sandbox",
+    "checkoutReached": true,
+    "paymentAttemptId": "50688635-7d49-41e0-a5d7-bcbb63d75060",
+    "paymentReference": "50688635-7d49-41e0-a5d7-bcbb63d75060",
+    "paymentMatched": false,
+    "providerCheckoutBlocked": true,
+    "providerBlockReason": "Cloudflare access-block page",
+    "orderId": "53e4ec90-37fe-4dc6-a876-0813c86f488e",
+    "orderStatus": "WAITING_PAYMENT",
+    "paymentAttemptStatus": "PENDING",
+    "paymentTransactionId": null,
+    "paymentClassification": null,
+    "providerEventId": null,
+    "providerTransactionReference": null,
+    "paymentAccepted": false,
+    "ipnReachedBackend": false,
+    "paymentTransactionPersisted": false,
+    "providerUiBlockIsExternal": true,
+    "externalBlockReason": "SePay Sandbox Cloudflare provider UI",
+    "operatorPaymentEvidence": false
+  },
+  "license": {},
+  "issue": {},
+  "activation": {},
+  "entitlement": {},
+  "deviceSync": {},
+  "timeline": {
+    "orderAccepted": "2026-10-05T15:07:07.796Z"
+  }
+}

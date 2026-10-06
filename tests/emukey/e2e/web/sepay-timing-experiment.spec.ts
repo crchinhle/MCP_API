@@ -25,7 +25,7 @@ test.describe.serial('SePay Sandbox timing experiment', () => {
       await page.getByRole('link', { name: 'Emukey - Trang sản phẩm' }).click();
       await page.waitForURL('**/products');
       await expect(page.getByRole('heading', { name: 'Bản quyền phần mềm được xác lập on-chain' })).toBeVisible();
-      await page.getByRole('link', { name: 'Chọn gói' }).first().click();
+      await page.getByRole('link', { name: 'Xem gói & chi tiết' }).first().click();
       await expect(page.getByRole('heading', { name: /Emukey Desktop|Sản phẩm/ })).toBeVisible();
       await page.getByRole('button', { name: 'Mua ngay' }).click();
       await page.waitForURL('**/buyer/checkout**');

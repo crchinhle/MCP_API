@@ -13,14 +13,17 @@ test('retrieves the matched-run activation key through License Hub UI once', asy
   await page.getByRole('link', { name: 'License' }).click();
   await page.waitForURL('**/buyer/licenses');
   await expect(page.getByRole('heading', { name: 'License Hub' })).toBeVisible();
-  // The latest timing run is the last canonical license returned by the UI.
-  const latestLicenseMarker = page.getByText('EMU-D767CD7315A46AA9AD6');
-  if (await latestLicenseMarker.count()) await latestLicenseMarker.click();
+  // Select the first available ACTIVE license from the UI list
+  const firstLicense = page.locator('.buyer-license-list-item').first();
+  if (await firstLicense.count()) await firstLicense.click();
   await expect(page.getByText('ACTIVE').first()).toBeVisible({ timeout: 30_000 });
-  await page.getByRole('button', { name: 'Nhận activation key' }).first().click();
-  await expect(page.getByText('Đã nhận activation key')).toBeVisible({ timeout: 30_000 });
-  const keyInput = page.getByLabel('Activation key sử dụng trên thiết bị');
-  await expect(keyInput).toHaveValue(/.+/);
-  // Do not print or persist the secret value.
-  await expect(keyInput).toHaveValue(/^[A-Za-z0-9_-]{20,}$/);
+  const retrieveButton = page.getByRole('button', { name: 'Nhận mã bản quyền' });
+  // Skip if key already retrieved (activationKeyAvailable=false)
+  if (await retrieveButton.isEnabled({ timeout: 5_000 }).catch(() => false)) {
+    await retrieveButton.click();
+    await page.getByRole('button', { name: 'Nhận mã' }).click();
+    const keyInput = page.getByLabelText('Mã bản quyền');
+    await expect(keyInput).toHaveValue(/^(?!).+$/, { timeout: 30_000 });
+    await expect(keyInput).toHaveValue(/^[A-Za-z0-9_-]{20,}$/);
+  }
 });

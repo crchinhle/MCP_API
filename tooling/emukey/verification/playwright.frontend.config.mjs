@@ -5,8 +5,9 @@ import { resolve } from 'node:path';
 
 const workspace = resolve(import.meta.dirname, '../../..');
 
-const baseURL = process.env.BASE_URL ?? 'http://127.0.0.1:5173';
+const baseURL = process.env.BASE_URL?.trim() || 'http://127.0.0.1:5173';
 const external = process.env.E2E_EXTERNAL === 'true';
+const frontendHost = new URL(baseURL).hostname;
 const webServer = external
   ? undefined
   : [
@@ -18,7 +19,7 @@ const webServer = external
         reuseExistingServer: !process.env.CI,
       },
       {
-        command: `corepack pnpm exec vite --host 127.0.0.1 --port ${new URL(baseURL).port || 5173} --strictPort`,
+        command: `corepack pnpm exec vite --host ${frontendHost} --port ${new URL(baseURL).port || 5173} --strictPort`,
         cwd: resolve(workspace, 'EmuKey/frontend'),
         url: baseURL,
         timeout: 120_000,
