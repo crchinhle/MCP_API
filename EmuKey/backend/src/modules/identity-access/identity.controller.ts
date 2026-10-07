@@ -108,12 +108,18 @@ export class IdentityController {
       const result = await this.service.refresh(this.refreshCookie(request));
       this.setRefresh(response, result.refreshToken);
       return { accessToken: result.accessToken, user: result.user };
-    } catch {
-      response.clearCookie('emukey_refresh', { path: '/api/v1/auth' });
-      throw new UnauthorizedException({
-        code: 'INVALID_SESSION',
-        message: 'Invalid session.',
-      });
+    } catch (error) {
+      // Only a confirmed authentication failure may terminate the browser
+      // session: INVALID_SESSION, REFRESH_REUSE_DETECTED and equivalent
+      // revocations surface as UnauthorizedException from the service, so the
+      // 401 and its error code are preserved and the stale cookie is dropped.
+      if (error instanceof UnauthorizedException) {
+        response.clearCookie('emukey_refresh', { path: '/api/v1/auth' });
+      }
+      // Redis/PostgreSQL outages, timeouts and unexpected internal errors stay
+      // transient: they keep the refresh cookie and propagate their original
+      // status instead of being misreported as an invalid session.
+      throw error;
     }
   }
 
