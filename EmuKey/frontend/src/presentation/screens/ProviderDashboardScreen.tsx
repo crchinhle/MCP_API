@@ -1,10 +1,10 @@
-import { Alert, Empty, Spin } from 'antd';
+import { Alert, Button, Empty } from 'antd';
 import { Link } from 'react-router-dom';
 
 import { useAdminPlans, useAdminProducts } from '../../application/catalog/catalogQueries';
 import { usePaymentHistory } from '../../application/orders/orderQueries';
 import { useProviderLicenses } from '../../application/licenses/licenseQueries';
-import { PageHeader } from '../components/WorkspacePrimitives';
+import { PageLoading, PageHeader } from '../components/WorkspacePrimitives';
 
 export function ProviderDashboardScreen() {
   const products = useAdminProducts();
@@ -13,12 +13,17 @@ export function ProviderDashboardScreen() {
   const licenses = useProviderLicenses();
   const loading = products.isLoading || plans.isLoading || payments.isLoading || licenses.isLoading;
   const error = products.error ?? plans.error ?? payments.error ?? licenses.error;
+  if (loading) return <PageLoading />;
+  if (error && (!products.data || !plans.data || !payments.data || !licenses.data)) {
+    return <Alert showIcon type="error" message="Không thể tải tổng quan Provider." action={<Button onClick={() => { void products.refetch(); void plans.refetch(); void payments.refetch(); void licenses.refetch(); }}>Thử lại</Button>} />;
+  }
+
   return (
     <div className="provider-dashboard-screen">
       <PageHeader
         title="Tổng quan nhà cung cấp"
       />
-      {loading ? <Spin aria-label="Đang tải tổng quan Provider" /> : null}
+
       {error ? <Alert showIcon type="error" message="Không thể tải tổng quan Provider." /> : null}
       <section className="metric-grid metric-grid--four">
         <article className="metric-card"><span className="status-chip status-chip--neutral">Sản phẩm</span><strong>{products.data?.length ?? '—'}</strong><small>Danh mục doanh nghiệp</small></article>

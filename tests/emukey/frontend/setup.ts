@@ -188,6 +188,7 @@ vi.stubGlobal(
     const method = init?.method?.toUpperCase() ?? 'GET';
 
     if (path === '/auth/refresh') return jsonResponse(undefined, 401);
+    if (path === '/auth/users' && method === 'GET') return jsonResponse([]);
     if (method === 'GET' && path === '/notifications') return jsonResponse([]);
     if (method === 'GET' && path === '/knowledge/documents') return jsonResponse([]);
     if (method === 'GET' && path === '/health/ready') return jsonResponse({ status: 'ok', dependencies: { postgres: 'up', redis: 'up', blockchain: 'up' } });
@@ -360,6 +361,7 @@ vi.stubGlobal(
     if (method === 'POST' && path === '/licenses/action-verification/resolve') return jsonResponse({ action: 'KEY_RECOVERY', licenseId: license.id, deviceId: null, expiresAt: new Date(Date.now() + 900_000).toISOString() });
     if (method === 'GET' && path === '/licenses') return jsonResponse([license]);
     if (method === 'GET' && path === `/licenses/${license.id}`) return jsonResponse(license);
+    if (method === 'GET' && path === `/licenses/${license.id}/devices`) return jsonResponse([]);
     if (method === 'POST' && path.endsWith('/lifecycle')) return jsonResponse({ commandId: '00000000-0000-4000-8000-000000000902', deviceId: null, licenseId: license.id, status: 'PENDING' }, 201);
     if (method === 'GET' && path === '/commands/00000000-0000-4000-8000-000000000902') {
       return jsonResponse({

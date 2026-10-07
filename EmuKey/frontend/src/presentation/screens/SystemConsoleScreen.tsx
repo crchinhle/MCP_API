@@ -8,7 +8,7 @@ import { usePaymentHistory } from '../../application/orders/orderQueries';
 
 import { PaymentReviewPanel } from '../components/PaymentReviewPanel';
 import { AuditLogPanel } from '../components/AuditLogPanel';
-import { FactList, PageHeader } from '../components/WorkspacePrimitives';
+import { PageLoading, FactList, PageHeader } from '../components/WorkspacePrimitives';
 
 export function SystemConsoleScreen() {
   const location = useLocation();
@@ -25,6 +25,8 @@ export function SystemConsoleScreen() {
   const accounts = useQuery({ queryKey: ['identity', 'users', userQuery], queryFn: () => requestJson<Array<{ id: string; email: string; displayName: string; role: string; status: string }>>(`/auth/users${userQuery.trim() ? `?q=${encodeURIComponent(userQuery.trim())}` : ''}`), enabled: permitted });
   const detail = useQuery({ queryKey: ['identity', 'user', accountId], queryFn: () => requestJson<AuthUser>(`/auth/users/${accountId}`), enabled: permitted && Boolean(accountId) });
   const stateMutation = useMutation({ mutationFn: async ({ id, action }: { id: string; action: 'lock' | 'unlock' | 'disable' }) => requestJson(`/auth/users/${id}/${action}`, { method: 'POST', body: JSON.stringify({ reason: `System console: ${action}` }) }), onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['identity'] }); } });
+  if (readiness.isLoading || (permitted && assistance.isLoading) || (view === 'users' && accounts.isLoading) || (view === 'payments' && payments.isLoading)) return <PageLoading />;
+
   return (
     <>
       <PageHeader

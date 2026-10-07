@@ -5,6 +5,7 @@ import { conversationContextLabels, conversationStatusLabels, useAppendConversat
 import { useRequestSupport } from '../../application/assistance/supportQueries';
 import { ConversationPanel } from '../components/ConversationPanel';
 import {
+  PageLoading,
   FactList,
   PageHeader,
   StatusChip,
@@ -23,7 +24,7 @@ export function BuyerAssistanceScreen() {
     { contextType: 'GENERAL', title: 'Hội thoại hỗ trợ' },
     { onSuccess: (created) => { setSelectedId(created.id); askAi.reset(); } },
   );
-  if (conversations.isLoading) return <Spin />;
+  if (conversations.isLoading) return <PageLoading />;
   if (conversations.isError) return <Alert type="error" title="Không thể tải hội thoại" action={<Button onClick={() => void conversations.refetch()}>Thử lại</Button>} />;
   if (!conversation) {
     return (

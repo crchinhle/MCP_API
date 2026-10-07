@@ -1,4 +1,5 @@
-import { Alert, Button, Empty, Spin } from 'antd';
+import { PageLoading } from '../components/WorkspacePrimitives';
+import { Alert, Button, Empty } from 'antd';
 import {
   BlockOutlined,
   CheckCircleOutlined,
@@ -576,6 +577,8 @@ export function PublicHomeScreen() {
   const { data: products = [], isLoading, isError, refetch } = useProducts();
   const featured = products.slice(0, 6);
 
+  if (isLoading) return <div className="page-shell"><SiteHeader /><PageLoading /></div>;
+
   return (
     <div className="page-shell public-home-screen">
       <style>{publicHomeStyles}</style>
@@ -674,7 +677,7 @@ export function PublicHomeScreen() {
             </div>
           </div>
 
-          {isLoading ? <Spin aria-label="Đang tải sản phẩm" /> : null}
+
           {isError ? (
             <Alert
               action={<Button onClick={() => void refetch()}>Thử lại</Button>}

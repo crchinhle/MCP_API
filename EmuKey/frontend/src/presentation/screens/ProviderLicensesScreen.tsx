@@ -1,9 +1,9 @@
-import { Alert, Button, Empty, Input, Modal, Spin } from 'antd';
+import { Alert, Button, Empty, Input, Modal } from 'antd';
 import { useEffect, useState } from 'react';
 
 import { describeApiError } from '../../application/auth/authContext';
 import { licenseStatusLabel, finalityLabel, useLicenseLifecycle, usePhase6Command, useProviderLicenses } from '../../application/licenses/licenseQueries';
-import { PageHeader, StatusChip } from '../components/WorkspacePrimitives';
+import { PageLoading, PageHeader, StatusChip } from '../components/WorkspacePrimitives';
 
 const commandLabels: Record<string, string> = {
   PENDING: 'Đang chờ xử lý',
@@ -47,10 +47,12 @@ export function ProviderLicensesScreen() {
     );
   };
 
+  if (licenses.isLoading) return <PageLoading />;
+
   return (
     <>
       <PageHeader title="Bản quyền nhà cung cấp" />
-      {licenses.isPending ? <Spin aria-label="Đang tải license của nhà cung cấp" /> : null}
+
       {licenses.isError ? <Alert showIcon type="error" message="Không thể tải danh sách license." action={<Button onClick={() => void licenses.refetch()}>Thử lại</Button>} /> : null}
       {!licenses.isPending && !licenses.isError && licenses.data?.length === 0 ? <Empty description="Chưa có license." /> : null}
       {command ? (

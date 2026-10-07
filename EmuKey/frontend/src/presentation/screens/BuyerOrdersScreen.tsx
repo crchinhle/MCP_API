@@ -5,7 +5,7 @@ import { describeApiError } from '../../application/auth/authContext';
 import { useCreateConversation } from '../../application/assistance/assistanceQueries';
 import { useNavigate } from 'react-router-dom';
 import { orderStatusLabel, orderStatusTone, type OrderSummary, useOrder, useOrderMutations, useOrders, useOrderTerms } from '../../application/orders/orderQueries';
-import { formatMoney, FactList, StatusChip } from '../components/WorkspacePrimitives';
+import { PageLoading, formatMoney, FactList, StatusChip } from '../components/WorkspacePrimitives';
 import { entitlementLabel } from '../components/OrderSummary';
 
 type OrderTab = 'all' | 'sign' | 'payment' | 'complete';
@@ -58,7 +58,7 @@ export function BuyerOrdersScreen() {
   }), [orders, query, status, tab]);
   const currentPage = Math.min(page, Math.max(1, Math.ceil(data.length / 10)));
 
-  if (ordersQuery.isLoading) return <Spin aria-label="Đang tải đơn hàng" />;
+  if (ordersQuery.isLoading) return <PageLoading />;
   if (ordersQuery.isError) return <Result status="error" title="Không thể tải đơn hàng" subTitle={describeApiError(ordersQuery.error, 'Lịch sử đơn hàng đang tạm thời không khả dụng.')} />;
 
   return (

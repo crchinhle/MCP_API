@@ -1,4 +1,4 @@
-import { Alert, Button, Empty, Spin } from 'antd';
+import { Alert, Button, Empty } from 'antd';
 import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useOptionalAuth } from '../../application/auth/authContext';
@@ -7,6 +7,7 @@ import { useAppendSupportMessage, useClaimConversation, useCloseSupportConversat
 import { conversationContextLabels, conversationStatusLabels } from '../../application/assistance/assistanceQueries';
 import { ConversationPanel } from '../components/ConversationPanel';
 import {
+  PageLoading,
   FactList,
   PageHeader,
   StatusChip,
@@ -33,7 +34,7 @@ export function SupportConsoleScreen() {
   const selected = queueData.find((item) => item.id === selectedId) ?? queueData[0];
   const assignedToMe = selected?.assignedSupportUserId === auth?.user?.id;
   const messages = useSupportConversationMessages(selected?.id, Boolean(selected && !assignedToMe && selected.status === 'WAITING_SUPPORT'));
-  if (queue.isLoading && !queue.data) return <Spin aria-label="Đang tải hàng đợi hỗ trợ" />;
+  if (queue.isLoading && !queue.data) return <PageLoading />;
   return (
     <>
       <PageHeader

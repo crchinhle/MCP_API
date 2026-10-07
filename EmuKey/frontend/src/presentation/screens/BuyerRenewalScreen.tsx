@@ -5,7 +5,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { describeApiError } from '../../application/auth/authContext';
 import { useOrder, useOrderMutations, useOrderTerms, useRenewalPreview } from '../../application/orders/orderQueries';
 import { OrderSummary } from '../components/OrderSummary';
-import { FactList, PageHeader } from '../components/WorkspacePrimitives';
+import { PageLoading, FactList, PageHeader } from '../components/WorkspacePrimitives';
 
 export function BuyerRenewalScreen() {
   const { licenseId = '' } = useParams();
@@ -20,7 +20,7 @@ export function BuyerRenewalScreen() {
   const [accepted, setAccepted] = useState(false);
   useEffect(() => { setAccepted(false); }, [order?.id, terms.data?.version, terms.data?.hash]);
 
-  if (preview.isPending) return <Spin aria-label="Đang tải thông tin gia hạn" />;
+  if (preview.isPending) return <PageLoading />;
   if (preview.isError || !preview.data) return <Result status="error" title="Không thể tải thông tin gia hạn" subTitle="Bản quyền có thể không thuộc tài khoản này hoặc kết nối đang gián đoạn." extra={<Button onClick={() => void preview.refetch()}>Thử lại</Button>} />;
   const offer = preview.data;
   const terminal = order && ['CANCELLED', 'EXPIRED'].includes(order.orderStatus);

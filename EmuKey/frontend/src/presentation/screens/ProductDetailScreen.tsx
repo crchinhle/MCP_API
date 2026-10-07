@@ -1,4 +1,5 @@
-import { Button, Result, Select, Spin } from 'antd';
+import { PageLoading } from '../components/WorkspacePrimitives';
+import { Button, Result, Select } from 'antd';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
@@ -19,7 +20,7 @@ export function ProductDetailScreen({ authenticated = false }: { readonly authen
   const selectedPlan =
     product?.plans.find((plan) => plan.id === selectedPlanId) ?? defaultPlan;
 
-  if (isLoading) return <Spin aria-label="Đang tải sản phẩm" />;
+  if (isLoading) return <div className="page-shell">{!authenticated ? <SiteHeader /> : null}<PageLoading /></div>;
   if (isError) {
     return (
       <Result

@@ -1,10 +1,10 @@
-import { Alert, Button, Empty, Input, Select, Spin, Upload, message } from 'antd';
+import { Alert, Button, Empty, Input, Select, Upload, message } from 'antd';
 import type { UploadProps } from 'antd';
 import { useState } from 'react';
 
 import { useAdminProducts } from '../../application/catalog/catalogQueries';
 import { useCreateKnowledgeDocument, useKnowledgeDocuments, usePublishKnowledgeDocument } from '../../application/assistance/knowledgeQueries';
-import { PageHeader } from '../components/WorkspacePrimitives';
+import { PageLoading, PageHeader } from '../components/WorkspacePrimitives';
 import { describeApiError } from '../../application/auth/authContext';
 
 export function AiKnowledgeScreen() {
@@ -32,6 +32,8 @@ export function AiKnowledgeScreen() {
       onSuccess: () => { setFile(undefined); void messageApi.success('Đã tải tài liệu lên.'); },
     });
   };
+  if (products.isLoading || documents.isLoading) return <PageLoading />;
+
   return (
     <>
       {contextHolder}
@@ -70,7 +72,7 @@ export function AiKnowledgeScreen() {
             value={query}
           />
         </div>
-        {documents.isLoading ? <Spin aria-label="Đang tải tài liệu kiến thức" /> : null}
+
         {documents.isError ? <Alert showIcon type="error" message="Không thể tải tài liệu kiến thức." /> : null}
         {!documents.isLoading && !documents.isError && visibleDocuments.length === 0 ? <Empty description="Chưa có tài liệu kiến thức phù hợp." /> : null}
         {visibleDocuments.map((document) => (

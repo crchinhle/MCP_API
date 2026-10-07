@@ -1,3 +1,4 @@
+import { PageLoading } from '../components/WorkspacePrimitives';
 import { Alert, Button, Checkbox, Empty, Input, Spin, Table } from 'antd';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -45,6 +46,8 @@ export function ComparePlansScreen() {
     })),
   );
 
+  if (products.isLoading) return <div className="page-shell"><SiteHeader /><PageLoading /></div>;
+
   return (
     <div className="page-shell">
       <SiteHeader />
@@ -61,7 +64,7 @@ export function ComparePlansScreen() {
             {selectedIds.length ? <Button onClick={() => setSelectedIds([])}>Bỏ chọn tất cả</Button> : null}
           </div>
           <div className="comparison-selection" aria-label="Chọn gói để so sánh">
-            {products.isLoading ? <Spin aria-label="Đang tải gói" /> : null}
+
             {products.isError ? <Alert type="error" title="Không thể tải các gói" action={<Button onClick={() => void products.refetch()}>Thử lại</Button>} /> : null}
             {choices.filter((choice) => selectedIds.includes(choice.id) || choice.label.toLocaleLowerCase('vi').includes(query.trim().toLocaleLowerCase('vi'))).map((choice) => (
               <Checkbox

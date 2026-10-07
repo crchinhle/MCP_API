@@ -1,4 +1,5 @@
-import { Alert, Button, Spin } from 'antd';
+import { PageLoading } from '../components/WorkspacePrimitives';
+import { Alert, Button } from 'antd';
 import { useNavigate } from 'react-router-dom';
 
 import { useAllLicenseDevices, useLicenses } from '../../application/licenses/licenseQueries';
@@ -21,6 +22,11 @@ export function BuyerHomeScreen() {
   const loading = licenses.isLoading || orders.isLoading || deviceQueries.some((query) => query.isLoading);
   const failed = licenses.isError || orders.isError || deviceQueries.some((query) => query.isError);
 
+  if (loading) return <PageLoading />;
+  if (failed && (!licenses.data || !orders.data || deviceQueries.some((query) => query.isError && !query.data))) {
+    return <Alert showIcon message="Không thể tải dữ liệu trang chủ." type="error" action={<Button onClick={() => { void licenses.refetch(); void orders.refetch(); deviceQueries.forEach((query) => { void query.refetch(); }); }}>Thử lại</Button>} />;
+  }
+
   return (
     <div className="buyer-home-screen">
       <main className="buyer-home-main">
@@ -33,7 +39,7 @@ export function BuyerHomeScreen() {
           </div>
         </section>
 
-        {loading ? <Spin aria-label="Đang tải trang chủ người mua" /> : null}
+
         {failed ? <Alert showIcon message="Không thể tải dữ liệu trang chủ." type="error" /> : null}
 
         <section aria-label="Tóm tắt tài khoản" className="buyer-home-metrics">

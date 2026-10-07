@@ -1,11 +1,60 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
 import { App } from '../../../EmuKey/frontend/src/presentation/app/App';
+import { AuthProvider } from '../../../EmuKey/frontend/src/application/auth/authContext';
+import { AuthScreen } from '../../../EmuKey/frontend/src/presentation/screens/AuthScreen';
 
 afterEach(cleanup);
 
 describe('Emukey public web screens', () => {
+  it.each([
+    ['/buyer', 'Bản quyền và đơn hàng của bạn'],
+    ['/provider', 'Tổng quan nhà cung cấp'],
+    ['/system/console', 'Tổng quan hệ thống'],
+  ])('hides unfinished page content while initial data loads at %s', async (path, heading) => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    vi.mocked(fetch).mockImplementation(async (input, init) => { await pending; return original(input, init); });
+    try {
+      render(<App initialEntries={[path]} />);
+      expect(screen.queryByRole('heading', { name: heading })).toBeNull();
+      expect(screen.getByRole('status', { name: 'Đang tải nội dung' })).toBeTruthy();
+      await act(async () => { release(); });
+      expect(await screen.findByRole('heading', { name: heading })).toBeTruthy();
+      expect(screen.queryByRole('status', { name: 'Đang tải nội dung' })).toBeNull();
+    } finally {
+      cleanup();
+      vi.mocked(fetch).mockImplementation(original);
+    }
+  });
+
+  it.each([
+    ['CUSTOMER', '/buyer/checkout?product=DEMO_CLASSROOM_PRO&planId=classroom-plan', '/buyer/checkout?product=DEMO_CLASSROOM_PRO&planId=classroom-plan'],
+    ['CUSTOMER', '', '/'],
+    ['CUSTOMER', 'https://example.com', '/'],
+    ['CUSTOMER', '//example.com', '/'],
+    ['PROVIDER_ADMIN', '/buyer/checkout?product=DEMO_CLASSROOM_PRO&planId=classroom-plan', '/provider'],
+  ])('resumes an authenticated %s at the appropriate destination for redirect %s', async (role, redirect, expected) => {
+    function Destination() {
+      const location = useLocation();
+      return <output aria-label="Destination">{location.pathname}{location.search}</output>;
+    }
+    render(
+      <AuthProvider skipBootstrap initialUser={{ id: 'test-user', email: 'test@example.com', displayName: 'Test User', role, status: 'ACTIVE' }}>
+        <MemoryRouter initialEntries={[`/auth?mode=login&redirect=${encodeURIComponent(redirect)}`]}>
+          <Routes>
+            <Route path="/auth" element={<AuthScreen />} />
+            <Route path="*" element={<Destination />} />
+          </Routes>
+        </MemoryRouter>
+      </AuthProvider>,
+    );
+    expect((await screen.findByLabelText('Destination')).textContent).toBe(expected);
+  });
+
   it('provides public guides without requiring login to read them', () => {
     render(<App initialEntries={['/help']} />);
     expect(screen.getByRole('heading', { name: 'Hướng dẫn sử dụng EmuKey' })).toBeTruthy();

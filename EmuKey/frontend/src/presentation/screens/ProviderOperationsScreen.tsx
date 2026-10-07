@@ -1,8 +1,9 @@
-import { Alert, Empty, Input, Spin, Tabs } from 'antd';
+import { Alert, Empty, Input, Tabs } from 'antd';
 import { useMemo, useState } from 'react';
 
 import { usePaymentHistory } from '../../application/orders/orderQueries';
 import {
+  PageLoading,
   FactList,
   PageHeader,
   StatusChip,
@@ -36,6 +37,8 @@ export function ProviderOperationsScreen() {
       ),
     [normalized, payments.data],
   );
+  if (payments.isLoading) return <PageLoading />;
+
   return (
     <>
       <PageHeader
@@ -57,7 +60,7 @@ export function ProviderOperationsScreen() {
               label: 'Đơn hàng & thanh toán',
               children: (
                 <div className="stack-list">
-                  {payments.isPending ? <Spin aria-label="Đang tải thanh toán" /> : null}
+
                   {payments.isError ? <Alert showIcon type="error" message="Không thể tải lịch sử thanh toán." /> : null}
                   {!payments.isPending && !payments.isError && visibleOrders.length === 0 ? (
                     <Empty description="Chưa có thanh toán phù hợp." />

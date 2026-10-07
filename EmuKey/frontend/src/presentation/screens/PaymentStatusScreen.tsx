@@ -14,6 +14,7 @@ import {
   useOrderMutations,
 } from '../../application/orders/orderQueries';
 import {
+  PageLoading,
   FactList,
   PageHeader,
   ProgressList,
@@ -69,7 +70,7 @@ export function PaymentStatusScreen() {
     ['SUSPENDED', 'REVOKED'].includes(license.data?.status ?? '') ||
     (license.data?.status === 'EXPIRED' && (!isRenewal || (renewalConfirmed && renewalProjectionUpdated))) ||
     (isRenewal && ['DEAD_LETTER', 'ABANDONED', 'SUPERSEDED'].includes(order.data?.renewalStatus ?? ''));
-  if (order.isPending) return <Spin />;
+  if (order.isPending) return <PageLoading />;
   if (!order.data)
     return <Alert type="error" message="Không thể tải đơn hàng." />;
   const current = order.data;

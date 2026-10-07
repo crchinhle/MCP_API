@@ -50,15 +50,16 @@ export function AuthScreen() {
   const [searchParams, setSearchParams] = useSearchParams();
   const mode = resolveAuthMode(searchParams.get('mode'));
   const redirectTarget = searchParams.get('redirect');
+  const safeRedirect = redirectTarget?.startsWith('/') && !redirectTarget.startsWith('//') ? redirectTarget : null;
   const [verification, setVerification] = useState<'failed' | 'pending' | 'verified' | null>(null);
   const [resending, setResending] = useState(false);
   const [resendStatus, setResendStatus] = useState<'sent' | 'failed' | null>(null);
   const verificationToken = searchParams.get('token');
   useEffect(() => {
     if (user && (mode === 'login' || mode === 'register')) {
-      void navigate(user.role === 'CUSTOMER' ? '/' : roleHomePath(user.role), { replace: true });
+      void navigate(user.role === 'CUSTOMER' ? safeRedirect ?? '/' : roleHomePath(user.role), { replace: true });
     }
-  }, [mode, navigate, user]);
+  }, [mode, navigate, safeRedirect, user]);
   useEffect(() => {
     if (mode !== 'verify' || !verificationToken || verification) return;
     setVerification('pending');
@@ -125,7 +126,6 @@ export function AuthScreen() {
                 onForgotPassword={() => selectMode('forgot')}
                 onLogin={login}
                 onSuccess={(user) => {
-                  const safeRedirect = redirectTarget?.startsWith('/') && !redirectTarget.startsWith('//') ? redirectTarget : null;
                   const destination = safeRedirect && user.role === 'CUSTOMER'
                     ? safeRedirect
                     : mode === 'licensing-action' && user.role === 'CUSTOMER' && verificationToken

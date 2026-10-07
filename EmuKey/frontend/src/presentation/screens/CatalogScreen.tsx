@@ -1,4 +1,5 @@
-import { Alert, Button, Card, Empty, Input, Pagination, Select, Spin } from 'antd';
+import { PageLoading } from '../components/WorkspacePrimitives';
+import { Alert, Button, Card, Empty, Input, Pagination, Select } from 'antd';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Link } from 'react-router-dom';
@@ -39,6 +40,8 @@ export function CatalogScreen({ authenticated = false }: { readonly authenticate
       : filtered;
   }, [products, search, sort]);
   const currentPage = Math.min(page, Math.max(1, Math.ceil(visibleProducts.length / 12)));
+
+  if (isLoading) return <div className="page-shell">{!authenticated ? <SiteHeader /> : null}<PageLoading /></div>;
 
   return (
     <div className="page-shell">
@@ -81,7 +84,7 @@ export function CatalogScreen({ authenticated = false }: { readonly authenticate
           className="product-grid"
           id="product-grid"
         >
-          {isLoading ? <Spin aria-label="Đang tải sản phẩm" /> : null}
+
           {isError ? <Alert message="Không thể tải danh mục sản phẩm" type="error" showIcon action={<Button onClick={() => void refetch()}>Thử lại</Button>} /> : null}
           {!isLoading && !isError && products.length === 0 ? (
             <Empty description="Chưa có sản phẩm và gói giá được công bố." />

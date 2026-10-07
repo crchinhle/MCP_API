@@ -8,6 +8,27 @@
   min-height: 44px;
 }
 
+.page-loading-state {
+  min-height: 65vh;
+}
+
+.page-loading-indicator {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.page-loading-indicator p {
+  margin: 0;
+}
+
 .customer-navigation {
   min-height: 52px;
   padding: 0 40px;

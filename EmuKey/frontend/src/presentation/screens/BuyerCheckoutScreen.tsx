@@ -16,7 +16,7 @@ import {
   useOrderTerms,
 } from '../../application/orders/orderQueries';
 import { OrderSummary } from '../components/OrderSummary';
-import { PageHeader } from '../components/WorkspacePrimitives';
+import { PageLoading, PageHeader } from '../components/WorkspacePrimitives';
 
 export function BuyerCheckoutScreen() {
   const navigate = useNavigate();
@@ -66,7 +66,7 @@ export function BuyerCheckoutScreen() {
     });
   }
 
-  if (isLoading) return <Spin aria-label="Đang tải gói giá" />;
+  if (isLoading) return <PageLoading />;
   if (isError)
     return (
       <Result

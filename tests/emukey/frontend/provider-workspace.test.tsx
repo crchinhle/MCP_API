@@ -6,11 +6,11 @@ import { App } from '../../../EmuKey/frontend/src/presentation/app/App';
 afterEach(cleanup);
 
 describe('Provider workspace', () => {
-  it('renders the provider dashboard without fabricated aggregates', () => {
+  it('renders the provider dashboard without fabricated aggregates', async () => {
     render(<App initialEntries={['/provider']} />);
 
     expect(
-      screen.getByRole('heading', { name: 'Tổng quan nhà cung cấp' }),
+      await screen.findByRole('heading', { name: 'Tổng quan nhà cung cấp' }),
     ).toBeTruthy();
     expect(screen.getByText('EmuKey').className).toContain('brand-wordmark');
     expect(screen.getByRole('link', { name: 'Hồ sơ' })).toBeTruthy();
@@ -18,13 +18,13 @@ describe('Provider workspace', () => {
     expect(screen.getByRole('link', { name: 'Quản lý danh mục' })).toBeTruthy();
   });
 
-  it('does not display a local-only knowledge file as uploaded', () => {
+  it('does not display a local-only knowledge file as uploaded', async () => {
     render(<App initialEntries={['/provider/knowledge']} />);
 
     const file = new File(['demo'], 'huong-dan-demo.pdf', {
       type: 'application/pdf',
     });
-    fireEvent.change(screen.getByLabelText('Chọn tài liệu kiến thức'), {
+    fireEvent.change(await screen.findByLabelText('Chọn tài liệu kiến thức'), {
       target: { files: [file] },
     });
     expect(screen.queryByText('huong-dan-demo.pdf')).toBeNull();
@@ -33,7 +33,7 @@ describe('Provider workspace', () => {
   it('filters provider payment history loaded from the backend', async () => {
     render(<App initialEntries={['/provider/operations']} />);
 
-    fireEvent.change(screen.getByLabelText('Tìm dữ liệu vận hành'), {
+    fireEvent.change(await screen.findByLabelText('Tìm dữ liệu vận hành'), {
       target: { value: '0218' },
     });
 

@@ -1,6 +1,18 @@
 import type { ReactNode } from 'react';
+import { Spin } from 'antd';
 
 import type { MetricRecord, StatusTone } from '../../domain/workspace';
+
+export function PageLoading({ label = 'Đang tải nội dung' }: { readonly label?: string }) {
+  return (
+    <div className="page-loading-state" role="status" aria-label={label} aria-busy="true">
+      <div className="page-loading-indicator">
+        <Spin size="large" />
+        <p>{label}</p>
+      </div>
+    </div>
+  );
+}
 
 export function formatMoney(value: number): string {
   return `${new Intl.NumberFormat('vi-VN').format(value)} ₫`;

@@ -1,3 +1,4 @@
+import { PageLoading } from '../components/WorkspacePrimitives';
 import { Alert, Button, Empty, Input, Modal, Spin } from 'antd';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -48,10 +49,10 @@ export function BuyerLicenseHubScreen() {
     if (resolution.data) { setSelectedId(resolution.data.licenseId); setFilter('all'); setTab('key'); }
   }, [resolution.data]);
 
-  if (actionToken && resolution.isPending) return <Spin aria-label="Đang kiểm tra liên kết email" />;
+  if (actionToken && resolution.isPending) return <PageLoading />;
   if (actionToken && resolution.isError) return <Alert type="error" message={invalidActionLink ? 'Liên kết email không hợp lệ hoặc đã hết hạn.' : 'Chưa thể kiểm tra liên kết email. Vui lòng thử lại.'} description={invalidActionLink ? 'Mở lại bản quyền để yêu cầu email mới.' : 'Kiểm tra kết nối rồi tải lại trạng thái liên kết.'} action={invalidActionLink ? <Button href="/buyer/licenses">Danh sách bản quyền</Button> : <Button onClick={() => void resolution.refetch()}>Thử lại</Button>} />;
   if (resolution.data && resolution.data.action !== 'KEY_RECOVERY') return <Alert type="info" message="Liên kết này dành cho thao tác thiết bị hoặc đổi mã." description="Quay lại ứng dụng đã gửi yêu cầu để tiếp tục đúng thao tác." action={<Button href="/buyer/licenses">Danh sách bản quyền</Button>} />;
-  if (licenses.isPending) return <Spin aria-label="Đang tải bản quyền" />;
+  if (licenses.isPending) return <PageLoading />;
   if (licenses.isError) return <Alert type="error" message="Không thể tải danh sách bản quyền." />;
   if (!rows.length) return <Empty description="Chưa có bản quyền"><Button href="/buyer/products">Khám phá sản phẩm</Button></Empty>;
 

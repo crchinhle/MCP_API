@@ -8,6 +8,29 @@ import { OrderSummary } from '../../../EmuKey/frontend/src/presentation/componen
 afterEach(cleanup);
 
 describe('Customer commerce', () => {
+  it('shows a retryable error without placeholder metrics when initial home data fails', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    let fail = true;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (fail && url.endsWith('/orders') && (!init?.method || init.method === 'GET')) {
+        return new Response(JSON.stringify({ message: 'Unavailable' }), { status: 500 });
+      }
+      return original(input, init);
+    });
+    try {
+      render(<App initialEntries={['/buyer']} />);
+      expect(await screen.findByText('Không thể tải dữ liệu trang chủ.')).toBeTruthy();
+      expect(screen.queryByRole('region', { name: 'Tóm tắt tài khoản' })).toBeNull();
+      fail = false;
+      fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+      expect(await screen.findByRole('region', { name: 'Tóm tắt tài khoản' })).toBeTruthy();
+    } finally {
+      cleanup();
+      vi.mocked(fetch).mockImplementation(original);
+    }
+  });
+
   it('keeps disabled, zero and structured entitlements in the purchase snapshot', () => {
     render(<OrderSummary order={{ total: 100000, entitlements: { desktop: false, quota: 0, limits: { seats: 2 } } }} />);
     expect(screen.getByText(/Ứng dụng máy tính: Không/)).toBeTruthy();
@@ -47,7 +70,7 @@ try {
     render(<App initialEntries={['/buyer']} />);
 
     expect(
-      screen.getByRole('heading', { name: 'Bản quyền và đơn hàng của bạn' }),
+      await screen.findByRole('heading', { name: 'Bản quyền và đơn hàng của bạn' }),
     ).toBeTruthy();
     expect(await screen.findByText('Đơn hàng gần đây')).toBeTruthy();
     expect(screen.getByText('Thiết bị đang dùng')).toBeTruthy();
