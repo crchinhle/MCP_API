@@ -15,6 +15,8 @@ export class LicenseProviderDto {
 export class LicenseProjectionDto {
   @ApiPropertyOptional()
   activationKeyAvailable?: boolean;
+  @ApiPropertyOptional({ nullable: true, type: String, pattern: '^[0-9a-f]{4}$' })
+  activationKeyLast4?: string | null;
   @ApiPropertyOptional({ nullable: true, type: Number }) blockNumber!:
     number | null;
   @ApiProperty() confirmationCount!: number;

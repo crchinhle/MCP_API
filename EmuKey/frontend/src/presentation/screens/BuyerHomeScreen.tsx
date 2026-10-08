@@ -30,16 +30,6 @@ export function BuyerHomeScreen() {
   return (
     <div className="buyer-home-screen">
       <main className="buyer-home-main">
-        <section aria-labelledby="buyer-home-title" className="buyer-home-welcome">
-          <h1 id="buyer-home-title">Bản quyền và đơn hàng của bạn</h1>
-          <p>Xem nhanh đơn hàng, thiết bị và bản quyền đang sử dụng.</p>
-          <div className="buyer-home-hero-actions">
-            <Button onClick={() => void navigate('/buyer/products')} type="primary">Xem sản phẩm</Button>
-            <Button onClick={() => void navigate('/buyer/licenses')}>Bản quyền của tôi</Button>
-          </div>
-        </section>
-
-
         {failed ? <Alert showIcon message="Không thể tải dữ liệu trang chủ." type="error" /> : null}
 
         <section aria-label="Tóm tắt tài khoản" className="buyer-home-metrics">

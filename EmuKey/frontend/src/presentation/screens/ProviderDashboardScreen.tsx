@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { useAdminPlans, useAdminProducts } from '../../application/catalog/catalogQueries';
 import { usePaymentHistory } from '../../application/orders/orderQueries';
 import { useProviderLicenses } from '../../application/licenses/licenseQueries';
-import { PageLoading, PageHeader } from '../components/WorkspacePrimitives';
+import { PageLoading, PageHeader, StatusChip } from '../components/WorkspacePrimitives';
 
 export function ProviderDashboardScreen() {
   const products = useAdminProducts();
@@ -18,6 +18,17 @@ export function ProviderDashboardScreen() {
     return <Alert showIcon type="error" message="Không thể tải tổng quan Provider." action={<Button onClick={() => { void products.refetch(); void plans.refetch(); void payments.refetch(); void licenses.refetch(); }}>Thử lại</Button>} />;
   }
 
+  const publishedProducts = (products.data ?? []).filter((product) => product.status === 'PUBLISHED');
+  const activeLicenses = (licenses.data ?? []).filter((license) => license.status === 'ACTIVE');
+  const pendingLicenses = (licenses.data ?? []).filter((license) => license.status === 'PENDING_ONCHAIN');
+  const paymentExceptions = (payments.data ?? []).filter((payment) => payment.classification !== 'MATCHED');
+  const draftProducts = (products.data ?? []).filter((product) => product.status === 'DRAFT');
+  const attentionItems = [
+    ...(pendingLicenses.length ? [{ count: pendingLicenses.length, label: 'bản quyền đang chờ xác nhận', to: '/provider/licenses' }] : []),
+    ...(paymentExceptions.length ? [{ count: paymentExceptions.length, label: 'giao dịch cần kiểm tra', to: '/provider/operations' }] : []),
+    ...(draftProducts.length ? [{ count: draftProducts.length, label: 'sản phẩm nháp chưa công bố', to: '/provider/catalog' }] : []),
+  ];
+
   return (
     <div className="provider-dashboard-screen">
       <PageHeader
@@ -25,16 +36,28 @@ export function ProviderDashboardScreen() {
       />
 
       {error ? <Alert showIcon type="error" message="Không thể tải tổng quan Provider." /> : null}
-      <section className="metric-grid metric-grid--four">
-        <article className="metric-card"><span className="status-chip status-chip--neutral">Sản phẩm</span><strong>{products.data?.length ?? '—'}</strong><small>Danh mục doanh nghiệp</small></article>
-        <article className="metric-card"><span className="status-chip status-chip--neutral">Gói bản quyền</span><strong>{plans.data?.length ?? '—'}</strong><small>Bản nháp và đã công bố</small></article>
-        <article className="metric-card"><span className="status-chip status-chip--commerce">Thanh toán</span><strong>{payments.data?.length ?? '—'}</strong><small>Lịch sử đã tải</small></article>
-        <article className="metric-card"><span className="status-chip status-chip--success">Bản quyền</span><strong>{licenses.data?.length ?? '—'}</strong><small>Bản quyền đã cấp</small></article>
+      <section className="metric-grid metric-grid--four" aria-label="Chỉ số hoạt động">
+        <article className="metric-card"><span className="status-chip status-chip--neutral">Sản phẩm đang bán</span><strong>{publishedProducts.length}</strong><small>Trạng thái PUBLISHED</small></article>
+        <article className="metric-card"><span className="status-chip status-chip--success">Bản quyền hoạt động</span><strong>{activeLicenses.length}</strong><small>Trạng thái ACTIVE</small></article>
+        <article className="metric-card"><span className="status-chip status-chip--warning">Chờ xác nhận</span><strong>{pendingLicenses.length}</strong><small>Trạng thái PENDING_ONCHAIN</small></article>
+        <article className="metric-card"><span className="status-chip status-chip--commerce">Giao dịch cần kiểm tra</span><strong>{paymentExceptions.length}</strong><small>Chưa MATCHED</small></article>
       </section>
       <section className="workspace-card section-card">
-        <h2>Việc cần theo dõi</h2>
-        {!loading && !error && !products.data?.length && !plans.data?.length ? <Empty description="Chưa có sản phẩm hoặc gói trong danh mục." /> : <p className="muted-copy">Kiểm tra sản phẩm nháp, theo dõi thanh toán và quản lý các bản quyền đã cấp từ menu bên cạnh.</p>}
-        <Link className="primary-link" to="/provider/catalog">Quản lý danh mục</Link>
+        <h2>Cần chú ý</h2>
+        {attentionItems.length === 0 ? (
+          <Empty description="Không có vấn đề nào cần xử lý." />
+        ) : (
+          <ul className="provider-attention-list">
+            {attentionItems.map((item) => (
+              <li key={item.label}>
+                <StatusChip tone={item.label.includes('chờ') ? 'warning' : item.label.includes('kiểm tra') ? 'error' : 'info'}>
+                  {item.count} {item.label}
+                </StatusChip>
+                <Link className="primary-link" to={item.to}>Xem chi tiết</Link>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
     </div>
   );

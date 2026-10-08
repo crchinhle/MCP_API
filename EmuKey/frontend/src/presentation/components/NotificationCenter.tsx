@@ -1,5 +1,7 @@
+import { Fragment } from 'react';
+import { LoadingOverlay } from './WorkspacePrimitives';
 import { BellOutlined } from '@ant-design/icons';
-import { Alert, Badge, Button, Empty, List, Popover, Spin } from 'antd';
+import { Alert, Badge, Button, Empty, List, Popover } from 'antd';
 import { useMarkNotificationRead, useNotifications } from '../../application/notifications/notificationQueries';
 
 export function NotificationCenter() {
@@ -9,7 +11,7 @@ export function NotificationCenter() {
   const items = pages.flatMap((page) => page.items);
   const unread = items.filter((item) => !item.isRead).length;
 
-  const content = notifications.isLoading ? <Spin size="small" /> : notifications.isError ? (
+  const content = notifications.isLoading ? <LoadingOverlay /> : notifications.isError ? (
     <div className="notification-popover-error">
       <p>Không thể tải thông báo.</p>
       <Button size="small" onClick={() => void notifications.refetch()}>Thử lại</Button>
@@ -22,14 +24,14 @@ export function NotificationCenter() {
         locale={{ emptyText: <Empty description="Chưa có thông báo" /> }}
         renderItem={(item) => (
           <List.Item
-            {...(!item.isRead ? { actions: [<Button key="read" size="small" type="link" loading={markRead.isPending && markRead.variables === item.id} onClick={() => markRead.mutate(item.id)}>Đã đọc</Button>] } : {})}
+            {...(!item.isRead ? { actions: [<Fragment key="read"><Button key="read" size="small" type="link" disabled={markRead.isPending && markRead.variables === item.id} onClick={() => markRead.mutate(item.id)}>Đã đọc</Button><LoadingOverlay active={markRead.isPending && markRead.variables === item.id} label="Đang xử lý yêu cầu: Đã đọc" /></Fragment>] } : {})}
           >
             <List.Item.Meta description={item.content} title={item.title} />
           </List.Item>
         )}
       />
       {markRead.isError ? <Alert role="alert" type="error" message="Không thể đánh dấu đã đọc. Vui lòng thử lại." /> : null}
-      {notifications.hasNextPage ? <Button loading={notifications.isFetchingNextPage} type="link" onClick={() => void notifications.fetchNextPage()}>Xem thêm thông báo</Button> : null}
+      {notifications.hasNextPage ? <><Button disabled={notifications.isFetchingNextPage} type="link" onClick={() => void notifications.fetchNextPage()}>Xem thêm thông báo</Button><LoadingOverlay active={notifications.isFetchingNextPage} label="Đang xử lý yêu cầu: Xem thêm thông báo" /></> : null}
     </>
   ) : <Empty description="Chưa có thông báo" />;
 

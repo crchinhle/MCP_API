@@ -1,4 +1,5 @@
-import { Alert, Button, Input, Spin } from 'antd';
+import { LoadingOverlay } from '../components/WorkspacePrimitives';
+import { Alert, Button, Input } from 'antd';
 import { useState } from 'react';
 
 import { licenseStatusLabel, publicVerificationErrorLabel, usePublicLicenseVerification } from '../../application/licenses/licenseQueries';
@@ -42,19 +43,19 @@ export function PublicVerificationScreen() {
             >
               Xóa
             </Button>
-            <Button
-              disabled={!code.trim()}
-              loading={verification.isPending}
+            <><Button
+              disabled={(!code.trim()) || (verification.isPending)}
+
               type="primary"
               onClick={() => verification.mutate(code.trim())}
             >
               Xác minh
-            </Button>
+            </Button><LoadingOverlay active={verification.isPending} label="Đang xử lý yêu cầu: Xác minh" /></>
           </div>
         </section>
 
         <section className="verification-result" aria-label="Kết quả xác minh">
-          {verification.isPending ? <Spin /> : null}
+          {verification.isPending ? <LoadingOverlay /> : null}
           {!verification.isPending && !result && !verification.error ? (
             <div className="verification-placeholder" role="status">
               <StatusChip tone="info">Sẵn sàng</StatusChip>

@@ -1,7 +1,42 @@
 import type { ReactNode } from 'react';
-import { Spin } from 'antd';
+import { useEffect, useId, useSyncExternalStore } from 'react';
+import { Modal, Spin } from 'antd';
 
 import type { MetricRecord, StatusTone } from '../../domain/workspace';
+
+const pendingOverlays = new Set<string>();
+const overlayListeners = new Set<() => void>();
+const subscribeToOverlays = (listener: () => void) => {
+  overlayListeners.add(listener);
+  return () => { overlayListeners.delete(listener); };
+};
+const firstOverlay = () => pendingOverlays.values().next().value ?? '';
+const notifyOverlays = () => { overlayListeners.forEach((listener) => listener()); };
+
+export function LoadingOverlay({ active = true, label = 'Đang xử lý yêu cầu' }: {
+  readonly active?: boolean;
+  readonly label?: string;
+}) {
+  const id = useId();
+  const visibleId = useSyncExternalStore(subscribeToOverlays, firstOverlay, () => '');
+  useEffect(() => {
+    if (!active) return;
+    // Avoid flashing a dialog for fast requests; concurrent requests share one dialog.
+    const timer = window.setTimeout(() => { pendingOverlays.add(id); notifyOverlays(); }, 200);
+    return () => {
+      window.clearTimeout(timer);
+      pendingOverlays.delete(id);
+      notifyOverlays();
+    };
+  }, [active, id]);
+  return <Modal centered open={active && visibleId === id} title={label} footer={null}
+    closable={false} keyboard={false} mask={{ closable: false }} zIndex={2000} width={420}>
+    <div className="payment-processing" role="status" aria-live="polite" aria-busy="true">
+      <Spin size="large" />
+      <p>Vui lòng chờ trong giây lát.</p>
+    </div>
+  </Modal>;
+}
 
 export function PageLoading({ label = 'Đang tải nội dung' }: { readonly label?: string }) {
   return (

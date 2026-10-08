@@ -1,3 +1,4 @@
+import { LoadingOverlay } from '../components/WorkspacePrimitives';
 import { Alert, Button, Empty, Form, Input, InputNumber, Modal, Popconfirm, Select, Table, message } from 'antd';
 import { useEffect, useState } from 'react';
 
@@ -145,14 +146,16 @@ export function ProviderCatalogScreen() {
           { title: 'Thao tác', render: (_: unknown, record: AdminPlan) => <div className="table-actions"><Button size="small" onClick={() => openPlan(record)} disabled={record.status !== 'DRAFT'}>{record.status === 'PUBLISHED' ? 'Tạo bản nháp' : 'Sửa'}</Button>{record.status === 'DRAFT' ? <Button size="small" onClick={() => run('publishPlan', record.id)}>Công bố</Button> : null}{record.status === 'PUBLISHED' ? <Button size="small" onClick={() => run('archivePlan', record.id)}>Lưu trữ</Button> : null}{record.status === 'DRAFT' ? <Popconfirm title="Xóa gói nháp?" description="Thao tác này không thể hoàn tác." okText="Xóa" cancelText="Giữ lại" onConfirm={() => run('deletePlan', record.id)}><Button danger size="small">Xóa</Button></Popconfirm> : null}</div> },
         ]} /> : null}
       </section>
-      <Modal open={productOpen} title={editingProduct ? 'Sửa sản phẩm' : 'Tạo sản phẩm'} okText="Lưu" cancelText="Hủy" confirmLoading={mutations.createProduct.isPending || mutations.updateProduct.isPending} onCancel={() => closeProduct()} onOk={() => void productForm.submit()}>
+      <Modal open={productOpen} title={editingProduct ? 'Sửa sản phẩm' : 'Tạo sản phẩm'} okText="Lưu" cancelText="Hủy" okButtonProps={{ disabled: mutations.createProduct.isPending || mutations.updateProduct.isPending }} onCancel={() => closeProduct()} onOk={() => void productForm.submit()}>
+        <LoadingOverlay active={Boolean(productOpen) && (mutations.createProduct.isPending || mutations.updateProduct.isPending)} />
         <Form form={productForm} layout="vertical" onFinish={submitProduct}>
           <Form.Item label="Mã sản phẩm" name="code" rules={[{ required: true, message: 'Vui lòng nhập mã sản phẩm.' }]}><Input disabled={Boolean(editingProduct)} /></Form.Item>
           <Form.Item label="Tên sản phẩm" name="name" rules={[{ required: true, message: 'Vui lòng nhập tên sản phẩm.' }]}><Input /></Form.Item>
           <Form.Item label="Mô tả" name="description"><Input.TextArea /></Form.Item>
         </Form>
       </Modal>
-      <Modal open={planOpen} title={editingPlan ? 'Sửa gói' : 'Tạo gói'} okText="Lưu" cancelText="Hủy" confirmLoading={mutations.createPlan.isPending || mutations.updatePlan.isPending} onCancel={() => closePlan()} onOk={() => void planForm.submit()}>
+      <Modal open={planOpen} title={editingPlan ? 'Sửa gói' : 'Tạo gói'} okText="Lưu" cancelText="Hủy" okButtonProps={{ disabled: mutations.createPlan.isPending || mutations.updatePlan.isPending }} onCancel={() => closePlan()} onOk={() => void planForm.submit()}>
+        <LoadingOverlay active={Boolean(planOpen) && (mutations.createPlan.isPending || mutations.updatePlan.isPending)} />
         <Form form={planForm} layout="vertical" onFinish={submitPlan}>
           <Form.Item label="Sản phẩm" name="productId" rules={[{ required: true, message: 'Vui lòng chọn sản phẩm.' }]}><Select disabled={Boolean(editingPlan)} options={(products.data ?? []).filter((product) => product.status !== 'ARCHIVED').map((product) => ({ value: product.id, label: `${product.name} (${product.code})` }))} /></Form.Item>
           <div className="form-grid"><Form.Item label="Mã gói" name="code" rules={[{ required: true, message: 'Vui lòng nhập mã gói.' }]}><Input disabled={Boolean(editingPlan)} /></Form.Item><Form.Item label="Tên gói" name="name" rules={[{ required: true, message: 'Vui lòng nhập tên gói.' }]}><Input /></Form.Item></div>

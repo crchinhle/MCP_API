@@ -1,4 +1,5 @@
-import { Alert, Button, Checkbox, Result, Spin, Steps } from 'antd';
+import { LoadingOverlay } from '../components/WorkspacePrimitives';
+import { Alert, Button, Checkbox, Result, Steps } from 'antd';
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -126,13 +127,13 @@ export function BuyerCheckoutScreen() {
                <>
                  <h2>Xác nhận ý định mua</h2>
                  <p>Kiểm tra gói và tạo đơn hàng khi bạn sẵn sàng. Việc mở trang này chưa tạo đơn hoặc yêu cầu thanh toán.</p>
-                 {resumedOrder.isPending && existingIntent ? <Spin aria-label="Đang khôi phục đơn hàng" /> : null}
+                 {resumedOrder.isPending && existingIntent ? <LoadingOverlay label="Đang khôi phục đơn hàng" /> : null}
                  {resumedOrder.isError && existingIntent ? <Alert showIcon type="warning" message="Không thể khôi phục đơn hàng trước đó." action={<Button onClick={() => void resumedOrder.refetch()}>Thử lại</Button>} /> : null}
                  {createOrderMutation.isError ? <Alert showIcon type="error" message={describeApiError(createOrderMutation.error, 'Không thể tạo đơn hàng. Vui lòng thử lại.')} /> : null}
-                 <Button type="primary" loading={createOrderMutation.isPending} onClick={createOrder}>Tạo đơn hàng</Button>
+                 <><Button type="primary" disabled={createOrderMutation.isPending} onClick={createOrder}>Tạo đơn hàng</Button><LoadingOverlay active={createOrderMutation.isPending} label="Đang xử lý yêu cầu: Tạo đơn hàng" /></>
                </>
              ) : termsQuery.isPending ? (
-               <Spin aria-label="Đang tải điều khoản" />
+               <LoadingOverlay label="Đang tải điều khoản" />
              ) : termsQuery.isError || !termsQuery.data ? (
                <Alert
                  showIcon
@@ -192,17 +193,16 @@ export function BuyerCheckoutScreen() {
             <Button onClick={() => void navigate(`/products/${encodeURIComponent(productSlug)}`)}>
               Quay lại
             </Button>
-              <Button
+              <><Button
                 type="primary"
-                disabled={!order || !accepted || !termsQuery.data || termsQuery.isFetching || termsQuery.isError}
-              loading={
-                createOrderMutation.isPending ||
-                orderMutations.acceptServiceTerms.isPending
-              }
+                disabled={(!order || !accepted || !termsQuery.data || termsQuery.isFetching || termsQuery.isError) || (createOrderMutation.isPending ||
+                orderMutations.acceptServiceTerms.isPending)}
+
               onClick={acceptServiceTerms}
             >
               Đồng ý và tiếp tục thanh toán
-            </Button>
+            </Button><LoadingOverlay active={createOrderMutation.isPending ||
+                orderMutations.acceptServiceTerms.isPending} label="Đang xử lý yêu cầu: Đồng ý và tiếp tục thanh toán" /></>
           </div>
         </aside>
       </div>

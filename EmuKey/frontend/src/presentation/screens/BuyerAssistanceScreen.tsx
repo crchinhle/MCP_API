@@ -1,4 +1,5 @@
-import { Alert, Button, Empty, Spin } from 'antd';
+import { LoadingOverlay } from '../components/WorkspacePrimitives';
+import { Alert, Button, Empty } from 'antd';
 import { useState } from 'react';
 
 import { conversationContextLabels, conversationStatusLabels, useAppendConversationMessage, useAskAi, useConversationMessages, useConversations, useCreateConversation } from '../../application/assistance/assistanceQueries';
@@ -32,9 +33,9 @@ export function BuyerAssistanceScreen() {
         <PageHeader title="Hội thoại hỗ trợ" />
         {create.isError ? <Alert type="error" title="Không thể tạo hội thoại. Vui lòng thử lại." /> : null}
         <Empty description="Bạn chưa có hội thoại hỗ trợ." image={Empty.PRESENTED_IMAGE_SIMPLE}>
-          <Button loading={create.isPending} onClick={startConversation} type="primary">
+          <><Button disabled={create.isPending} onClick={startConversation} type="primary">
             Bắt đầu hội thoại
-          </Button>
+          </Button><LoadingOverlay active={create.isPending} label="Đang xử lý yêu cầu: Bắt đầu hội thoại" /></>
         </Empty>
       </>
     );
@@ -43,7 +44,7 @@ export function BuyerAssistanceScreen() {
     <>
       <PageHeader
         title="Hội thoại hỗ trợ"
-        action={<span className="workspace-actions"><Button loading={create.isPending} onClick={startConversation} type="primary">Tạo yêu cầu mới</Button>{conversation.status === 'AI_ACTIVE' ? <Button loading={requestSupport.isPending} onClick={() => requestSupport.mutate({ conversationId: conversation.id, reason: 'AI chưa giải quyết được yêu cầu.' })}>Chuyển cho nhân viên</Button> : null}</span>}
+        action={<span className="workspace-actions"><><Button disabled={create.isPending} onClick={startConversation} type="primary">Tạo yêu cầu mới</Button><LoadingOverlay active={create.isPending} label="Đang xử lý yêu cầu: Tạo yêu cầu mới" /></>{conversation.status === 'AI_ACTIVE' ? <><Button disabled={requestSupport.isPending} onClick={() => requestSupport.mutate({ conversationId: conversation.id, reason: 'AI chưa giải quyết được yêu cầu.' })}>Chuyển cho nhân viên</Button><LoadingOverlay active={requestSupport.isPending} label="Đang xử lý yêu cầu: Chuyển cho nhân viên" /></> : null}</span>}
       />
       {create.isError ? <Alert type="error" title="Không thể tạo hội thoại. Vui lòng thử lại." /> : null}
       <StatusChip tone={conversation.status === 'CLOSED' ? 'success' : 'info'}>{conversationStatusLabels[conversation.status]}</StatusChip>
@@ -65,7 +66,7 @@ export function BuyerAssistanceScreen() {
             <h2>{conversation.title ?? 'Hội thoại hỗ trợ'}</h2>
           </header>
           {messages.isError ? <Alert type="error" title="Không thể tải tin nhắn" action={<Button onClick={() => void messages.refetch()}>Thử lại</Button>} /> : null}
-          {messages.isLoading ? <Spin aria-label="Đang tải tin nhắn" /> : null}
+          {messages.isLoading ? <LoadingOverlay label="Đang tải tin nhắn" /> : null}
           <ConversationPanel
             author="Buyer"
             initialMessages={(messages.data ?? []).map((message) => ({

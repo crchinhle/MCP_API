@@ -1,5 +1,6 @@
+import { LoadingOverlay } from './WorkspacePrimitives';
 import { CustomerServiceOutlined } from '@ant-design/icons';
-import { Button, FloatButton, Input, Popover, Spin, Tag } from 'antd';
+import { Button, FloatButton, Input, Popover, Tag } from 'antd';
 import { useState } from 'react';
 
 import { useAskAi, useCreateConversation } from '../../application/assistance/assistanceQueries';
@@ -45,8 +46,8 @@ function AssistantSession() {
           <h2>Trợ lý AI Emukey</h2>
           {auth?.user?.role === 'CUSTOMER' ? <>
             <p>Hỏi về số thiết bị, thời hạn và quyền sử dụng phù hợp.</p>
-            <Input.Search aria-label="Câu hỏi cho trợ lý AI" enterButton="Hỏi" loading={pending} onChange={(event) => setQuestion(event.target.value)} onSearch={() => void ask()} placeholder="Ví dụ: Gói nào cho 3 thiết bị?" value={question} />
-            {pending ? <Spin aria-label="Đang hỏi trợ lý AI" /> : null}
+            <><Input.Search aria-label="Câu hỏi cho trợ lý AI" enterButton="Hỏi" disabled={pending} onChange={(event) => setQuestion(event.target.value)} onSearch={() => void ask()} placeholder="Ví dụ: Gói nào cho 3 thiết bị?" value={question} /><LoadingOverlay active={pending} label="Đang xử lý yêu cầu" /></>
+            {pending ? <LoadingOverlay label="Đang hỏi trợ lý AI" /> : null}
             {error ? <p role="alert">Không thể nhận câu trả lời. Vui lòng thử lại.</p> : null}
             {answer.data ? <div role="status"><strong>{submittedQuestion}</strong><p>{answer.data.answer}</p><small>{answer.data.grounded ? `Nguồn tham khảo: ${answer.data.citedSourceIds.join(', ')}` : 'Chưa có đủ nguồn xác thực; hãy liên hệ hỗ trợ.'}</small></div> : null}
           </> : <>

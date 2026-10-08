@@ -1,3 +1,4 @@
+import { LoadingOverlay } from './WorkspacePrimitives';
 import { Alert, Button, Form, Input, Select } from 'antd';
 import { useState } from 'react';
 
@@ -68,7 +69,7 @@ export function LoginForm({
       <div className="remember-row">
         <Button onClick={onForgotPassword} type="link">Quên mật khẩu?</Button>
       </div>
-      <Button block htmlType="submit" loading={loading} type="primary">{submitLabel}</Button>
+      <><Button block htmlType="submit" disabled={loading} type="primary">{submitLabel}</Button><LoadingOverlay active={loading} label="Đang xử lý yêu cầu" /></>
     </Form>
   );
 }
@@ -120,7 +121,7 @@ export function RegisterForm({
       >
         <Input.Password autoComplete="new-password" />
       </Form.Item>
-      <Button block htmlType="submit" loading={loading} type="primary">Tạo tài khoản</Button>
+      <><Button block htmlType="submit" disabled={loading} type="primary">Tạo tài khoản</Button><LoadingOverlay active={loading} label="Đang xử lý yêu cầu: Tạo tài khoản" /></>
     </Form>
   );
 }
@@ -152,7 +153,7 @@ export function ForgotPasswordForm({
       <Form.Item label="Email" name="email" rules={emailRules}>
         <Input autoComplete="email" inputMode="email" />
       </Form.Item>
-      <Button block htmlType="submit" loading={loading} type="primary">Gửi hướng dẫn</Button>
+      <><Button block htmlType="submit" disabled={loading} type="primary">Gửi hướng dẫn</Button><LoadingOverlay active={loading} label="Đang xử lý yêu cầu: Gửi hướng dẫn" /></>
     </Form>
   );
 }
@@ -224,7 +225,7 @@ export function ResetPasswordForm({
       >
         <Input.Password autoComplete="new-password" />
       </Form.Item>
-      <Button block htmlType="submit" loading={loading} type="primary">Đặt lại mật khẩu</Button>
+      <><Button block htmlType="submit" disabled={loading} type="primary">Đặt lại mật khẩu</Button><LoadingOverlay active={loading} label="Đang xử lý yêu cầu: Đặt lại mật khẩu" /></>
     </Form>
   );
 }

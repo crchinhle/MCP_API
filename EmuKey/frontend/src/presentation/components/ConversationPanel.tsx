@@ -1,3 +1,4 @@
+import { LoadingOverlay } from './WorkspacePrimitives';
 import { Alert, Button, Input } from 'antd';
 import { useState } from 'react';
 
@@ -70,9 +71,9 @@ export function ConversationPanel({
             <Button onClick={() => setDraft(suggestion)}>Chèn gợi ý AI</Button>
           ) : null}
           {onAskAi ? <Button disabled={!draft.trim() || pending} onClick={() => void sendMessage(true)}>Hỏi AI có nguồn</Button> : null}
-          <Button disabled={!draft.trim() || !onSubmit} loading={pending} onClick={() => void sendMessage()} type="primary">
+          <><Button disabled={(!draft.trim() || !onSubmit) || (pending)}  onClick={() => void sendMessage()} type="primary">
             {submitLabel}
-          </Button>
+          </Button><LoadingOverlay active={pending} label="Đang xử lý yêu cầu" /></>
         </span>
       </label>}
     </section>

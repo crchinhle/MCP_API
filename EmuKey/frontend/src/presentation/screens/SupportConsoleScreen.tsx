@@ -1,3 +1,4 @@
+import { LoadingOverlay } from '../components/WorkspacePrimitives';
 import { Alert, Button, Empty } from 'antd';
 import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
@@ -18,6 +19,7 @@ export function SupportConsoleScreen() {
   const auth = useOptionalAuth();
   const queue = useSupportQueue(new URLSearchParams(location.search).get('view') === 'resolved');
   const [selectedId, setSelectedId] = useState<string>();
+  const [refreshing, setRefreshing] = useState(false);
   const claim = useClaimConversation();
   const append = useAppendSupportMessage();
   const close = useCloseSupportConversation();
@@ -39,7 +41,7 @@ export function SupportConsoleScreen() {
     <>
       <PageHeader
         title="Hàng đợi hỗ trợ"
-        action={<Button onClick={() => void queue.refetch()} loading={queue.isFetching}>Làm mới</Button>}
+        action={<><Button onClick={() => { setRefreshing(true); void queue.refetch().finally(() => setRefreshing(false)); }} disabled={refreshing}>Làm mới</Button><LoadingOverlay active={refreshing} label="Đang tải lại hàng đợi hỗ trợ" /></>}
       />
       {queue.isError ? <Alert showIcon type="error" message="Không thể tải hàng đợi hỗ trợ." action={<Button onClick={() => void queue.refetch()}>Thử lại</Button>} /> : null}
           {claim.isError || close.isError || release.isError ? <Alert type="error" title="Không thể cập nhật hội thoại. Vui lòng thử lại." /> : null}
@@ -74,18 +76,18 @@ export function SupportConsoleScreen() {
             <div className="conversation-actions">
               {selected.status === 'CLOSED' ? <StatusChip tone="success">Đã hoàn tất</StatusChip> : (
                 <>
-                   <Button loading={claim.isPending} disabled={selected.status === 'SUPPORT_ACTIVE'} onClick={() => claim.mutate(selected.id)}>
+                   <><Button  disabled={(selected.status === 'SUPPORT_ACTIVE') || (claim.isPending)} onClick={() => claim.mutate(selected.id)}>
                      {selected.status === 'SUPPORT_ACTIVE' ? selected.assignedSupportUserId === auth?.user?.id ? 'Đang xử lý bởi bạn' : 'Đã có người xử lý' : 'Nhận xử lý'}
-                   </Button>
-                    {selected.status === 'AI_ACTIVE' ? <Button loading={requestSupport.isPending} onClick={() => requestSupport.mutate({ conversationId: selected.id, reason: 'Yêu cầu cần nhân viên hỗ trợ.' })}>Chuyển cho nhân viên</Button> : null}
-                    {selected.status === 'SUPPORT_ACTIVE' && assignedToMe ? <Button loading={release.isPending} onClick={() => release.mutate(selected.id)}>Trả về hàng đợi</Button> : null}
-                    <Button
-                      disabled={selected.status !== 'SUPPORT_ACTIVE' || !assignedToMe}
-                     loading={close.isPending}
+                   </Button><LoadingOverlay active={claim.isPending} label="Đang xử lý yêu cầu" /></>
+                    {selected.status === 'AI_ACTIVE' ? <><Button disabled={requestSupport.isPending} onClick={() => requestSupport.mutate({ conversationId: selected.id, reason: 'Yêu cầu cần nhân viên hỗ trợ.' })}>Chuyển cho nhân viên</Button><LoadingOverlay active={requestSupport.isPending} label="Đang xử lý yêu cầu: Chuyển cho nhân viên" /></> : null}
+                    {selected.status === 'SUPPORT_ACTIVE' && assignedToMe ? <><Button disabled={release.isPending} onClick={() => release.mutate(selected.id)}>Trả về hàng đợi</Button><LoadingOverlay active={release.isPending} label="Đang xử lý yêu cầu: Trả về hàng đợi" /></> : null}
+                    <><Button
+                      disabled={(selected.status !== 'SUPPORT_ACTIVE' || !assignedToMe) || (close.isPending)}
+
                      onClick={() => close.mutate(selected.id)}
                    >
                      Hoàn tất
-                   </Button>
+                   </Button><LoadingOverlay active={close.isPending} label="Đang xử lý yêu cầu: Hoàn tất" /></>
                 </>
               )}
             </div>

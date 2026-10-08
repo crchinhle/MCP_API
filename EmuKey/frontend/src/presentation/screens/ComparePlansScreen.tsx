@@ -1,5 +1,6 @@
+import { LoadingOverlay } from '../components/WorkspacePrimitives';
 import { PageLoading } from '../components/WorkspacePrimitives';
-import { Alert, Button, Checkbox, Empty, Input, Spin, Table } from 'antd';
+import { Alert, Button, Checkbox, Empty, Input, Table } from 'antd';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -86,7 +87,7 @@ export function ComparePlansScreen() {
         {selectedIds.length < 2 ? (
           <Empty description="Chọn ít nhất hai gói để bắt đầu so sánh." />
         ) : comparison.isLoading ? (
-          <Spin aria-label="Đang so sánh gói" />
+          <LoadingOverlay label="Đang so sánh gói" />
         ) : comparison.isError || !comparison.data ? (
           <Alert showIcon type="error" message="Không thể tải dữ liệu so sánh gói." />
         ) : (

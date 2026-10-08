@@ -1,3 +1,4 @@
+import { LoadingOverlay } from '../components/WorkspacePrimitives';
 import { Alert, Button, Empty, Input, Select, Upload, message } from 'antd';
 import type { UploadProps } from 'antd';
 import { useState } from 'react';
@@ -56,7 +57,7 @@ export function AiKnowledgeScreen() {
           >
             <Button>Chọn tệp</Button>
           </Upload>
-          <Button disabled={!file || !productId} loading={create.isPending} onClick={upload} type="primary">Tải lên</Button>
+          <><Button disabled={(!file || !productId) || (create.isPending)}  onClick={upload} type="primary">Tải lên</Button><LoadingOverlay active={create.isPending} label="Đang xử lý yêu cầu: Tải lên" /></>
           {file ? <span>Đã chọn: {file.name}</span> : null}
         </div>
       </section>
@@ -78,7 +79,7 @@ export function AiKnowledgeScreen() {
         {visibleDocuments.map((document) => (
           <div className="data-row" key={document.id}>
             <span><strong>{document.title}</strong><small>{document.logicalDocumentKey} · v{document.version}</small></span>
-            <span className="table-actions"><span className="status-chip status-chip--neutral">{document.isCurrent ? 'Đã công bố' : document.status === 'READY' ? 'Sẵn sàng' : document.status}</span>{document.status === 'READY' && !document.isCurrent ? <Button disabled={documents.isFetching || documents.isError} loading={publish.isPending} onClick={() => publish.mutate({ id: document.id, expectedCurrentVersion: documents.data?.find((current) => current.logicalDocumentKey === document.logicalDocumentKey && current.isCurrent)?.version ?? 0 })}>Công bố</Button> : null}</span>
+            <span className="table-actions"><span className="status-chip status-chip--neutral">{document.isCurrent ? 'Đã công bố' : document.status === 'READY' ? 'Sẵn sàng' : document.status}</span>{document.status === 'READY' && !document.isCurrent ? <><Button disabled={(documents.isFetching || documents.isError) || (publish.isPending)}  onClick={() => publish.mutate({ id: document.id, expectedCurrentVersion: documents.data?.find((current) => current.logicalDocumentKey === document.logicalDocumentKey && current.isCurrent)?.version ?? 0 })}>Công bố</Button><LoadingOverlay active={publish.isPending} label="Đang xử lý yêu cầu: Công bố" /></> : null}</span>
           </div>
         ))}
       </section>

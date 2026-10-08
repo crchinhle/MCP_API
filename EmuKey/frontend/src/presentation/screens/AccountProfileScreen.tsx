@@ -1,3 +1,4 @@
+import { LoadingOverlay } from '../components/WorkspacePrimitives';
 import { Alert, Button, Form, Input, Popover, Tag } from 'antd';
 import { useEffect, useState } from 'react';
 
@@ -134,9 +135,9 @@ export function AccountProfileScreen() {
             ) : null}
             {saved ? <Alert showIcon type="success" message="Đã cập nhật hồ sơ." /> : null}
             {error ? <Alert showIcon role="alert" type="error" message={error} /> : null}
-            <Button htmlType="submit" loading={saving} type="primary">
+            <><Button htmlType="submit" disabled={saving} type="primary">
               Lưu thay đổi
-            </Button>
+            </Button><LoadingOverlay active={saving} label="Đang xử lý yêu cầu: Lưu thay đổi" /></>
           </Form>
         </section>
         <aside className="workspace-card section-card profile-summary">
@@ -187,7 +188,7 @@ export function AccountProfileScreen() {
                 </Form.Item>
                 {passwordSaved ? <Alert showIcon message="Đã đổi mật khẩu. Vui lòng đăng nhập lại." type="success" /> : null}
                 {passwordError ? <Alert message={passwordError} role="alert" showIcon type="error" /> : null}
-                <Button htmlType="submit" loading={passwordSaving} type="primary">Đổi mật khẩu</Button>
+                <><Button htmlType="submit" disabled={passwordSaving} type="primary">Đổi mật khẩu</Button><LoadingOverlay active={passwordSaving} label="Đang xử lý yêu cầu: Đổi mật khẩu" /></>
               </Form>
             }
             trigger="click"

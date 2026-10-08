@@ -13,6 +13,10 @@ UPDATE license_devices
 SET status = 'ACTIVE', activated_at = COALESCE(activated_at, created_at)
 WHERE status = 'PENDING_ONCHAIN';
 
+-- Flush deferred constraint events before DDL. Keep constraints immediate for the
+-- rest of this transaction, including the licenses backfill before its ALTER TABLE.
+SET CONSTRAINTS ALL IMMEDIATE;
+
 ALTER TABLE license_devices
   DROP CONSTRAINT IF EXISTS ck_license_devices_status;
 ALTER TABLE license_devices

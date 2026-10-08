@@ -1,3 +1,4 @@
+import { LoadingOverlay } from '../components/WorkspacePrimitives';
 import { Alert, Button } from 'antd';
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -156,7 +157,7 @@ export function AuthScreen() {
               {verification === 'verified' ? (
                 <Button block onClick={() => selectMode('login')} type="primary">Đăng nhập</Button>
               ) : (
-                <Button block disabled={!searchParams.get('email')} loading={resending} onClick={() => { setResending(true); setResendStatus(null); void resendVerification(searchParams.get('email') ?? '').then(() => setResendStatus('sent')).catch(() => setResendStatus('failed')).finally(() => setResending(false)); }} type="primary">Gửi lại email xác minh</Button>
+                <><Button block disabled={(!searchParams.get('email')) || (resending)}  onClick={() => { setResending(true); setResendStatus(null); void resendVerification(searchParams.get('email') ?? '').then(() => setResendStatus('sent')).catch(() => setResendStatus('failed')).finally(() => setResending(false)); }} type="primary">Gửi lại email xác minh</Button><LoadingOverlay active={resending} label="Đang xử lý yêu cầu: Gửi lại email xác minh" /></>
               )}
             </>
           ) : null}
