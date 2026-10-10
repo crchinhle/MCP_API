@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { App } from '../../../EmuKey/frontend/src/presentation/app/App';
@@ -10,6 +10,9 @@ describe('API-backed workspace screens', () => {
     render(<App initialEntries={['/provider/knowledge']} />);
 
     expect(await screen.findByText('Chưa có tài liệu kiến thức phù hợp.')).toBeTruthy();
+    expect(screen.queryByLabelText('Sản phẩm của tài liệu')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Tải tài liệu' }));
+    expect(await screen.findByRole('dialog', { name: 'Tải tài liệu kiến thức' })).toBeTruthy();
     expect(screen.getByLabelText('Sản phẩm của tài liệu')).toBeTruthy();
   });
 

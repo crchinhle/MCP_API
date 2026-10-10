@@ -2,6 +2,8 @@ import { PageLoading } from '../components/WorkspacePrimitives';
 import { Button, Result, Select } from 'antd';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useOptionalAuth } from '../../application/auth/authContext';
+import { PurchaseFlowModal } from '../components/PurchaseFlowModal';
 
 import {
   formatVnd,
@@ -13,8 +15,10 @@ import { SiteHeader } from '../components/SiteHeader';
 export function ProductDetailScreen({ authenticated = false }: { readonly authenticated?: boolean }) {
   const { slug = '' } = useParams();
   const navigate = useNavigate();
+  const auth = useOptionalAuth();
   const { data: product, isLoading, isError } = useProduct(slug);
   const [selectedPlanId, setSelectedPlanId] = useState('');
+  const [purchaseOpen, setPurchaseOpen] = useState(false);
 
   const defaultPlan = product?.plans[0];
   const selectedPlan =
@@ -102,13 +106,14 @@ export function ProductDetailScreen({ authenticated = false }: { readonly authen
               </Button>
               <Button
                 type="primary"
-                onClick={() =>
-                  void navigate(
-                    authenticated
-                      ? `/buyer/checkout?product=${encodeURIComponent(slug)}&planId=${encodeURIComponent(selectedPlan.id)}`
-                      : `/auth?mode=login&redirect=${encodeURIComponent(`/buyer/checkout?product=${slug}&planId=${selectedPlan.id}`)}`,
-                  )
-                }
+                onClick={() => {
+                  if (!authenticated && !auth?.user) {
+                    const checkout = `/buyer/checkout?product=${encodeURIComponent(product.slug)}&planId=${encodeURIComponent(selectedPlan.id)}`;
+                    void navigate(`/auth?mode=login&redirect=${encodeURIComponent(checkout)}`);
+                    return;
+                  }
+                  setPurchaseOpen(true);
+                }}
               >
                 Mua ngay
               </Button>
@@ -116,6 +121,14 @@ export function ProductDetailScreen({ authenticated = false }: { readonly authen
           </article>
         </section>
       </main>
+      {auth?.user || !authenticated ? (
+        <PurchaseFlowModal
+          initialPlanId={selectedPlan.id}
+          onClose={() => setPurchaseOpen(false)}
+          open={purchaseOpen}
+          product={product}
+        />
+      ) : null}
     </div>
   );
 }

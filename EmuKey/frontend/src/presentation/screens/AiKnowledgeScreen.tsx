@@ -1,5 +1,5 @@
 import { LoadingOverlay } from '../components/WorkspacePrimitives';
-import { Alert, Button, Empty, Input, Select, Upload, message } from 'antd';
+import { Alert, Button, Empty, Input, Modal, Select, Upload, message } from 'antd';
 import type { UploadProps } from 'antd';
 import { useState } from 'react';
 
@@ -12,6 +12,7 @@ export function AiKnowledgeScreen() {
   const [query, setQuery] = useState('');
   const [file, setFile] = useState<File>();
   const [productId, setProductId] = useState('');
+  const [uploadOpen, setUploadOpen] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
   const products = useAdminProducts();
   const documents = useKnowledgeDocuments();
@@ -30,7 +31,7 @@ export function AiKnowledgeScreen() {
     if (!file || !productId) return;
     const title = file.name.replace(/\.[^.]+$/, '');
     create.mutate({ file, productId, logicalDocumentKey: `${productId}/${title.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 130) || 'document'}`, sourceType: file.name.toLocaleLowerCase('vi').endsWith('.pdf') ? 'PDF' : 'TXT', title }, {
-      onSuccess: () => { setFile(undefined); void messageApi.success('Đã tải tài liệu lên.'); },
+      onSuccess: () => { setFile(undefined); setUploadOpen(false); void messageApi.success('Đã tải tài liệu lên.'); },
     });
   };
   if (products.isLoading || documents.isLoading) return <PageLoading />;
@@ -41,11 +42,18 @@ export function AiKnowledgeScreen() {
       <PageHeader
         title="Kho tri thức AI"
       />
-      <section className="workspace-card knowledge-upload">
-        <div>
-          <h2>Tải tài liệu</h2>
-          <p>Tải hướng dẫn sản phẩm để trợ lý AI có nguồn tham khảo. Chấp nhận PDF hoặc TXT tối đa 10 MB. Tải lại cùng tên cho cùng sản phẩm sẽ tạo phiên bản mới; phiên bản cũ vẫn được dùng cho đến khi bạn công bố bản mới.</p>
-        </div>
+      <div className="workspace-actions knowledge-upload-actions">
+        <Button onClick={() => setUploadOpen(true)} type="primary">Tải tài liệu</Button>
+      </div>
+      <Modal
+        className="knowledge-upload-modal"
+        destroyOnHidden
+        footer={null}
+        onCancel={() => { if (!create.isPending) setUploadOpen(false); }}
+        open={uploadOpen}
+        title="Tải tài liệu kiến thức"
+      >
+        <p>Tải hướng dẫn sản phẩm để trợ lý AI có nguồn tham khảo. Chấp nhận PDF hoặc TXT tối đa 10 MB. Tải lại cùng tên cho cùng sản phẩm sẽ tạo phiên bản mới; phiên bản cũ vẫn được dùng cho đến khi bạn công bố bản mới.</p>
         <div className="file-picker">
           <Select aria-label="Sản phẩm của tài liệu" onChange={setProductId} options={(products.data ?? []).filter((product) => product.status !== 'ARCHIVED').map((product) => ({ label: product.name, value: product.id }))} placeholder="Chọn sản phẩm" {...(productId ? { value: productId } : {})} />
           <label htmlFor="knowledge-upload">Chọn tài liệu kiến thức</label>
@@ -57,10 +65,10 @@ export function AiKnowledgeScreen() {
           >
             <Button>Chọn tệp</Button>
           </Upload>
-          <><Button disabled={(!file || !productId) || (create.isPending)}  onClick={upload} type="primary">Tải lên</Button><LoadingOverlay active={create.isPending} label="Đang xử lý yêu cầu: Tải lên" /></>
+          <><Button disabled={(!file || !productId) || (create.isPending)} onClick={upload} type="primary">Tải lên</Button><LoadingOverlay active={create.isPending} label="Đang xử lý yêu cầu: Tải lên" /></>
           {file ? <span>Đã chọn: {file.name}</span> : null}
         </div>
-      </section>
+      </Modal>
       {products.isError ? <Alert type="error" title="Không thể tải danh sách sản phẩm" action={<Button onClick={() => void products.refetch()}>Thử lại</Button>} /> : null}
       {create.isError || publish.isError ? <Alert type="error" title={describeApiError(publish.error ?? create.error, 'Không thể lưu hoặc công bố tài liệu. Vui lòng thử lại.')} action={<Button onClick={() => { void documents.refetch(); publish.reset(); }}>Tải lại danh sách</Button>} /> : null}
       <section className="workspace-card document-list">

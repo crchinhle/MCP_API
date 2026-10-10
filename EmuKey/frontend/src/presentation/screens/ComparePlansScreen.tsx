@@ -10,7 +10,9 @@ import {
   useProducts,
 } from '../../application/catalog/catalogQueries';
 import { useOptionalAuth } from '../../application/auth/authContext';
+import { PurchaseFlowModal } from '../components/PurchaseFlowModal';
 import { SiteHeader } from '../components/SiteHeader';
+import type { Product } from '../../domain/product';
 
 function displayDimension(key: string, value: unknown): string {
   if (key === 'priceVnd' && typeof value === 'number') return formatVnd(value);
@@ -37,6 +39,7 @@ export function ComparePlansScreen() {
   );
   const [selectedIds, setSelectedIds] = useState<string[]>(initialIds);
   const [query, setQuery] = useState('');
+  const [purchase, setPurchase] = useState<{ product: Product; planId: string } | null>(null);
   const products = useProducts();
   const comparison = useComparePlans(selectedIds);
   const choices = (products.data ?? []).flatMap((product) =>
@@ -112,13 +115,28 @@ export function ComparePlansScreen() {
               {comparison.data.plans.map((plan) => {
                 const choice = choices.find((item) => item.id === plan.id);
                 if (!choice) return null;
-                const checkout = `/buyer/checkout?product=${encodeURIComponent(choice.productSlug)}&planId=${encodeURIComponent(choice.id)}`;
-                return <Button key={plan.id} type="primary" onClick={() => void navigate(auth?.user ? checkout : `/auth?mode=login&redirect=${encodeURIComponent(checkout)}`)}>Mua {plan.name}</Button>;
+                const product = products.data?.find((item) => item.slug === choice.productSlug);
+                if (!product) return null;
+                return <Button key={plan.id} type="primary" onClick={() => {
+                  if (auth?.user) setPurchase({ product, planId: choice.id });
+                  else {
+                    const checkout = `/buyer/checkout?product=${encodeURIComponent(choice.productSlug)}&planId=${encodeURIComponent(choice.id)}`;
+                    void navigate(`/auth?mode=login&redirect=${encodeURIComponent(checkout)}`);
+                  }
+                }}>Mua {plan.name}</Button>;
               })}
             </div>
           </section>
         )}
       </main>
+      {purchase ? (
+        <PurchaseFlowModal
+          initialPlanId={purchase.planId}
+          onClose={() => setPurchase(null)}
+          open
+          product={purchase.product}
+        />
+      ) : null}
     </div>
   );
 }

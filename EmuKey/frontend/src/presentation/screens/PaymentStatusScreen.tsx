@@ -2,6 +2,7 @@ import { LoadingOverlay } from '../components/WorkspacePrimitives';
 import { Alert, Button, Input, Modal, Spin } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useAuth } from '../../application/auth/authContext';
 
 import {
   activationKeyErrorLabel,
@@ -14,6 +15,7 @@ import {
   useOrder,
   useOrderMutations,
 } from '../../application/orders/orderQueries';
+import { clearCheckoutIntent } from '../../application/orders/checkoutIntent';
 import {
   FactList,
   PageHeader,
@@ -24,6 +26,7 @@ import {
 
 export function PaymentStatusScreen() {
   const { id = '' } = useParams();
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const order = useOrder(id);
@@ -67,6 +70,10 @@ export function PaymentStatusScreen() {
     (isRenewal && ['DEAD_LETTER', 'ABANDONED', 'SUPERSEDED'].includes(order.data?.renewalStatus ?? ''));
   const [dismissedOrder, setDismissedOrder] = useState<string>();
   const [checking, setChecking] = useState(false);
+  const currentStatus = order.data?.orderStatus;
+  useEffect(() => {
+    if (currentStatus === 'PAYMENT_ACCEPTED') clearCheckoutIntent(user?.id, id);
+  }, [currentStatus, user?.id]);
   const processingStage = order.isPending ? 'loading'
     : order.isError || paymentNeedsReview ? null
     : waitingPayment && providerReturned && !unsuccessfulReturn ? 'payment'
@@ -369,10 +376,7 @@ export function PaymentStatusScreen() {
                       mask={{ closable: false }} onCancel={() => setKeyDialogOpen(false)}
                       footer={<div className="workspace-actions">
                         <Button onClick={() => void copyActivationKey()}>Sao chép</Button>
-                        <Button type="primary" onClick={() => {
-                          setKeyDialogOpen(false);
-                          void navigate(`/buyer/licenses?licenseId=${encodeURIComponent(license.data!.id)}&activate=1`);
-                        }}>Tôi đã lưu mã</Button>
+                        <Button type="primary" onClick={() => setKeyDialogOpen(false)}>Đóng</Button>
                       </div>}>
                       <div className="activation-key-dialog-content">
                         <p>Mã bản quyền chỉ được cấp một lần. Hãy sao chép và lưu ở nơi an toàn trước khi rời trang.</p>

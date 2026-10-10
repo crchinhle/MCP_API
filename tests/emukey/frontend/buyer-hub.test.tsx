@@ -14,23 +14,24 @@ afterEach(() => {
 describe('Customer hub', () => {
   it('offers renewal from the license overview without opening the secret tab', async () => {
     render(<App initialEntries={['/buyer/licenses']} />);
-    expect((await screen.findByRole('link', { name: 'Gia hạn bản quyền' })).getAttribute('href')).toBe('/buyer/licenses/00000000-0000-4000-8000-000000000401/renew');
+    expect((await screen.findByRole('link', { name: 'Gia hạn' })).getAttribute('href')).toBe('/buyer/licenses/00000000-0000-4000-8000-000000000401/renew');
     expect(screen.queryByRole('button', { name: 'Nhận mã bản quyền' })).toBeNull();
   });
   it('retains the one-time key through filtering and reselection', async () => {
     render(<App initialEntries={['/buyer/licenses']} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Mã bản quyền' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Nhận mã bản quyền' }));
-     fireEvent.click(await screen.findByRole('button', { name: /^Nhận mã$/ }));
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Chi tiết' }))[0]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Mã bản quyền' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Nhận mã bản quyền một lần' }));
     const key = '0x' + '12'.repeat(32);
-    await screen.findByText(key);
+    const keyField = await screen.findByLabelText<HTMLInputElement>('Mã bản quyền đã cấp');
+    expect(keyField.value).toBe(key);
+    fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
     fireEvent.click(screen.getByRole('button', { name: 'Đã thu hồi' }));
     fireEvent.click(screen.getByRole('button', { name: 'Tất cả' }));
-    expect(screen.getByText(key)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /SecureDesk Pro.*Tối đa/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Mã bản quyền' }));
-    expect(screen.getByText(key)).toBeTruthy();
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Nhận mã bản quyền' }).disabled).toBe(true);
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Chi tiết' }))[0]!);
+    expect(screen.getByRole('button', { name: 'Xem mã bản quyền' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Xem mã bản quyền' }));
+    expect(screen.getByLabelText<HTMLInputElement>('Mã bản quyền đã cấp').value).toBe(key);
   });
 
   it('creates and selects a new support thread after the previous thread closed', async () => {
@@ -79,14 +80,15 @@ describe('Customer hub', () => {
     render(<App initialEntries={['/buyer/licenses']} />);
     const key = '0x' + '12'.repeat(32);
     expect(screen.queryByText(key)).toBeNull();
-    fireEvent.click(await screen.findByRole('button', { name: 'Mã bản quyền' }));
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Nhận mã bản quyền' }),
-    );
-    fireEvent.click(
-      await screen.findByRole('button', { name: /^Nhận mã$/ }),
-    );
-    expect(await screen.findByText(key)).toBeTruthy();
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Chi tiết' }))[0]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Mã bản quyền' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Nhận mã bản quyền một lần' }));
+    expect((await screen.findByLabelText<HTMLInputElement>('Mã bản quyền đã cấp')).value).toBe(key);
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+    expect(screen.getByRole('button', { name: 'Xem mã bản quyền' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Xem mã bản quyền' }));
+    expect(screen.getByLabelText<HTMLInputElement>('Mã bản quyền đã cấp').value).toBe(key);
     fireEvent.click(
       screen.getByRole('button', { name: 'Sao chép mã bản quyền' }),
     );
@@ -97,8 +99,10 @@ describe('Customer hub', () => {
   it('does not report clipboard success when the browser denies access', async () => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } });
     render(<App initialEntries={['/buyer/licenses']} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Mã bản quyền' }));
-    fireEvent.change(screen.getByLabelText('Mã bản quyền'), { target: { value: 'saved-key' } });
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Chi tiết' }))[0]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Mã bản quyền' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Nhận mã bản quyền một lần' }));
+    await screen.findByLabelText<HTMLInputElement>('Mã bản quyền đã cấp');
     fireEvent.click(screen.getByRole('button', { name: 'Sao chép mã bản quyền' }));
     expect(await screen.findByText('Không thể sao chép. Vui lòng lưu mã thủ công.')).toBeTruthy();
     expect(screen.queryByText('Đã sao chép mã bản quyền')).toBeNull();
@@ -113,6 +117,14 @@ describe('Customer hub', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
 
     expect(await screen.findByText('Đã cập nhật hồ sơ.')).toBeTruthy();
+  });
+
+  it('opens the password change form in a dialog, not an anchored overlay', async () => {
+    render(<App initialEntries={['/buyer/profile']} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Đổi mật khẩu' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Đổi mật khẩu' })).toBeTruthy();
+    expect(screen.getByLabelText('Mật khẩu hiện tại')).toBeTruthy();
   });
 
   it('appends a support message through the API', async () => {
@@ -132,7 +144,7 @@ describe('Customer hub', () => {
 
   it('does not present a fabricated key or operating system', async () => {
     render(<App initialEntries={['/buyer/licenses']} />);
-    await screen.findByRole('heading', { name: 'Bản quyền & thiết bị' });
+    await screen.findAllByRole('button', { name: 'Chi tiết' });
     expect(screen.queryByText('XXXX-XXXX-XXXX-9K2M')).toBeNull();
     expect(screen.queryByText(/Windows 11/)).toBeNull();
     expect(screen.queryByRole('button', { name: 'Sao chép' })).toBeNull();
@@ -157,6 +169,6 @@ describe('Customer hub', () => {
     expect(screen.getByText('Không có bản quyền phù hợp bộ lọc.')).toBeTruthy();
     expect(document.querySelectorAll('.ai-assistant-launcher')).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Tất cả' }));
-    expect(screen.getByRole('button', { name: 'Mã bản quyền' })).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Chi tiết' }).length).toBeGreaterThan(0);
   });
 });

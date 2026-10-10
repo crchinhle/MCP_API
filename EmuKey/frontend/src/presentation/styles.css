@@ -2127,6 +2127,197 @@ a {
   line-height: 1.6;
 }
 
+/*
+ * Shared purchase flow (Product Detail / Catalog / Compare / Checkout fallback).
+ * Two stages only: configuration then the order's exact terms snapshot.
+ */
+.purchase-flow-modal {
+  max-width: 720px;
+}
+
+.purchase-flow-modal .ant-modal-container {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 48px);
+}
+
+.purchase-flow-modal .ant-modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.purchase-flow-modal__content {
+  display: grid;
+  gap: 16px;
+}
+
+.purchase-flow-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.purchase-flow-modal__offers {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.purchase-flow-modal__offers legend {
+  padding: 0 0 8px;
+  font-weight: 600;
+}
+
+.purchase-flow-modal__offer-group {
+  display: grid;
+  width: 100%;
+  gap: 8px;
+}
+
+.purchase-flow-modal__offer {
+  width: 100%;
+  margin-inline-end: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.purchase-flow-modal__offer.ant-radio-wrapper-checked {
+  border-color: var(--primary);
+  background: var(--surface-selected);
+}
+
+.purchase-flow-modal__offer-name {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.purchase-flow-modal__offer-details {
+  display: block;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.purchase-flow-modal__offer-summary {
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--neutral-surface);
+}
+
+.purchase-flow-modal__offer-summary h3 {
+  margin: 0 0 8px;
+}
+
+.purchase-flow-modal__offer-summary dl {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.purchase-flow-modal__offer-summary dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.purchase-flow-modal__offer-summary dt {
+  color: var(--text-secondary);
+}
+
+.purchase-flow-modal__offer-summary dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.purchase-flow-modal__entitlements h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.purchase-flow-modal__entitlements ul {
+  margin: 0;
+  padding-inline-start: 20px;
+  line-height: 1.6;
+}
+
+.purchase-flow-modal__terms {
+  display: grid;
+  gap: 12px;
+}
+
+.purchase-flow-modal__terms header h3 {
+  margin: 0 0 4px;
+}
+
+.purchase-flow-modal__terms header p {
+  margin: 0;
+}
+
+.purchase-flow-modal__terms-scroll {
+  max-height: min(320px, 38vh);
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--neutral-surface);
+}
+
+.purchase-flow-modal__terms-scroll:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.purchase-flow-modal__terms-scroll pre {
+  margin: 0;
+  padding: 16px;
+  font: inherit;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.purchase-flow-modal .order-summary {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--neutral-surface);
+}
+
+.purchase-flow-modal .order-summary h2 {
+  margin-top: 0;
+}
+
+@media (max-width: 760px) {
+  .purchase-flow-modal {
+    max-width: none;
+    margin: 0;
+    padding-bottom: 0;
+  }
+
+  .purchase-flow-modal .ant-modal-container {
+    max-height: 100vh;
+    height: 100vh;
+    border-radius: 0;
+  }
+
+  .purchase-flow-modal__footer {
+    justify-content: stretch;
+  }
+
+  .purchase-flow-modal__footer .ant-btn {
+    flex: 1;
+    min-height: 44px;
+  }
+
+  .purchase-flow-modal__terms-scroll {
+    max-height: 34vh;
+  }
+}
+
+
 .payment-processing {
   width: 100%;
   flex: 1;

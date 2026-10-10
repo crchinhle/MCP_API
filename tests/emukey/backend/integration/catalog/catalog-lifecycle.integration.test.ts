@@ -54,6 +54,30 @@ describe('provider-scoped catalog lifecycle', () => {
     if (container) await container.stop();
   });
 
+  it('seeds one product with exact published edition and device offers', async () => {
+    const result = await pool.query<{
+      name: string;
+      price_vnd: number;
+      max_active_devices: number;
+      duration_months: number;
+      plan_commitment: Buffer;
+    }>(
+      `SELECT pl.name, pl.price_vnd, pl.max_active_devices, pl.duration_months, pl.plan_commitment
+       FROM plans pl
+       JOIN products p ON p.id = pl.product_id
+       WHERE p.code = 'EMUKEY_DESKTOP' AND p.status = 'PUBLISHED' AND pl.status = 'PUBLISHED'
+       ORDER BY pl.name`,
+    );
+
+    expect(result.rows.map((row) => row.name)).toEqual(['Business', 'Professional', 'Starter']);
+    expect(result.rows.map((row) => [row.price_vnd, row.max_active_devices, row.duration_months])).toEqual([
+      [1_800_000, 5, 12],
+      [900_000, 3, 12],
+      [300_000, 1, 1],
+    ]);
+    expect(new Set(result.rows.map((row) => row.plan_commitment.toString('hex'))).size).toBe(3);
+  });
+
   it('binds ownership and denies every cross-provider read or mutation', async () => {
     const product = await service.createProduct(providerA, {
       code: 'SCOPED_PRODUCT',

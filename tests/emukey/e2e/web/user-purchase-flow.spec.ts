@@ -22,21 +22,18 @@ test.describe('real customer purchase journey', () => {
     await page.getByLabel('Email').fill(email);
     await page.getByLabel('Mật khẩu').fill(password!);
     await page.getByRole('button', { name: 'Đăng nhập' }).click();
-    await page.waitForURL('**/buyer');
-    // The current auth redirect lands on the buyer dashboard; continue through
-    // the same public purchase entry point rather than bypassing the UI.
-    await page.getByRole('link', { name: 'Emukey - Trang sản phẩm' }).click();
-    await page.waitForURL('**/products');
-    await page.getByRole('link', { name: 'Xem gói & chi tiết' }).first().click();
-    await page.getByRole('button', { name: 'Mua ngay' }).click();
     await page.waitForURL('**/buyer/checkout**');
 
-    await expect(page.getByRole('heading', { name: 'Hoàn tất mua bản quyền' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Điều khoản cấp phép' })).toBeVisible({ timeout: 15_000 });
-    const acceptButton = page.getByRole('button', { name: 'Đồng ý và tiếp tục thanh toán' });
-    await expect(acceptButton).toBeDisabled();
-    await page.getByText('Tôi đã đọc và đồng ý với điều khoản cấp phép').click();
-    await acceptButton.click();
+    const purchaseDialog = page.getByRole('dialog', { name: /Mua/ });
+    await expect(purchaseDialog).toBeVisible();
+    const continueButton = purchaseDialog.getByRole('button', { name: 'Tiếp tục' });
+    await expect(continueButton).toBeEnabled();
+    await continueButton.click();
+    await expect(purchaseDialog.getByRole('region', { name: 'Điều khoản dịch vụ' })).toBeVisible({ timeout: 15_000 });
+    const paymentButton = purchaseDialog.getByRole('button', { name: 'Thanh toán qua SePay' });
+    await expect(paymentButton).toBeDisabled();
+    await purchaseDialog.getByRole('checkbox', { name: /đồng ý với đúng phiên bản điều khoản/i }).check();
+    await paymentButton.click();
     await page.waitForURL(/\/buyer\/orders\/.*\/payment|sepay/i, { timeout: 30_000 });
     if (!/sepay/i.test(page.url())) await page.waitForURL(/sepay/i, { timeout: 30_000 });
     await expect(page).toHaveURL(/sepay/i);

@@ -83,20 +83,29 @@ async function seedUsers(database: DatabaseClient, passwordHash: string): Promis
 async function seedCatalog(database: DatabaseClient): Promise<void> {
   const productId = '00000000-0000-4000-8000-000000000200';
   const providerChainAddress = '0x0000000000000000000000000000000000000002';
-  const monthlyCommitment = planCommitment({
+  const starterCommitment = planCommitment({
     durationMonths: 1,
     entitlements: { desktop: true },
-    maxActiveDevices: 2,
+    maxActiveDevices: 1,
     planId: '00000000-0000-4000-8000-000000000301',
     planVersion: 1,
     productId,
     providerChainAddress,
   });
-  const yearlyCommitment = planCommitment({
+  const professionalCommitment = planCommitment({
     durationMonths: 12,
     entitlements: { desktop: true },
     maxActiveDevices: 3,
     planId: '00000000-0000-4000-8000-000000000302',
+    planVersion: 1,
+    productId,
+    providerChainAddress,
+  });
+  const businessCommitment = planCommitment({
+    durationMonths: 12,
+    entitlements: { desktop: true, priority_support: true },
+    maxActiveDevices: 5,
+    planId: '00000000-0000-4000-8000-000000000303',
     planVersion: 1,
     productId,
     providerChainAddress,
@@ -123,20 +132,28 @@ async function seedCatalog(database: DatabaseClient): Promise<void> {
         '00000000-0000-4000-8000-000000000301',
         '00000000-0000-4000-8000-000000000200',
         '00000000-0000-4000-8000-000000000002',
-        'MONTHLY', 1, 'Monthly plan', 'MONTHLY', 1, 120000, 2,
+        'STARTER', 1, 'Starter', 'MONTHLY', 1, 300000, 1,
          '{"desktop": true}'::jsonb, decode($1, 'hex'), 'PUBLISHED', '2026-09-08T00:00:00Z'
       ),
       (
         '00000000-0000-4000-8000-000000000302',
         '00000000-0000-4000-8000-000000000200',
         '00000000-0000-4000-8000-000000000002',
-        'YEARLY', 1, 'Yearly plan', 'YEARLY', 12, 1200000, 3,
+        'PROFESSIONAL', 1, 'Professional', 'YEARLY', 12, 900000, 3,
        '{"desktop": true}'::jsonb, decode($2, 'hex'), 'PUBLISHED', '2026-09-08T00:00:00Z'
+      ),
+      (
+        '00000000-0000-4000-8000-000000000303',
+        '00000000-0000-4000-8000-000000000200',
+        '00000000-0000-4000-8000-000000000002',
+        'BUSINESS', 1, 'Business', 'YEARLY', 12, 1800000, 5,
+       '{"desktop": true, "priority_support": true}'::jsonb, decode($3, 'hex'), 'PUBLISHED', '2026-09-08T00:00:00Z'
       )
     ON CONFLICT (product_id, code, version) DO NOTHING`,
     [
-       monthlyCommitment.slice(2),
-       yearlyCommitment.slice(2),
+       starterCommitment.slice(2),
+       professionalCommitment.slice(2),
+       businessCommitment.slice(2),
     ],
   );
 }

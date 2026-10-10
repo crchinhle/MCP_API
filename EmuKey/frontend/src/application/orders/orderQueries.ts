@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef } from 'react';
-import { requestJson } from '../auth/authContext';
+import { requestJson, useAuth } from '../auth/authContext';
+import {
+  clearOrderIdempotencyKey,
+  createOrderIdempotencyKey,
+} from './checkoutIntent';
 import type {
   CheckoutSessionDto,
   CreateOrderDto,
@@ -83,7 +87,9 @@ export function useOrderTerms(id: string) {
 
 export function useOrderMutations() {
   const queryClient = useQueryClient();
-  // Retain an uncertain operation's key until its response is acknowledged.
+  const { user } = useAuth();
+  const userId = user?.id;
+  // Retain uncertain keys across retries and page reloads until acknowledged.
   const pendingCreates = useRef(new Map<string, string>());
   const refresh = (order?: OrderSummary) => {
     void queryClient.invalidateQueries({ queryKey: ['orders'] });
@@ -94,7 +100,8 @@ export function useOrderMutations() {
     create: useMutation({
       mutationFn: async (body: CreateOrderDto) => {
         const operation = JSON.stringify(body);
-        const idempotencyKey = pendingCreates.current.get(operation) ?? crypto.randomUUID();
+        const idempotencyKey = pendingCreates.current.get(operation)
+          ?? createOrderIdempotencyKey(userId, body);
         pendingCreates.current.set(operation, idempotencyKey);
         const order = await requestJson<OrderDetail>('/orders', {
           method: 'POST',
@@ -104,6 +111,7 @@ export function useOrderMutations() {
           body: JSON.stringify(body),
         });
         pendingCreates.current.delete(operation);
+        clearOrderIdempotencyKey(userId);
         return order;
       },
       onSuccess: refresh,

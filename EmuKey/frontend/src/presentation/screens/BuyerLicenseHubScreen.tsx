@@ -29,6 +29,7 @@ export function BuyerLicenseHubScreen() {
   const [activationKeys, setActivationKeys] = useState<Record<string, string>>({});
   const [copyStatus, setCopyStatus] = useState('');
   const [keyDialogId, setKeyDialogId] = useState<string>();
+  const [keyDialogOpen, setKeyDialogOpen] = useState(false);
   const [actionToken] = useState(() => searchParams.get('actionToken') ?? '');
   const resolution = useResolveLicensingAction(actionToken);
   const invalidActionLink = resolution.error instanceof ApiRequestError && [400, 401, 403, 404].includes(resolution.error.status);
@@ -37,9 +38,6 @@ export function BuyerLicenseHubScreen() {
   const selected = rows.find((license) => license.id === selectedId);
   const devices = useLicenseDevices(selected?.id);
   const activationKey = selected ? activationKeys[selected.id] : undefined;
-  const setActivationKey = (value: string | undefined) => {
-    if (selected) setActivationKeys((current) => ({ ...current, [selected.id]: value ?? '' }));
-  };
 
   useEffect(() => {
     if (searchParams.has('actionToken')) {
@@ -88,9 +86,18 @@ export function BuyerLicenseHubScreen() {
               </div> },
             ]} />
         </section>
-        <Modal centered width={960} open={Boolean(selected)} title={tab === 'devices' ? 'Quản lý thiết bị' : 'Chi tiết bản quyền'}
-          onCancel={() => { if (!retrieve.isPending) { setSelectedId(''); setKeyDialogId(undefined); } }} footer={null}>
-          {selected ? <section aria-label="Chi tiết bản quyền" className="buyer-license-modal-content">
+        <Modal centered width={keyDialogOpen ? 520 : 960} open={Boolean(selected)} title={keyDialogOpen ? 'Mã bản quyền của bạn' : tab === 'devices' ? 'Quản lý thiết bị' : 'Chi tiết bản quyền'}
+          onCancel={() => { if (retrieve.isPending) return; if (keyDialogOpen) { setKeyDialogOpen(false); return; } setSelectedId(''); setKeyDialogId(undefined); }}
+          footer={keyDialogOpen && activationKey ? <div className="workspace-actions">
+            <Button aria-label="Sao chép mã bản quyền" onClick={() => { if (!activationKey) return; if (!navigator.clipboard) { setCopyStatus('Không thể sao chép tự động. Vui lòng lưu mã thủ công.'); return; } void navigator.clipboard.writeText(activationKey).then(() => setCopyStatus('Đã sao chép mã bản quyền')).catch(() => setCopyStatus('Không thể sao chép. Vui lòng lưu mã thủ công.')); }}>Sao chép mã bản quyền</Button>
+            <Button type="primary" onClick={() => setKeyDialogOpen(false)}>Đóng</Button>
+          </div> : null} destroyOnHidden>
+          {selected && keyDialogOpen && activationKey && keyDialogId === selected.id ? <div className="activation-key-dialog-content">
+            <p>{selected.productName} · {selected.plan.name}</p>
+            <Input.Password aria-label="Mã bản quyền đã cấp" readOnly value={activationKey} />
+            <p>Hãy lưu mã an toàn trước khi đóng. Mã không được lưu trên thiết bị này và sẽ mất khi tải lại trang.</p>
+            <span role="status" aria-live="polite">{copyStatus}</span>
+          </div> : selected ? <section aria-label="Chi tiết bản quyền" className="buyer-license-modal-content">
             <header className="buyer-license-detail-header"><div><h2>{selected.productName} · {selected.plan.name}</h2><p>Mã tra cứu: {selected.publicLicenseId} · Hết hạn {dateLabel(selected.expiresAt)}</p></div><span className={`buyer-license-status buyer-license-status--${selected.status.toLowerCase()}`}>{statusLabel(selected.status)}</span></header>
             {devices.isError ? <Alert type="error" title="Không thể tải thiết bị" action={<Button onClick={() => void devices.refetch()}>Thử lại</Button>} /> : null}
                {retrieve.isError ? <Alert type="error" message={activationKeyErrorLabel(retrieve.error)} /> : null}
@@ -100,28 +107,19 @@ export function BuyerLicenseHubScreen() {
               <div className="buyer-license-summary"><article><span>Phạm vi</span><strong>{selected.maxActiveDevices} thiết bị</strong></article><article><span>Đã kích hoạt</span><strong>{devices.data ? activeDevices : '—'}</strong></article><article><span>Còn lại</span><strong>{devices.data ? remainingDevices : '—'}</strong></article></div>
               <section className="buyer-license-devices"><h3>Thiết bị gần đây</h3>{(devices.data ?? []).slice(0, 2).map((device) => <div className="buyer-license-device-row" key={device.id}><span>{device.deviceRef} · {statusLabel(device.status)}</span><Button onClick={() => setTab('devices')}>Xem thiết bị</Button></div>)}</section>
             </> : null}
-             {tab === 'key' ? <section className="buyer-license-action-panel">
-               {activationKey ? <Button type="primary" onClick={() => setKeyDialogId(selected.id)}>Xem mã bản quyền</Button>
-                 : selected.activationKeyAvailable ? <>
-                   <p>Mã bản quyền đã sẵn sàng. Bạn có thể nhận mã một lần và lưu lại để sử dụng trong phần mềm.</p>
-                   <Button type="primary" disabled={retrieve.isPending} onClick={() => Modal.confirm({ centered: true, title: 'Nhận mã bản quyền một lần?', content: 'Hãy lưu mã an toàn sau khi nhận. Hệ thống không cung cấp lại mã đã nhận.', okText: 'Nhận mã', cancelText: 'Để sau', onOk: () => { retrieve.mutate({ id: selected.id }, { onSuccess: (value) => { setActivationKey(value.activationKey); setCopyStatus(''); setKeyDialogId(selected.id); } }); } })}>Nhận mã bản quyền</Button>
-                 </> : <Alert showIcon type="info" title="Mã bản quyền không còn sẵn sàng để nhận" description="Mã có thể đã được nhận hoặc bản quyền chưa đủ điều kiện cấp mã. Nếu đã lưu mã, tiếp tục sử dụng mã đó trong phần mềm; nếu mất mã, sử dụng mục khôi phục bên dưới khi bản quyền đang hoạt động." />}
+             {tab === 'key' ? <section aria-label="Mã bản quyền" className="buyer-license-action-panel">
+               {!activationKey ? selected.activationKeyAvailable ? <>
+                 <p>Mã bản quyền đã sẵn sàng. Bạn chỉ có thể nhận mã một lần; hãy chuẩn bị lưu mã an toàn.</p>
+                 <Button type="primary" disabled={retrieve.isPending} onClick={() => retrieve.mutate({ id: selected.id }, { onSuccess: (value) => {
+                   setActivationKeys((current) => ({ ...current, [selected.id]: value.activationKey }));
+                   setCopyStatus('');
+                   setKeyDialogId(selected.id);
+                   setKeyDialogOpen(true);
+                 } })}>Nhận mã bản quyền một lần</Button>
+               </> : <Alert showIcon type="info" title="Mã bản quyền không còn sẵn sàng để nhận" description="Mã có thể đã được nhận hoặc bản quyền chưa đủ điều kiện cấp mã. Nếu đã lưu mã, tiếp tục sử dụng mã đó trong phần mềm; nếu mất mã, sử dụng mục khôi phục bên dưới khi bản quyền đang hoạt động." /> : <Button type="primary" onClick={() => setKeyDialogOpen(true)}>Xem mã bản quyền</Button>}
                <LoadingOverlay active={retrieve.isPending} label="Đang nhận mã bản quyền" />
-               <Modal centered width={520} open={Boolean(activationKey) && keyDialogId === selected.id} title="Mã bản quyền của bạn"
-                 mask={{ closable: false }} onCancel={() => setKeyDialogId(undefined)}
-                 footer={<div className="workspace-actions">
-                   <Button onClick={() => { if (!activationKey) return; if (!navigator.clipboard) { setCopyStatus('Không thể sao chép tự động. Vui lòng lưu mã thủ công.'); return; } void navigator.clipboard.writeText(activationKey).then(() => setCopyStatus('Đã sao chép mã bản quyền')).catch(() => setCopyStatus('Không thể sao chép. Vui lòng lưu mã thủ công.')); }}>Sao chép</Button>
-                   <Button type="primary" onClick={() => setKeyDialogId(undefined)}>Tôi đã lưu mã</Button>
-                 </div>}>
-                 <div className="activation-key-dialog-content">
-                   <p>{selected.productName} · {selected.plan.name}</p>
-                   <Input.Password aria-label="Mã bản quyền đã cấp" readOnly value={activationKey ?? ''} />
-                   <p>Hãy lưu mã an toàn trước khi tải lại hoặc rời trang. Bạn có thể mở lại cửa sổ này trong trang hiện tại.</p>
-                   <span role="status" aria-live="polite">{copyStatus}</span>
-                 </div>
-               </Modal>
              </section> : null}
-            {tab === 'devices' ? <section className="buyer-license-action-panel">
+            {tab === 'devices' ? <section aria-label="Thiết bị" className="buyer-license-action-panel">
               <p>Đang sử dụng {devices.data ? activeDevices : '—'}/{selected.maxActiveDevices} thiết bị.</p>
               <LoadingOverlay active={devices.isPending} label="Đang tải thiết bị" />
               {!devices.isError && !devices.isPending ? <Table rowKey="id" dataSource={devices.data ?? []} scroll={{ x: 650 }}
@@ -132,9 +130,9 @@ export function BuyerLicenseHubScreen() {
                   { title: 'Ngày thu hồi', dataIndex: 'revokedAt', width: 150, render: (value: string | null) => value ? dateLabel(value) : '—' },
                 ]} /> : null}
             </section> : null}
-            {tab === 'key' && selected.status === 'ACTIVE' ? <LicenseRecoveryPanel key={selected.id} licenseId={selected.id} initialToken={resolution.data?.licenseId === selected.id ? actionToken : ''} onKey={(id, key) => { setActivationKeys((current) => ({ ...current, [id]: key })); setCopyStatus(''); setKeyDialogId(id); void licenses.refetch(); }} /> : null}
           </section> : null}
         </Modal>
+        {selected && tab === 'key' && selected.status === 'ACTIVE' ? <LicenseRecoveryPanel key={selected.id} licenseId={selected.id} initialToken={resolution.data?.licenseId === selected.id ? actionToken : ''} onKey={(id, key) => { setActivationKeys((current) => ({ ...current, [id]: key })); setCopyStatus(''); setKeyDialogId(id); setKeyDialogOpen(true); void licenses.refetch(); }} /> : null}
       </main>
     </div>
   );

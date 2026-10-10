@@ -1,16 +1,18 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
 import { App } from '../../../EmuKey/frontend/src/presentation/app/App';
 import { AuthProvider } from '../../../EmuKey/frontend/src/application/auth/authContext';
 import { AuthScreen } from '../../../EmuKey/frontend/src/presentation/screens/AuthScreen';
+import { ProductDetailScreen } from '../../../EmuKey/frontend/src/presentation/screens/ProductDetailScreen';
 
 afterEach(cleanup);
 
 describe('Emukey public web screens', () => {
   it.each([
-    ['/buyer', 'Bản quyền và đơn hàng của bạn'],
+    ['/buyer', 'Lối tắt'],
     ['/provider', 'Tổng quan nhà cung cấp'],
     ['/system/console', 'Tổng quan hệ thống'],
   ])('hides unfinished page content while initial data loads at %s', async (path, heading) => {
@@ -98,7 +100,7 @@ describe('Emukey public web screens', () => {
     fireEvent.change(screen.getByLabelText('Mật khẩu'), { target: { value: 'Emu@1234' } });
     fireEvent.click(screen.getByRole('button', { name: 'Đăng nhập và tiếp tục' }));
 
-    expect(await screen.findByRole('heading', { name: 'Bản quyền & thiết bị' })).toBeTruthy();
+    expect(await screen.findByRole('dialog', { name: 'Chi tiết bản quyền' })).toBeTruthy();
     expect(screen.getByLabelText('Mã xác nhận khôi phục')).toHaveProperty('value', 'action-token-123');
   });
 
@@ -170,6 +172,62 @@ describe('Emukey public web screens', () => {
     expect(screen.getByRole('combobox', { name: 'Gói' })).toBeTruthy();
     expect(screen.getAllByText('10 thiết bị').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Mua ngay' })).toBeTruthy();
+  });
+
+  it('sends public guests to login with the selected published plan preserved', async () => {
+    function Destination() {
+      const location = useLocation();
+      return <output aria-label="Destination">{location.pathname}{location.search}</output>;
+    }
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <AuthProvider skipBootstrap initialUser={null}>
+          <MemoryRouter initialEntries={['/products/securedesk']}>
+            <Routes>
+              <Route path="/products/:slug" element={<ProductDetailScreen />} />
+              <Route path="*" element={<Destination />} />
+            </Routes>
+          </MemoryRouter>
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+    await screen.findByRole('heading', { name: 'SecureDesk Pro' });
+    fireEvent.click(screen.getByRole('button', { name: 'Mua ngay' }));
+
+    expect((await screen.findByLabelText('Destination')).textContent).toBe(
+      '/auth?mode=login&redirect=%2Fbuyer%2Fcheckout%3Fproduct%3Dsecuredesk%26planId%3Dsecuredesk-10',
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('opens the shared purchase flow from product detail without creating an order on open', async () => {
+    vi.mocked(fetch).mockClear();
+    render(<App initialEntries={['/buyer/products/cloudstudio-ai']} />);
+    await screen.findByRole('heading', { name: 'CloudStudio AI' });
+    fireEvent.click(screen.getByRole('button', { name: 'Mua ngay' }));
+
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+    expect(screen.getByText('Mua CloudStudio AI')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Tiếp tục' }) as HTMLButtonElement).disabled).toBe(false);
+    expect(vi.mocked(fetch).mock.calls.filter(([input, init]) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      return url.endsWith('/orders') && init?.method === 'POST';
+    })).toHaveLength(0);
+  });
+
+  it('opens the shared purchase flow from the authenticated catalog without creating an order', async () => {
+    vi.mocked(fetch).mockClear();
+    render(<App initialEntries={['/buyer/products']} />);
+    await screen.findByText('SecureDesk Pro');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Mua gói' })[0]!);
+
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+    expect(screen.getByRole('radio', { name: /10 thiết bị/ })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: /25 thiết bị/ })).toBeTruthy();
+    expect(vi.mocked(fetch).mock.calls.filter(([input, init]) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      return url.endsWith('/orders') && init?.method === 'POST';
+    })).toHaveLength(0);
   });
 
   it('compares published plans through the canonical comparison API', async () => {

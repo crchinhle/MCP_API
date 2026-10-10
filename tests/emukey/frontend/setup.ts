@@ -8,9 +8,11 @@ vi.stubGlobal('crypto', webcrypto);
 
 const testOrderId = '00000000-0000-4000-8000-000000000501';
 const acceptedOrderId = '00000000-0000-4000-8000-000000000502';
+let createdOrder: { id: string; orderNumber: string; planId: string; planNameSnapshot: string; productNameSnapshot: string; orderStatus: string; priceVndSnapshot: number; paymentDueAt: string; createdAt: string } | undefined;
 beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
+  createdOrder = undefined;
 });
 
 const publicProducts = [
@@ -304,7 +306,7 @@ vi.stubGlobal(
     }
     if (method === 'GET' && path.endsWith('/service-terms'))
       return jsonResponse({ content: '# EmuKey Service Terms\n\nThese are the platform Service Terms.', version: 'v1', hash: 'a'.repeat(64) });
-    if (method === 'GET' && path === '/orders') return jsonResponse(orders);
+    if (method === 'GET' && path === '/orders') return jsonResponse(createdOrder ? [createdOrder] : orders);
     if (method === 'GET' && path === '/payments/history') {
       return jsonResponse([
         {
@@ -329,15 +331,25 @@ vi.stubGlobal(
     if (method === 'GET' && path.startsWith('/orders/'))
       return jsonResponse(path.endsWith(acceptedOrderId)
         ? { ...orders[0], id: acceptedOrderId, licenseId: license.id, orderStatus: 'PAYMENT_ACCEPTED' }
-        : orders[0]);
-    if (method === 'POST' && path === '/orders')
-      return jsonResponse({ ...orders[0], orderStatus: 'WAITING_SERVICE_TERMS_ACCEPTANCE' }, 201);
+        : path.endsWith(testOrderId) && createdOrder ? createdOrder : orders[0]);
+    if (method === 'POST' && path === '/orders') {
+      const body = typeof init?.body === 'string' ? JSON.parse(init.body) as { planId?: string } : {};
+      const plan = publicProducts.flatMap((product) => product.plans).find((item) => item.id === body.planId);
+      createdOrder = {
+        ...orders[0],
+        planId: body.planId ?? orders[0].planId,
+        planNameSnapshot: plan?.name ?? orders[0].planNameSnapshot,
+        priceVndSnapshot: plan?.priceVnd ?? ({ 'plan-starter': 300_000, 'plan-business': 1_800_000 }[body.planId ?? ''] ?? orders[0].priceVndSnapshot),
+        orderStatus: 'WAITING_SERVICE_TERMS_ACCEPTANCE',
+      };
+      return jsonResponse(createdOrder, 201);
+    }
     if (method === 'POST' && path.endsWith('/accept-service-terms'))
-      return jsonResponse({ ...orders[0], orderStatus: 'WAITING_PAYMENT' });
+      return jsonResponse({ ...(createdOrder ?? orders[0]), orderStatus: 'WAITING_PAYMENT' });
     if (method === 'POST' && path.endsWith('/checkout'))
       return jsonResponse(
         {
-          amountVnd: orders[0].priceVndSnapshot,
+          amountVnd: (createdOrder ?? orders[0]).priceVndSnapshot,
           attemptId: 'payment-attempt-1',
           checkoutFields: {
             currency: 'VND',

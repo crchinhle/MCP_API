@@ -61,13 +61,16 @@ export function activationKeyErrorLabel(error: unknown): string {
 export function licenseStatusLabel(status: string): string {
   const labels: Record<string, string> = {
     ACTIVE: 'Hoạt động',
-
-    PENDING: 'Đang chờ xác nhận',
+    PENDING_ONCHAIN: 'Đang chờ xác nhận',
     SUSPENDED: 'Tạm ngưng',
     EXPIRED: 'Đã hết hạn',
     REVOKED: 'Đã thu hồi',
   };
   return labels[status] ?? status;
+}
+
+export function deviceStatusLabel(status: string): string {
+  return status === 'ACTIVE' ? 'Đang sử dụng' : status === 'REVOKED' ? 'Đã thu hồi' : status;
 }
 
 export function finalityLabel(finality: string | null | undefined): string {
