@@ -107,7 +107,8 @@ export function BuyerLicenseHubScreen() {
               <div className="buyer-license-summary"><article><span>Phạm vi</span><strong>{selected.maxActiveDevices} thiết bị</strong></article><article><span>Đã kích hoạt</span><strong>{devices.data ? activeDevices : '—'}</strong></article><article><span>Còn lại</span><strong>{devices.data ? remainingDevices : '—'}</strong></article></div>
               <section className="buyer-license-devices"><h3>Thiết bị gần đây</h3>{(devices.data ?? []).slice(0, 2).map((device) => <div className="buyer-license-device-row" key={device.id}><span>{device.deviceRef} · {statusLabel(device.status)}</span><Button onClick={() => setTab('devices')}>Xem thiết bị</Button></div>)}</section>
             </> : null}
-             {tab === 'key' ? <section aria-label="Mã bản quyền" className="buyer-license-action-panel">
+             {tab === 'key' ? <>
+              <section aria-label="Mã bản quyền" className="buyer-license-action-panel">
                {!activationKey ? selected.activationKeyAvailable ? <>
                  <p>Mã bản quyền đã sẵn sàng. Bạn chỉ có thể nhận mã một lần; hãy chuẩn bị lưu mã an toàn.</p>
                  <Button type="primary" disabled={retrieve.isPending} onClick={() => retrieve.mutate({ id: selected.id }, { onSuccess: (value) => {
@@ -118,7 +119,9 @@ export function BuyerLicenseHubScreen() {
                  } })}>Nhận mã bản quyền một lần</Button>
                </> : <Alert showIcon type="info" title="Mã bản quyền không còn sẵn sàng để nhận" description="Mã có thể đã được nhận hoặc bản quyền chưa đủ điều kiện cấp mã. Nếu đã lưu mã, tiếp tục sử dụng mã đó trong phần mềm; nếu mất mã, sử dụng mục khôi phục bên dưới khi bản quyền đang hoạt động." /> : <Button type="primary" onClick={() => setKeyDialogOpen(true)}>Xem mã bản quyền</Button>}
                <LoadingOverlay active={retrieve.isPending} label="Đang nhận mã bản quyền" />
-             </section> : null}
+              </section>
+              {selected.status === 'ACTIVE' ? <LicenseRecoveryPanel key={selected.id} licenseId={selected.id} initialToken={resolution.data?.licenseId === selected.id ? actionToken : ''} onKey={(id, key) => { setActivationKeys((current) => ({ ...current, [id]: key })); setCopyStatus(''); setKeyDialogId(id); setKeyDialogOpen(true); void licenses.refetch(); }} /> : null}
+            </> : null}
             {tab === 'devices' ? <section aria-label="Thiết bị" className="buyer-license-action-panel">
               <p>Đang sử dụng {devices.data ? activeDevices : '—'}/{selected.maxActiveDevices} thiết bị.</p>
               <LoadingOverlay active={devices.isPending} label="Đang tải thiết bị" />
@@ -132,7 +135,6 @@ export function BuyerLicenseHubScreen() {
             </section> : null}
           </section> : null}
         </Modal>
-        {selected && tab === 'key' && selected.status === 'ACTIVE' ? <LicenseRecoveryPanel key={selected.id} licenseId={selected.id} initialToken={resolution.data?.licenseId === selected.id ? actionToken : ''} onKey={(id, key) => { setActivationKeys((current) => ({ ...current, [id]: key })); setCopyStatus(''); setKeyDialogId(id); setKeyDialogOpen(true); void licenses.refetch(); }} /> : null}
       </main>
     </div>
   );

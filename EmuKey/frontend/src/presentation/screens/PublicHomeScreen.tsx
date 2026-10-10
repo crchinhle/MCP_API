@@ -528,7 +528,7 @@ function FeaturedCarousel({ products }: { readonly products: readonly Product[] 
           style={{ transform: `translateX(-${page * 100}%)` }}
         >
           {pages.map((pageProducts, pageIndex) => (
-            <div aria-hidden={pageIndex !== page} className="public-home-page" key={`page-${pageIndex}`}>
+            <div aria-hidden={pageIndex !== page} className="public-home-page" inert={pageIndex !== page} key={`page-${pageIndex}`}>
               {pageProducts.map((product) => {
                 const startingPlan = product.plans[0];
                 return (

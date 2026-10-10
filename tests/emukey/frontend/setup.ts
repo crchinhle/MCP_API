@@ -371,6 +371,9 @@ vi.stubGlobal(
       return jsonResponse({ ...orders[0], orderStatus: 'CANCELLED' });
     }
     if (method === 'POST' && path === '/licenses/action-verification/resolve') return jsonResponse({ action: 'KEY_RECOVERY', licenseId: license.id, deviceId: null, expiresAt: new Date(Date.now() + 900_000).toISOString() });
+    if (method === 'POST' && path === '/licenses/action-verification') return jsonResponse({ accepted: true });
+    if (method === 'POST' && path === `/licenses/${license.id}/activation-key/recover`) return jsonResponse({ commandId: '00000000-0000-4000-8000-000000000903', deviceId: null, licenseId: license.id, status: 'PENDING' }, 201);
+    if (method === 'GET' && path === '/commands/00000000-0000-4000-8000-000000000903') return jsonResponse({ commandId: '00000000-0000-4000-8000-000000000903', commandType: 'ROTATE_KEY', confirmedAt: null, deviceId: null, licenseId: license.id, status: 'PENDING', transactionHash: null });
     if (method === 'GET' && path === '/licenses') return jsonResponse([license]);
     if (method === 'GET' && path === `/licenses/${license.id}`) return jsonResponse(license);
     if (method === 'GET' && path === `/licenses/${license.id}/devices`) return jsonResponse([]);

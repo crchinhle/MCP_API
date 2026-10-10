@@ -126,7 +126,7 @@ export function PaymentStatusScreen() {
   );
   if (order.isPending) return <div className="workspace-screen"><PageHeader title="Thanh toán đơn hàng" />{processingModal}<Button onClick={() => setDismissedOrder(undefined)}>Xem tiến trình tải đơn hàng</Button></div>;
   if (!order.data)
-    return <Alert type="error" message="Không thể tải đơn hàng." />;
+    return <div className="workspace-screen"><PageHeader title="Thanh toán đơn hàng" />{processingModal}<Alert type="error" message="Không thể tải đơn hàng." action={<Button disabled={order.isFetching} onClick={() => void order.refetch()}>Thử lại</Button>} /></div>;
   const current = order.data;
   const payment = checkout.data;
   const checkoutAttemptExpired = Boolean(payment && Date.parse(payment.expiresAt) <= Date.now());

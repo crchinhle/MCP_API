@@ -57,6 +57,32 @@ describe('Emukey public web screens', () => {
     expect((await screen.findByLabelText('Destination')).textContent).toBe(expected);
   });
 
+  it('removes inactive public product slides from keyboard interaction', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.endsWith('/products') && (!init?.method || init.method === 'GET')) {
+        const response = await original(input, init);
+        const products = await response.json() as Array<Record<string, unknown>>;
+        return Response.json([...products, { ...products[0], slug: 'fourth-product', name: 'Fourth Product' }]);
+      }
+      return original(input, init);
+    });
+    try {
+      render(<App initialEntries={['/']} />);
+      await screen.findByRole('heading', { name: 'Sản phẩm nổi bật' });
+      const carousel = document.querySelector<HTMLElement>('.public-home-carousel');
+      expect(carousel).toBeTruthy();
+      const inactiveSlide = carousel?.querySelector<HTMLElement>('.public-home-page[aria-hidden="true"]');
+      expect(inactiveSlide).toBeTruthy();
+      expect(inactiveSlide?.hasAttribute('inert')).toBe(true);
+      expect(inactiveSlide?.querySelector('a')).toBeTruthy();
+    } finally {
+      cleanup();
+      vi.mocked(fetch).mockImplementation(original);
+    }
+  });
+
   it('provides public guides without requiring login to read them', () => {
     render(<App initialEntries={['/help']} />);
     expect(screen.getByRole('heading', { name: 'Hướng dẫn sử dụng EmuKey' })).toBeTruthy();

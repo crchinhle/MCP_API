@@ -41,10 +41,11 @@ export function BuyerCheckoutScreen() {
       <Alert
         showIcon
         type="info"
-        title="Đang mở quy trình mua an toàn"
+        title="Quy trình mua bản quyền"
         description="Đơn hàng chỉ được tạo sau khi bạn xác nhận cấu hình. Các đơn hiện có vẫn được giữ để tiếp tục."
       />
       <div className="workspace-actions">
+        {!open ? <Button type="primary" onClick={() => setOpen(true)}>{resumableOrderId ? 'Tiếp tục đơn hàng' : 'Tiếp tục mua'}</Button> : null}
         <Button href={`/buyer/products/${encodeURIComponent(productSlug)}`}>Quay lại sản phẩm</Button>
       </div>
       <PurchaseFlowModal

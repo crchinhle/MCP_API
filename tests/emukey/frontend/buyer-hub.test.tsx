@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../../../EmuKey/frontend/src/presentation/app/App';
@@ -17,6 +17,61 @@ describe('Customer hub', () => {
     expect((await screen.findByRole('link', { name: 'Gia hạn' })).getAttribute('href')).toBe('/buyer/licenses/00000000-0000-4000-8000-000000000401/renew');
     expect(screen.queryByRole('button', { name: 'Nhận mã bản quyền' })).toBeNull();
   });
+  it('keeps recovery controls inside the license detail dialog', async () => {
+    render(<App initialEntries={['/buyer/licenses']} />);
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Chi tiết' }))[0]!);
+    fireEvent.click(screen.getByRole('button', { name: 'Mã bản quyền' }));
+
+    const dialog = screen.getByRole('dialog');
+    const recoveryPanel = screen.getByRole('region', { name: 'Khôi phục mã bản quyền' });
+    expect(dialog.contains(recoveryPanel)).toBe(true);
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+  });
+
+  it('requests recovery explicitly and waits for blockchain confirmation before retrieving the replacement key', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    let confirmed = false;
+    const recoveryCommandId = '00000000-0000-4000-8000-000000000903';
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.endsWith('/commands/' + recoveryCommandId)) {
+        return Response.json({
+          commandId: recoveryCommandId,
+          commandType: 'ROTATE_KEY',
+          confirmedAt: confirmed ? '2026-10-10T00:00:00.000Z' : null,
+          deviceId: null,
+          licenseId: '00000000-0000-4000-8000-000000000401',
+          status: confirmed ? 'CONFIRMED' : 'PENDING',
+          transactionHash: null,
+        });
+      }
+      return original(input, init);
+    });
+    try {
+      render(<App initialEntries={['/buyer/licenses']} />);
+      fireEvent.click((await screen.findAllByRole('button', { name: 'Chi tiết' }))[0]!);
+      fireEvent.click(screen.getByRole('button', { name: 'Mã bản quyền' }));
+      const panel = screen.getByRole('region', { name: 'Khôi phục mã bản quyền' });
+      fireEvent.click(within(panel).getByRole('button', { name: 'Gửi email khôi phục' }));
+      expect(await within(panel).findByText('Đã gửi email. Dán mã xác nhận trong email vào ô bên dưới.')).toBeTruthy();
+      fireEvent.change(within(panel).getByLabelText('Mã xác nhận khôi phục'), { target: { value: 'recovery-action-token-0123456789abcdef' } });
+      fireEvent.change(within(panel).getByLabelText('Mật khẩu xác nhận khôi phục'), { target: { value: 'current-password' } });
+      fireEvent.click(within(panel).getByRole('button', { name: 'Xác nhận khôi phục' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Khôi phục' }));
+      expect(await within(panel).findByText('Trạng thái khôi phục: Đang xử lý')).toBeTruthy();
+      expect(within(panel).queryByRole('button', { name: 'Nhận mã khôi phục' })).toBeNull();
+      expect(screen.queryByLabelText('Mã bản quyền đã cấp')).toBeNull();
+      expect(screen.queryByText(recoveryCommandId)).toBeNull();
+
+      confirmed = true;
+      await waitFor(() => expect(within(panel).getByRole('button', { name: 'Nhận mã khôi phục' })).toBeTruthy(), { timeout: 5_000 });
+      fireEvent.click(within(panel).getByRole('button', { name: 'Nhận mã khôi phục' }));
+      expect(await screen.findByLabelText('Mã bản quyền đã cấp')).toBeTruthy();
+    } finally {
+      vi.mocked(fetch).mockImplementation(original);
+    }
+  });
+
   it('retains the one-time key through filtering and reselection', async () => {
     render(<App initialEntries={['/buyer/licenses']} />);
     fireEvent.click((await screen.findAllByRole('button', { name: 'Chi tiết' }))[0]!);

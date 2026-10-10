@@ -15,19 +15,23 @@ describe('Provider workspace', () => {
     expect(screen.getByText('EmuKey').className).toContain('brand-wordmark');
     expect(screen.getByRole('link', { name: 'Hồ sơ' })).toBeTruthy();
     expect(screen.queryByText(/canonical Phase 1-7 API/i)).toBeNull();
-    expect(screen.getByRole('link', { name: 'Quản lý danh mục' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Sản phẩm & gói' })).toBeTruthy();
   });
 
   it('does not display a local-only knowledge file as uploaded', async () => {
     render(<App initialEntries={['/provider/knowledge']} />);
 
+    fireEvent.click(await screen.findByRole('button', { name: 'Tải tài liệu' }));
+    expect(await screen.findByRole('dialog', { name: 'Tải tài liệu kiến thức' })).toBeTruthy();
     const file = new File(['demo'], 'huong-dan-demo.pdf', {
       type: 'application/pdf',
     });
-    fireEvent.change(await screen.findByLabelText('Chọn tài liệu kiến thức'), {
-      target: { files: [file] },
-    });
-    expect(screen.queryByText('huong-dan-demo.pdf')).toBeNull();
+    const picker = document.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(picker).toBeTruthy();
+    fireEvent.change(picker!, { target: { files: [file] } });
+    expect(await screen.findByText('Đã chọn: huong-dan-demo.pdf')).toBeTruthy();
+    expect(screen.getByText('Chưa có tài liệu kiến thức phù hợp.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Công bố' })).toBeNull();
   });
 
   it('filters provider payment history loaded from the backend', async () => {

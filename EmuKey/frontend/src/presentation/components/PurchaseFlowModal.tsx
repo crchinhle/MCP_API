@@ -30,7 +30,7 @@ export interface PurchaseFlowModalProps {
   readonly onOrderPrepared?: (order: OrderDetail) => void;
 }
 
-type Stage = 'configuration' | 'terms';
+type Stage = 'configuration' | 'terms' | 'status';
 
 /**
  * PAY-12: a signed SePay handoff must be a real browser form POST. Building the
@@ -118,7 +118,11 @@ export function PurchaseFlowModal({
     [product.plans, selectedPlanId],
   );
   const conflict = snapshotConflict(order, selectedOffer);
-  const needsConsent = order?.orderStatus === 'WAITING_SERVICE_TERMS_ACCEPTANCE';
+  const orderStatus = order?.orderStatus;
+  const needsConsent = orderStatus === 'WAITING_SERVICE_TERMS_ACCEPTANCE';
+  const waitingPayment = orderStatus === 'WAITING_PAYMENT';
+  const paymentAccepted = orderStatus === 'PAYMENT_ACCEPTED';
+  const terminalOrder = orderStatus === 'CANCELLED' || orderStatus === 'EXPIRED';
   const termsReady = Boolean(terms.data) && !terms.isFetching && !terms.isError;
 
   useEffect(() => {
@@ -146,7 +150,7 @@ export function PurchaseFlowModal({
     if (intentOrderId && resumedOrder.data.id !== intentOrderId) return;
     setOrder(resumedOrder.data);
     setSelectedPlanId(resumedOrder.data.planId);
-    setStage('terms');
+    setStage(resumedOrder.data.orderStatus === 'WAITING_SERVICE_TERMS_ACCEPTANCE' || resumedOrder.data.orderStatus === 'WAITING_PAYMENT' ? 'terms' : 'status');
   }, [open, resumeOrderId, resumableOrderId, effectiveIntent?.orderId, order, resumedOrder.data, intentVersion]);
 
   useEffect(() => {
@@ -169,7 +173,7 @@ export function PurchaseFlowModal({
   async function continueToTerms() {
     if (!selectedOffer || pending) return;
     if (order?.planId === selectedOffer.id && !conflict) {
-      setStage('terms');
+      setStage(order.orderStatus === 'WAITING_SERVICE_TERMS_ACCEPTANCE' || order.orderStatus === 'WAITING_PAYMENT' ? 'terms' : 'status');
       return;
     }
     setError(null);
@@ -178,6 +182,7 @@ export function PurchaseFlowModal({
       // with an idempotency key owned by the mutation layer.
       const created = await mutations.create.mutateAsync({ planId: selectedOffer.id });
       setOrder(created);
+      setStage(created.orderStatus === 'WAITING_SERVICE_TERMS_ACCEPTANCE' || created.orderStatus === 'WAITING_PAYMENT' ? 'terms' : 'status');
       intentRef.current = { orderId: created.id, planId: created.planId, productSlug: product.slug };
       setIntentOrderId(created.id);
       writeCheckoutIntent(user?.id, {
@@ -193,7 +198,7 @@ export function PurchaseFlowModal({
   }
 
   async function payThroughSePay() {
-    if (!order || !terms.data || !termsReady || pending || conflict) return;
+    if (!order || !terms.data || !termsReady || pending || (needsConsent && conflict)) return;
     if (needsConsent && !accepted) {
       setError('Bạn cần đồng ý đúng phiên bản điều khoản của đơn hàng trước khi thanh toán.');
       return;
@@ -232,13 +237,20 @@ export function PurchaseFlowModal({
     <div className="purchase-flow-modal__footer">
       <Button disabled={pending} onClick={() => setStage('configuration')}>Quay lại</Button>
       <Button
-        disabled={!order || !termsReady || pending || Boolean(conflict) || (needsConsent && !accepted)}
+        disabled={!order || !termsReady || pending || (needsConsent && Boolean(conflict)) || (needsConsent && !accepted)}
         loading={mutations.acceptServiceTerms.isPending || mutations.checkout.isPending}
         onClick={() => void payThroughSePay()}
         type="primary"
       >
-        Thanh toán qua SePay
+        {waitingPayment ? 'Tiếp tục thanh toán' : 'Thanh toán qua SePay'}
       </Button>
+    </div>
+  );
+  const statusFooter = (
+    <div className="purchase-flow-modal__footer">
+      {terminalOrder ? <Button disabled={pending} onClick={() => { setOrder(undefined); setStage('configuration'); setAccepted(false); }}>Chọn gói khác</Button> : null}
+      {order ? <Button href={`/buyer/orders/${encodeURIComponent(order.id)}/payment`} type="primary">{paymentAccepted ? 'Theo dõi cấp bản quyền' : 'Mở trạng thái đơn hàng'}</Button> : null}
+      <Button disabled={pending} onClick={close}>Đóng</Button>
     </div>
   );
 
@@ -247,11 +259,11 @@ export function PurchaseFlowModal({
       centered
       className="purchase-flow-modal"
       closable={!pending}
-      footer={stage === 'configuration' ? configurationFooter : termsFooter}
+      footer={stage === 'configuration' ? configurationFooter : stage === 'terms' ? termsFooter : statusFooter}
       mask={{ closable: !pending }}
       onCancel={() => { if (!pending) close(); }}
       open={open}
-      title={stage === 'configuration' ? `Mua ${product.name}` : `Xác nhận ${product.name}`}
+      title={stage === 'configuration' ? `Mua ${product.name}` : stage === 'terms' ? `Xác nhận ${product.name}` : `Trạng thái đơn hàng`}
       width={720}
     >
       <div aria-live="polite" className="purchase-flow-modal__content">
@@ -311,7 +323,7 @@ export function PurchaseFlowModal({
             ) : null}
             <p className="muted-copy">Bạn sẽ đọc và đồng ý điều khoản của đúng đơn hàng này ở bước tiếp theo.</p>
           </>
-        ) : (
+        ) : stage === 'terms' ? (
           <>
             {conflict ? (
               <Alert
@@ -353,7 +365,28 @@ export function PurchaseFlowModal({
               </section>
             ) : null}
           </>
-        )}
+        ) : order ? (
+          <>
+            {paymentAccepted ? (
+              <Alert
+                showIcon
+                type="info"
+                message="Đơn hàng này đã được thanh toán"
+                description="Hệ thống đang cập nhật trạng thái cấp bản quyền. Việc quay lại từ cổng thanh toán không thay thế xác nhận từ backend và blockchain."
+              />
+            ) : terminalOrder ? (
+              <Alert
+                showIcon
+                type="warning"
+                message={orderStatus === 'CANCELLED' ? 'Đơn hàng đã hủy' : 'Đơn hàng đã hết hạn'}
+                description="Đơn này không thể thanh toán. Bạn có thể chọn lại gói để bắt đầu đơn hàng mới."
+              />
+            ) : (
+              <Alert showIcon type="info" message="Trạng thái đơn hàng chưa hỗ trợ tiếp tục trong quy trình mua." description="Mở trang trạng thái để xem hướng xử lý an toàn." />
+            )}
+            {orderSummaryOf(order) ? <OrderSummary order={orderSummaryOf(order)!} /> : null}
+          </>
+        ) : null}
 
         {error ? <Alert message={error} role="alert" type="error" /> : null}
       </div>

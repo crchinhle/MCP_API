@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../../../EmuKey/frontend/src/presentation/app/App';
@@ -78,6 +78,42 @@ try {
     expect(screen.getByRole('button', { name: 'Xác minh ngay' })).toBeTruthy();
   });
 
+  it('reopens the checkout modal after closing it without creating another order', async () => {
+    vi.mocked(fetch).mockClear();
+    render(<App initialEntries={['/buyer/checkout?product=securedesk&planId=securedesk-25']} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Đóng' }));
+    const resume = await screen.findByRole('button', { name: 'Tiếp tục mua' });
+    fireEvent.click(resume);
+    await waitFor(() => expect(screen.getByRole('dialog').className).not.toContain('ant-zoom-leave'));
+    expect(vi.mocked(fetch).mock.calls.filter(([input, init]) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      return url.endsWith('/orders') && init?.method === 'POST';
+    })).toHaveLength(0);
+  });
+
+  it('does not offer checkout for an already paid resumed order', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.endsWith('/orders/00000000-0000-4000-8000-000000000501')) {
+        return Response.json({ ...await (await original(input, init)).json(), orderStatus: 'PAYMENT_ACCEPTED' });
+      }
+      return original(input, init);
+    });
+    try {
+      render(<App initialEntries={['/buyer/checkout?product=securedesk&orderId=00000000-0000-4000-8000-000000000501']} />);
+      expect(await screen.findByText(/Đơn hàng này đã được thanh toán/)).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Thanh toán qua SePay' })).toBeNull();
+      expect(vi.mocked(fetch).mock.calls.some(([input]) => {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        return url.endsWith('/checkout');
+      })).toBe(false);
+    } finally {
+      vi.mocked(fetch).mockImplementation(original);
+    }
+  });
+
   it('creates the server snapshot only after explicit intent and asks for Terms acceptance', async () => {
     vi.mocked(fetch).mockClear();
     render(<App initialEntries={['/buyer/checkout?product=securedesk&planId=securedesk-25']} />);
@@ -111,6 +147,28 @@ try {
     expect(await screen.findByRole('dialog')).toBeTruthy();
     const acceptance = vi.mocked(fetch).mock.calls.find(([input]) => (typeof input === 'string' ? input : input instanceof URL ? input.href : input.url).endsWith('/accept-service-terms'));
     expect(JSON.parse(typeof acceptance?.[1]?.body === 'string' ? acceptance[1].body : '{}')).toEqual({ accepted: true, version: 'v1', hash: 'a'.repeat(64) });
+  });
+
+  it('retries loading a payment order after the initial request fails', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    let fail = true;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (fail && url.endsWith('/orders/11111111-1111-4111-8111-111111111111') && (!init?.method || init.method === 'GET')) {
+        fail = false;
+        return Response.json({ message: 'Unavailable' }, { status: 500 });
+      }
+      return original(input, init);
+    });
+    try {
+      render(<App initialEntries={['/buyer/orders/11111111-1111-4111-8111-111111111111/payment']} />);
+      expect(await screen.findByRole('alert')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+      expect(await screen.findByRole('heading', { name: 'Thanh toán đơn hàng' })).toBeTruthy();
+      expect(await screen.findByRole('button', { name: 'Tạo yêu cầu thanh toán' })).toBeTruthy();
+    } finally {
+      vi.mocked(fetch).mockImplementation(original);
+    }
   });
 
   it('renders the signed SePay checkout as a POST form', async () => {
