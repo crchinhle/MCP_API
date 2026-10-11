@@ -49,10 +49,11 @@ test.describe('real customer purchase journey', () => {
     await expect(page).not.toHaveURL(/pay-sandbox\.sepay\.vn/i);
     await expect(page.getByRole('heading', { name: 'Thanh toán đơn hàng' })).toBeVisible();
     await expect(page.getByText(/Bản quyền đã sẵn sàng|Đang kích hoạt bản quyền|Đang xác nhận thanh toán/)).toBeVisible({ timeout: 90_000 });
-    const keyButton = page.getByRole('button', { name: 'Nhận mã kích hoạt' });
+    const keyButton = page.getByRole('button', { name: 'Nhận mã bản quyền' });
     if (await keyButton.count()) {
       await keyButton.click();
-      await expect(page.getByLabel('Mã kích hoạt')).toHaveValue(/.+/, { timeout: 30_000 });
+      await expect(page.getByRole('dialog', { name: 'Mã bản quyền của bạn' })).toBeVisible();
+      await expect(page.getByRole('dialog').getByLabel('Mã bản quyền')).toHaveValue(/.+/, { timeout: 30_000 });
     }
   });
 });

@@ -1,4 +1,4 @@
-import { Alert, Empty, Input, Tabs } from 'antd';
+import { Alert, Button, Empty, Input, Tabs } from 'antd';
 import { useMemo, useState } from 'react';
 
 import { usePaymentHistory } from '../../application/orders/orderQueries';
@@ -61,7 +61,7 @@ export function ProviderOperationsScreen() {
               children: (
                 <div className="stack-list">
 
-                  {payments.isError ? <Alert showIcon type="error" message="Không thể tải lịch sử thanh toán." /> : null}
+                  {payments.isError ? <Alert showIcon type="error" title="Không thể tải lịch sử thanh toán." action={<Button disabled={payments.isFetching} onClick={() => void payments.refetch()}>Thử lại</Button>} /> : null}
                   {!payments.isPending && !payments.isError && visibleOrders.length === 0 ? (
                     <Empty description="Chưa có thanh toán phù hợp." />
                   ) : null}

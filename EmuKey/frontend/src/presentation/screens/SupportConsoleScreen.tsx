@@ -101,7 +101,7 @@ export function SupportConsoleScreen() {
                  id: message.id,
                }))}
                inputLabel="Phản hồi hỗ trợ"
-               onSubmit={(content) => append.mutateAsync({ clientMessageId: crypto.randomUUID(), content, conversationId: selected.id })}
+               onSubmit={(content, clientMessageId) => append.mutateAsync({ clientMessageId, content, conversationId: selected.id })}
                readOnly={selected.status === 'CLOSED' || selected.assignedSupportUserId !== auth?.user?.id}
                submitLabel={selected.status === 'CLOSED' ? 'Đã hoàn tất' : selected.assignedSupportUserId === auth?.user?.id ? 'Gửi phản hồi' : 'Nhận xử lý để trả lời'}
              />

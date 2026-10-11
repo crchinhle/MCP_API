@@ -12,6 +12,27 @@ afterEach(() => {
 });
 
 describe('Customer hub', () => {
+  it('retries loading licenses after a temporary failure', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    let fail = true;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (fail && url.endsWith('/licenses') && (!init?.method || init.method === 'GET')) {
+        fail = false;
+        return Response.json({ message: 'Unavailable' }, { status: 500 });
+      }
+      return original(input, init);
+    });
+    try {
+      render(<App initialEntries={['/buyer/licenses']} />);
+      expect(await screen.findByText('Không thể tải danh sách bản quyền.')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+      expect(await screen.findAllByRole('button', { name: 'Chi tiết' })).toHaveLength(1);
+    } finally {
+      vi.mocked(fetch).mockImplementation(original);
+    }
+  });
+
   it('offers renewal from the license overview without opening the secret tab', async () => {
     render(<App initialEntries={['/buyer/licenses']} />);
     expect((await screen.findByRole('link', { name: 'Gia hạn' })).getAttribute('href')).toBe('/buyer/licenses/00000000-0000-4000-8000-000000000401/renew');
@@ -26,6 +47,31 @@ describe('Customer hub', () => {
     const recoveryPanel = screen.getByRole('region', { name: 'Khôi phục mã bản quyền' });
     expect(dialog.contains(recoveryPanel)).toBe(true);
     expect(screen.getAllByRole('dialog')).toHaveLength(1);
+  });
+
+  it('retries a failed recovery verification email request', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    let fail = true;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.endsWith('/licenses/action-verification') && init?.method === 'POST' && fail) {
+        fail = false;
+        return Response.json({ message: 'Unavailable' }, { status: 500 });
+      }
+      return original(input, init);
+    });
+    try {
+      render(<App initialEntries={['/buyer/licenses']} />);
+      fireEvent.click((await screen.findAllByRole('button', { name: 'Chi tiết' }))[0]!);
+      fireEvent.click(screen.getByRole('button', { name: 'Mã bản quyền' }));
+      const panel = screen.getByRole('region', { name: 'Khôi phục mã bản quyền' });
+      fireEvent.click(within(panel).getByRole('button', { name: 'Gửi email khôi phục' }));
+      expect(await within(panel).findByText('Không thể gửi email khôi phục. Vui lòng thử lại.')).toBeTruthy();
+      fireEvent.click(within(panel).getByRole('button', { name: 'Thử lại' }));
+      expect(await within(panel).findByText('Đã gửi email. Dán mã xác nhận trong email vào ô bên dưới.')).toBeTruthy();
+    } finally {
+      vi.mocked(fetch).mockImplementation(original);
+    }
   });
 
   it('requests recovery explicitly and waits for blockchain confirmation before retrieving the replacement key', async () => {
@@ -205,7 +251,7 @@ describe('Customer hub', () => {
     expect(screen.queryByRole('button', { name: 'Sao chép' })).toBeNull();
   });
 
-  it('keeps the draft on failure and never displays an unconfirmed message', async () => {
+  it('keeps the draft and idempotency key after a lost message response', async () => {
     const send = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(undefined);
     render(<ConversationPanel author="Buyer" initialMessages={[]} inputLabel="Tin nhắn" submitLabel="Gửi" onSubmit={send} />);
     fireEvent.change(screen.getByLabelText('Tin nhắn'), { target: { value: 'Kiểm tra bản quyền' } });
@@ -216,6 +262,8 @@ describe('Customer hub', () => {
     fireEvent.click(screen.getByRole('button', { name: /Gửi$/ }));
     await waitFor(() => expect(screen.getByLabelText<HTMLTextAreaElement>('Tin nhắn').value).toBe(''));
     expect(send).toHaveBeenCalledTimes(2);
+    expect(send.mock.calls[0]![1]).toBeTruthy();
+    expect(send.mock.calls[1]![1]).toBe(send.mock.calls[0]![1]);
   });
 
   it('filters licenses and renders one assistant launcher', async () => {

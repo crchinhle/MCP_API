@@ -92,7 +92,7 @@ export function ComparePlansScreen() {
         ) : comparison.isLoading ? (
           <LoadingOverlay label="Đang so sánh gói" />
         ) : comparison.isError || !comparison.data ? (
-          <Alert showIcon type="error" message="Không thể tải dữ liệu so sánh gói." />
+          <Alert showIcon type="error" title="Không thể tải dữ liệu so sánh gói." action={<Button disabled={comparison.isFetching} onClick={() => void comparison.refetch()}>Thử lại</Button>} />
         ) : (
           <section className="workspace-card table-card comparison-table" aria-label="Bảng so sánh gói">
             <Table

@@ -61,7 +61,7 @@ export function BuyerOrdersScreen() {
   const currentPage = Math.min(page, Math.max(1, Math.ceil(data.length / 10)));
 
   if (ordersQuery.isLoading) return <PageLoading />;
-  if (ordersQuery.isError) return <Result status="error" title="Không thể tải đơn hàng" subTitle={describeApiError(ordersQuery.error, 'Lịch sử đơn hàng đang tạm thời không khả dụng.')} />;
+  if (ordersQuery.isError) return <Result status="error" title="Không thể tải đơn hàng" subTitle={describeApiError(ordersQuery.error, 'Lịch sử đơn hàng đang tạm thời không khả dụng.')} extra={<Button onClick={() => void ordersQuery.refetch()}>Thử lại</Button>} />;
 
   return (
     <div className="buyer-orders-screen">
@@ -121,7 +121,7 @@ export function BuyerOrdersScreen() {
         {mutations.cancel.isError ? <Alert showIcon type="error" title={describeApiError(mutations.cancel.error, 'Không thể hủy đơn hàng. Vui lòng thử lại.')} /> : null}
       </Modal>
       <Drawer open={Boolean(selectedId)} onClose={() => { setSelectedId(undefined); setAccepted(false); }} motion={{ motionName: '' }} title={`Chi tiết ${detailQuery.data?.orderNumber ?? ''}`}>
-        {detailQuery.isLoading ? <LoadingOverlay label="Đang tải chi tiết đơn hàng" /> : detailQuery.isError ? <Alert type="error" message={describeApiError(detailQuery.error, 'Không thể tải chi tiết đơn hàng.')} /> : detailQuery.data ? <FactList facts={[{ label: 'Sản phẩm', value: detailQuery.data.productNameSnapshot }, { label: 'Gói', value: detailQuery.data.planNameSnapshot }, { label: 'Tổng thanh toán', value: formatMoney(detailQuery.data.priceVndSnapshot) }]} /> : null}
+        {detailQuery.isLoading ? <LoadingOverlay label="Đang tải chi tiết đơn hàng" /> : detailQuery.isError ? <Alert type="error" message={describeApiError(detailQuery.error, 'Không thể tải chi tiết đơn hàng.')} action={<Button disabled={detailQuery.isFetching} onClick={() => void detailQuery.refetch()}>Thử lại</Button>} /> : detailQuery.data ? <FactList facts={[{ label: 'Sản phẩm', value: detailQuery.data.productNameSnapshot }, { label: 'Gói', value: detailQuery.data.planNameSnapshot }, { label: 'Tổng thanh toán', value: formatMoney(detailQuery.data.priceVndSnapshot) }]} /> : null}
         {detailQuery.data ? <section className="checkout-stack">
           <h3>Thông tin chi tiết gói</h3>
           <FactList facts={[

@@ -153,6 +153,59 @@ describe('PurchaseFlowModal offer configuration', () => {
     expect(orderCreates()).toHaveLength(0);
   });
 
+  it('allows retrying restoration and resumes without creating another order', async () => {
+    writeCheckoutIntent(customer.id, {
+      orderId: testOrderId,
+      planId: 'plan-business',
+      productSlug: testProduct.slug,
+    });
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    let fail = true;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (fail && url.endsWith(`/orders/${testOrderId}`) && (!init?.method || init.method === 'GET')) {
+        fail = false;
+        return Response.json({ message: 'Unavailable' }, { status: 500 });
+      }
+      return original(input, init);
+    });
+    try {
+      renderModal();
+      expect(await screen.findByText('Không thể khôi phục đơn hàng trước đó')).toBeTruthy();
+      expect((screen.getByRole('button', { name: 'Tiếp tục' }) as HTMLButtonElement).disabled).toBe(true);
+      expect(orderCreates()).toHaveLength(0);
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Thử lại' }));
+      expect(await screen.findByRole('region', { name: /Điều khoản dịch vụ/ })).toBeTruthy();
+      expect(orderCreates()).toHaveLength(0);
+    } finally {
+      vi.mocked(fetch).mockImplementation(original);
+    }
+  });
+
+  it('blocks new order creation while a persisted order cannot be restored', async () => {
+    writeCheckoutIntent(customer.id, {
+      orderId: testOrderId,
+      planId: 'plan-business',
+      productSlug: testProduct.slug,
+    });
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url.endsWith(`/orders/${testOrderId}`) && (!init?.method || init.method === 'GET')) {
+        return Response.json({ message: 'Unavailable' }, { status: 500 });
+      }
+      return original(input, init);
+    });
+    try {
+      renderModal();
+      expect(await screen.findByText('Không thể khôi phục đơn hàng trước đó')).toBeTruthy();
+      expect((screen.getByRole('button', { name: 'Tiếp tục' }) as HTMLButtonElement).disabled).toBe(true);
+      expect(orderCreates()).toHaveLength(0);
+    } finally {
+      vi.mocked(fetch).mockImplementation(original);
+    }
+  });
+
   it('resumes the persisted order even if the caller offers a different initial selection', async () => {
     writeCheckoutIntent(customer.id, {
       orderId: testOrderId,

@@ -21,7 +21,7 @@ export function AuditLogPanel() {
       <Select aria-label="Lọc kết quả nhật ký" value={outcome} onChange={(value) => { setOutcome(value); setPage(1); }} options={[{ value: '', label: 'Mọi kết quả' }, { value: 'SUCCESS', label: 'Thành công' }, { value: 'DENIED', label: 'Bị từ chối' }, { value: 'FAILED', label: 'Thất bại' }]} />
       <><Button disabled={refreshing} onClick={() => { setRefreshing(true); void logs.refetch().finally(() => setRefreshing(false)); }}>Làm mới</Button><LoadingOverlay active={refreshing} label="Đang tải lại nhật ký" /></>
     </div>
-    {logs.isError ? <Alert type="error" title="Không thể tải nhật ký. Vui lòng thử lại." /> : null}
+    {logs.isError ? <Alert type="error" title="Không thể tải nhật ký. Vui lòng thử lại." action={<Button disabled={logs.isFetching} onClick={() => void logs.refetch()}>Thử lại</Button>} /> : null}
     <><Table rowKey="id" pagination={false}  dataSource={logs.data?.items ?? []} scroll={{ x: 800 }} columns={[
       { title: 'Thời gian', dataIndex: 'createdAt', render: (value: string) => new Date(value).toLocaleString('vi-VN') },
       { title: 'Hành động', dataIndex: 'action' }, { title: 'Kết quả', dataIndex: 'outcome' }, { title: 'Vai trò', dataIndex: 'actorRole' },

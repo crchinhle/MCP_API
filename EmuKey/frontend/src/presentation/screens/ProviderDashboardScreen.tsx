@@ -12,10 +12,11 @@ export function ProviderDashboardScreen() {
   const payments = usePaymentHistory();
   const licenses = useProviderLicenses();
   const loading = products.isLoading || plans.isLoading || payments.isLoading || licenses.isLoading;
+  const failedQueries = [products, plans, payments, licenses].filter((query) => query.isError && !query.data);
   const error = products.error ?? plans.error ?? payments.error ?? licenses.error;
   if (loading) return <PageLoading />;
-  if (error && (!products.data || !plans.data || !payments.data || !licenses.data)) {
-    return <Alert showIcon type="error" message="Không thể tải tổng quan Provider." action={<Button onClick={() => { void products.refetch(); void plans.refetch(); void payments.refetch(); void licenses.refetch(); }}>Thử lại</Button>} />;
+  if (failedQueries.length) {
+    return <Alert showIcon type="error" message="Không thể tải tổng quan Provider." action={<Button onClick={() => failedQueries.forEach((query) => void query.refetch())}>Thử lại</Button>} />;
   }
 
   const publishedProducts = (products.data ?? []).filter((product) => product.status === 'PUBLISHED');

@@ -82,7 +82,7 @@ export function AiKnowledgeScreen() {
           />
         </div>
 
-        {documents.isError ? <Alert showIcon type="error" message="Không thể tải tài liệu kiến thức." /> : null}
+        {documents.isError ? <Alert showIcon type="error" message="Không thể tải tài liệu kiến thức." action={<Button disabled={documents.isFetching} onClick={() => void documents.refetch()}>Thử lại</Button>} /> : null}
         {!documents.isLoading && !documents.isError && visibleDocuments.length === 0 ? <Empty description="Chưa có tài liệu kiến thức phù hợp." /> : null}
         {visibleDocuments.map((document) => (
           <div className="data-row" key={document.id}>

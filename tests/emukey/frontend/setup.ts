@@ -195,6 +195,7 @@ vi.stubGlobal(
     if (method === 'GET' && path === '/knowledge/documents') return jsonResponse([]);
     if (method === 'GET' && path === '/health/ready') return jsonResponse({ status: 'ok', dependencies: { postgres: 'up', redis: 'up', blockchain: 'up' } });
     if (method === 'GET' && path === '/operations/health/assistance') return jsonResponse({ conversations: { supportActive: 0, waitingSupport: 0 }, notifications: { deadLetter: 0, pending: 0, retryableFailed: 0 } });
+    if (method === 'POST' && path === '/operations/blockchain/reconcile') return jsonResponse({ health: { active_without_finality: 0, pending_events: 0, reorged_events: 0, unknown_commands: 0 }, indexedEvents: 0, processed: true, projection: { commandRepairs: 0, licenseRepairs: 0, remainingMismatches: 0 }, reconciledCommandIds: [] });
     if (path === '/auth/profile' && method === 'PUT') {
       const body = typeof init?.body === 'string' ? JSON.parse(init.body) as Record<string, unknown> : {};
       return jsonResponse({

@@ -224,7 +224,7 @@ export function PurchaseFlowModal({
     <div className="purchase-flow-modal__footer">
       <Button disabled={pending} onClick={close}>Đóng</Button>
       <Button
-        disabled={!selectedOffer || pending || Boolean(resumableOrderId && resumedOrder.isPending)}
+        disabled={!selectedOffer || pending || Boolean(resumableOrderId && (resumedOrder.isPending || resumedOrder.isError))}
         loading={mutations.create.isPending}
         onClick={() => void continueToTerms()}
         type="primary"
@@ -314,7 +314,7 @@ export function PurchaseFlowModal({
               <Alert
                 action={<Button onClick={() => void resumedOrder.refetch()}>Thử lại</Button>}
                 message="Không thể khôi phục đơn hàng trước đó"
-                description="Đơn cũ của bạn vẫn được giữ. Bạn có thể tiếp tục mua gói đang chọn."
+                description="Đơn cũ của bạn vẫn được giữ. Hãy thử tải lại đơn trước khi tiếp tục để tránh tạo đơn trùng."
                 type="warning"
               />
             ) : null}

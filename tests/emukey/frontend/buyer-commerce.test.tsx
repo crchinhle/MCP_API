@@ -5,9 +5,54 @@ import { App } from '../../../EmuKey/frontend/src/presentation/app/App';
 import { orderStatusLabel } from '../../../EmuKey/frontend/src/application/orders/orderQueries';
 import { OrderSummary } from '../../../EmuKey/frontend/src/presentation/components/OrderSummary';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  document.querySelectorAll('form[action="https://pay-sandbox.sepay.vn/v1/checkout/init"]').forEach((form) => form.remove());
+});
 
 describe('Customer commerce', () => {
+  it('retries loading the order history after a temporary failure', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    let fail = true;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (fail && new URL(url, 'http://localhost').pathname.endsWith('/api/v1/orders') && (!init?.method || init.method === 'GET')) {
+        fail = false;
+        return Response.json({ message: 'Unavailable' }, { status: 500 });
+      }
+      return original(input, init);
+    });
+    try {
+      render(<App initialEntries={['/buyer/orders']} />);
+      expect(await screen.findByText('Máy chủ đang gặp sự cố. Vui lòng thử lại sau.')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+      expect(await screen.findByText('ORD-2026-0218')).toBeTruthy();
+    } finally {
+      vi.mocked(fetch).mockImplementation(original);
+    }
+  });
+  it('retries loading order details after a temporary failure', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    let fail = true;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (fail && url.endsWith('/orders/00000000-0000-4000-8000-000000000501') && (!init?.method || init.method === 'GET')) {
+        fail = false;
+        return Response.json({ message: 'Unavailable' }, { status: 500 });
+      }
+      return original(input, init);
+    });
+    try {
+      render(<App initialEntries={['/buyer/orders']} />);
+      fireEvent.click(await screen.findByRole('button', { name: 'ORD-2026-0218' }));
+      expect(await screen.findByText('Máy chủ đang gặp sự cố. Vui lòng thử lại sau.')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+      expect(await screen.findByText('Thông tin chi tiết gói')).toBeTruthy();
+    } finally {
+      vi.mocked(fetch).mockImplementation(original);
+    }
+  });
+
   it('shows a retryable error without placeholder metrics when initial home data fails', async () => {
     const original = vi.mocked(fetch).getMockImplementation()!;
     let fail = true;
@@ -165,34 +210,35 @@ try {
       expect(await screen.findByRole('alert')).toBeTruthy();
       fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
       expect(await screen.findByRole('heading', { name: 'Thanh toán đơn hàng' })).toBeTruthy();
-      expect(await screen.findByRole('button', { name: 'Tạo yêu cầu thanh toán' })).toBeTruthy();
+      expect(await screen.findByRole('button', { name: 'Thanh toán qua SePay' })).toBeTruthy();
     } finally {
       vi.mocked(fetch).mockImplementation(original);
     }
   });
 
-  it('renders the signed SePay checkout as a POST form', async () => {
-    render(
-      <App
-        initialEntries={[
-          '/buyer/orders/11111111-1111-4111-8111-111111111111/payment',
-        ]}
-      />,
-    );
+  it('submits the signed SePay POST after one explicit payment action', async () => {
+    const submit = vi.spyOn(HTMLFormElement.prototype, 'requestSubmit').mockImplementation(() => undefined);
+    try {
+      render(
+        <App
+          initialEntries={[
+            '/buyer/orders/11111111-1111-4111-8111-111111111111/payment',
+          ]}
+        />,
+      );
 
-    expect(await screen.findByRole('button', { name: 'Tạo yêu cầu thanh toán' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Tạo yêu cầu thanh toán' }));
-    const form = await screen.findByTestId('sepay-checkout-form');
-    expect(form.getAttribute('action')).toBe(
-      'https://pay-sandbox.sepay.vn/v1/checkout/init',
-    );
-    expect(form.getAttribute('method')).toBe('post');
-    expect(
-      screen.getByRole('button', { name: 'Thanh toán trên SePay Sandbox' }),
-    ).toBeTruthy();
-    expect(
-      form.querySelector<HTMLInputElement>('input[name="signature"]')?.value,
-    ).toBe('sandbox-signature');
+      expect(await screen.findByRole('button', { name: 'Thanh toán qua SePay' })).toBeTruthy();
+      expect(screen.queryByTestId('sepay-checkout-form')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Thanh toán qua SePay' }));
+      await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+      const form = document.querySelector<HTMLFormElement>('form[action="https://pay-sandbox.sepay.vn/v1/checkout/init"]');
+      expect(form?.method).toBe('post');
+      expect(form?.querySelector<HTMLInputElement>('input[name="signature"]')?.value).toBe('sandbox-signature');
+      expect(screen.queryByRole('button', { name: 'Tạo yêu cầu thanh toán' })).toBeNull();
+      form?.remove();
+    } finally {
+      submit.mockRestore();
+    }
   });
 
   it.each(['cancel', 'error'])('offers an explicit retry after SePay %s without auto checkout', async (status) => {
@@ -202,9 +248,9 @@ try {
     expect(screen.queryByText('Đang xác nhận thanh toán')).toBeNull();
     expect(vi.mocked(fetch).mock.calls.filter(([input]) => (typeof input === 'string' ? input : input instanceof URL ? input.href : input.url).endsWith('/checkout'))).toHaveLength(0);
     fireEvent.click(screen.getByRole('button', { name: 'Thanh toán lại' }));
-    expect(await screen.findByRole('button', { name: 'Tạo yêu cầu thanh toán' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Tạo yêu cầu thanh toán' }));
-    expect(await screen.findByTestId('sepay-checkout-form')).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Thanh toán qua SePay' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Thanh toán qua SePay' }));
+    await waitFor(() => expect(document.querySelector('form[action="https://pay-sandbox.sepay.vn/v1/checkout/init"]')).toBeTruthy());
   });
 
   it('continues from accepted payment to trusted license without retrieving a key automatically', async () => {

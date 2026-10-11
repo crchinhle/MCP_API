@@ -77,6 +77,42 @@ describe('completed API-backed flows', () => {
     expect(await screen.findByText('Không đủ nguồn chính thức để trả lời câu hỏi này.')).toBeTruthy();
   });
 
+  it('retries loading audit entries after a temporary failure', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    let fail = true;
+    vi.mocked(fetch).mockImplementation((input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (fail && url.includes('/operations/audit-logs?')) { fail = false; return Promise.resolve(Response.json({ message: 'Unavailable' }, { status: 500 })); }
+      if (url.includes('/operations/audit-logs?')) return Promise.resolve(Response.json({ items: [], page: 1, hasMore: false }));
+      return original(input, init);
+    });
+    try {
+      render(<App initialEntries={['/system/console?view=audit']} />);
+      expect(await screen.findByText('Không thể tải nhật ký. Vui lòng thử lại.')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+      expect(await screen.findByText('Trang 1')).toBeTruthy();
+    } finally { vi.mocked(fetch).mockImplementation(original); }
+  });
+
+  it('retries loading comparison data after a temporary failure', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    let fail = true;
+    vi.mocked(fetch).mockImplementation((input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (fail && url.includes('/plans/compare?')) {
+        fail = false;
+        return Promise.resolve(Response.json({ message: 'Unavailable' }, { status: 500 }));
+      }
+      return original(input, init);
+    });
+    try {
+      render(<App initialEntries={['/compare?ids=securedesk-10,securedesk-25']} />);
+      expect(await screen.findByText('Không thể tải dữ liệu so sánh gói.')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+      expect(await screen.findByRole('region', { name: 'Bảng so sánh gói' })).toBeTruthy();
+    } finally { vi.mocked(fetch).mockImplementation(original); }
+  });
+
   it('reads audit entries and opens the selected detail', async () => {
     const original = vi.mocked(fetch).getMockImplementation()!;
     vi.mocked(fetch).mockImplementation((input, init) => {

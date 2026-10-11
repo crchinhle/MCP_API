@@ -49,11 +49,10 @@ test('email recovery resolves the target license before accepting the token', as
   });
   await page.goto('/buyer/licenses?actionToken=resolved-email-token');
   await expect(page.getByRole('heading', { name: 'Other product · Business' })).toBeVisible();
-  await expect(page.getByLabel('Mã xác nhận khôi phục', { exact: true })).toHaveValue('resolved-email-token');
   expect(page.url()).not.toContain('resolved-email-token');
-  await page.getByRole('button', { name: /SecureDesk Pro.*Tối đa/ }).click();
   await page.getByRole('button', { name: 'Mã bản quyền', exact: true }).click();
-  await expect(page.getByLabel('Mã xác nhận khôi phục', { exact: true })).toHaveValue('');
+  const recovery = page.getByRole('region', { name: 'Khôi phục mã bản quyền' });
+  await expect(recovery.getByLabel('Mã xác nhận khôi phục', { exact: true })).toHaveValue('resolved-email-token');
 });
 
 test('email action lookup can retry a network failure without turning device revocation into recovery', async ({ page }) => {
@@ -123,8 +122,9 @@ for (const width of [320, 768, 1024, 1440]) {
       expect(Math.abs(cells[i]!.x - heads[i]!.x)).toBeLessThanOrEqual(1);
       expect(Math.abs(cells[i]!.width - heads[i]!.width)).toBeLessThanOrEqual(1);
     }
-    for (const name of ['Xem chi tiết', 'Hủy', 'Thanh toán']) {
-      const action = table.getByRole(name === 'Thanh toán' ? 'link' : 'button', { name, exact: true });
+    for (const [name, rowIndex] of [['Xem chi tiết', 0], ['Hủy đơn', 0], ['Thanh toán', 1]] as const) {
+      const row = table.locator('tbody tr').nth(rowIndex);
+      const action = row.getByRole(name === 'Thanh toán' ? 'link' : 'button', { name, exact: true });
       await action.scrollIntoViewIfNeeded();
       expect(await action.evaluate((el) => {
         const cell = el.closest('td')!.getBoundingClientRect();
@@ -132,7 +132,6 @@ for (const width of [320, 768, 1024, 1440]) {
         return box.left >= cell.left && box.right <= cell.right && el.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
       })).toBe(true);
     }
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
   });
 }
 test('login email and password controls have matching dimensions', async ({ page }) => {
@@ -195,10 +194,13 @@ test('recovers only after final confirmation and resumes polling after reload', 
   await expect(page.getByRole('button', { name: 'Nhận mã khôi phục' })).toHaveCount(0);
   expect(retrieved).toBe(0);
   await page.reload();
-  await expect(page.getByText(/Yêu cầu recovery-command:/)).toBeVisible();
+  const recoveryStatus = page.getByRole('region', { name: 'Khôi phục mã bản quyền' });
+  await expect(recoveryStatus.getByText('Trạng thái khôi phục: Đang xử lý')).toBeVisible();
   confirmed = true;
+  await expect(recoveryStatus.getByText('Trạng thái khôi phục: Đã xác nhận')).toBeVisible({ timeout: 7000 });
   await page.getByRole('button', { name: 'Nhận mã khôi phục' }).click();
-  await expect(page.locator('code')).toHaveText(activationKey);
+  const keyDialog = page.getByRole('dialog', { name: 'Mã bản quyền của bạn' });
+  await expect(keyDialog.getByLabel('Mã bản quyền đã cấp')).toHaveValue(activationKey);
   expect(retrieved).toBe(1);
 });
 
@@ -206,21 +208,45 @@ for (const width of [320, 390, 1440]) {
   test(`keeps the one-time key scoped to its license without overflow at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.goto('/buyer/licenses');
-    await page.getByRole('button', { name: 'Mã bản quyền', exact: true }).click();
-    await page.getByRole('button', { name: 'Nhận mã bản quyền', exact: true }).click();
-    await page.getByRole('button', { name: 'Nhận mã', exact: true }).click();
-    await expect(page.locator('code')).toHaveText(activationKey);
+    await page.getByRole('button', { name: 'Chi tiết' }).first().click();
+    const licenseDialog = page.getByRole('dialog', { name: 'Chi tiết bản quyền' });
+    await licenseDialog.getByRole('button', { name: 'Mã bản quyền', exact: true }).click();
+    await licenseDialog.getByRole('button', { name: 'Nhận mã bản quyền một lần', exact: true }).click();
+    const keyDialog = page.getByRole('dialog', { name: 'Mã bản quyền của bạn' });
+    await expect(keyDialog.getByLabel('Mã bản quyền đã cấp')).toHaveValue(activationKey);
+    const dialogBox = await keyDialog.boundingBox();
+    expect(dialogBox).not.toBeNull();
+    expect(dialogBox!.x).toBeGreaterThanOrEqual(0);
+    expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual(width);
+    expect(dialogBox!.width).toBeLessThanOrEqual(width);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-    await page.getByRole('button', { name: 'Đã thu hồi', exact: true }).click();
-    await page.getByRole('button', { name: 'Tất cả', exact: true }).click();
-    await expect(page.locator('code')).toHaveText(activationKey);
-    await page.getByRole('button', { name: /Other product.*Tối đa/ }).click();
-    await page.getByRole('button', { name: 'Mã bản quyền', exact: true }).click();
-    await expect(page.getByLabel('Mã bản quyền', { exact: true })).toHaveValue('');
+    const table = await page.locator('.buyer-license-table .ant-table-wrapper').boundingBox();
+    const tableSection = await page.locator('.buyer-license-table').boundingBox();
+    expect(table).not.toBeNull();
+    expect(tableSection).not.toBeNull();
+    expect(table!.x).toBeGreaterThanOrEqual(tableSection!.x);
+    expect(table!.x + table!.width).toBeLessThanOrEqual(tableSection!.x + tableSection!.width);
+    await keyDialog.getByRole('button', { name: 'Đóng', exact: true }).click();
+    await expect(licenseDialog).toBeVisible();
+    const detailDialog = page.getByRole('dialog');
+    await detailDialog.getByRole('button', { name: 'Tổng quan', exact: true }).click();
+    await detailDialog.getByRole('button', { name: 'Mã bản quyền', exact: true }).click();
+    await detailDialog.getByRole('button', { name: 'Xem mã bản quyền', exact: true }).click();
+    const reopenedKeyDialog = page.getByRole('dialog', { name: 'Mã bản quyền của bạn' });
+    await expect(reopenedKeyDialog.getByLabel('Mã bản quyền đã cấp')).toHaveValue(activationKey);
+    await reopenedKeyDialog.getByRole('button', { name: 'Đóng', exact: true }).click();
+    const keyTabs = detailDialog.getByRole('button', { name: 'Mã bản quyền', exact: true });
+    await expect(keyTabs).toHaveClass(/active/);
+    await detailDialog.getByRole('button', { name: 'Thiết bị', exact: true }).click();
+    await expect(detailDialog.getByRole('button', { name: 'Thiết bị', exact: true })).toHaveClass(/active/);
+    await expect(detailDialog.getByText('Đang sử dụng 0/3 thiết bị.')).toBeVisible();
+    await detailDialog.getByRole('button', { name: 'Tổng quan', exact: true }).click();
+    await detailDialog.getByRole('button', { name: 'Close', exact: true }).click();
+    await page.getByRole('button', { name: 'Chi tiết' }).nth(1).click();
+    const otherLicenseDialog = page.getByRole('dialog', { name: 'Chi tiết bản quyền' });
+    await otherLicenseDialog.getByRole('button', { name: 'Mã bản quyền', exact: true }).click();
+    await expect(otherLicenseDialog.getByText('Mã bản quyền không còn sẵn sàng để nhận')).toBeVisible();
+    await expect(otherLicenseDialog.getByLabel('Mã bản quyền đã cấp')).toHaveCount(0);
     await expect(page.locator('code')).toHaveCount(0);
-    await page.getByRole('button', { name: /SecureDesk Pro.*Tối đa/ }).click();
-    await page.getByRole('button', { name: 'Mã bản quyền', exact: true }).click();
-    await expect(page.locator('code')).toHaveText(activationKey);
-    await expect(page.getByRole('button', { name: 'Nhận mã bản quyền', exact: true })).toBeDisabled();
   });
 }

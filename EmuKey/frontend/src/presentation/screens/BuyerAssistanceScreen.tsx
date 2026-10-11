@@ -75,8 +75,8 @@ export function BuyerAssistanceScreen() {
               author: message.senderType === 'CUSTOMER' ? ('Buyer' as const) : message.senderType === 'AI' ? ('AI' as const) : ('Support' as const),
             }))}
             inputLabel="Tin nhắn hỗ trợ"
-            onSubmit={(content) => append.mutateAsync({ clientMessageId: crypto.randomUUID(), content, conversationId: conversation.id })}
-            onAskAi={(question) => askAi.mutateAsync({ conversationId: conversation.id, question, clientMessageId: crypto.randomUUID() })}
+            onSubmit={(content, clientMessageId) => append.mutateAsync({ clientMessageId, content, conversationId: conversation.id })}
+            onAskAi={(question, clientMessageId) => askAi.mutateAsync({ conversationId: conversation.id, question, clientMessageId })}
             readOnly={conversation.status === 'CLOSED'}
             submitLabel="Gửi tin nhắn"
           />

@@ -39,12 +39,10 @@ test.describe.serial('SePay Sandbox timing experiment', () => {
       await page.waitForURL('**/buyer/orders/*/payment');
       const orderId = new URL(page.url()).pathname.split('/')[3];
       await expect(page.getByRole('heading', { name: 'Thanh toán đơn hàng' })).toBeVisible();
-      await page.getByRole('button', { name: 'Tạo yêu cầu thanh toán' }).click();
-      const form = page.getByTestId('sepay-checkout-form');
-      await expect(form).toBeVisible();
-      const paymentButton = page.getByRole('button', { name: /Thanh toán trên SePay Sandbox|Thanh toán trên SePay/ });
-      await paymentButton.click();
-      await page.waitForURL(/sepay/i, { timeout: 30_000 });
+      await Promise.all([
+        page.waitForURL(/sepay/i, { timeout: 30_000 }),
+        page.getByRole('button', { name: 'Thanh toán qua SePay' }).click(),
+      ]);
       if (waitSeconds > 0) await new Promise((resolve) => setTimeout(resolve, waitSeconds * 1_000));
       const userPaymentClickAt = new Date().toISOString();
       await page.getByRole('button', { name: 'Giả lập thanh toán' }).click();

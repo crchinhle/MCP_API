@@ -1,6 +1,7 @@
 import { LoadingOverlay } from '../components/WorkspacePrimitives';
 import { Alert, Button, Input, Modal, Spin } from 'antd';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { submitSignedCheckout } from '../components/PurchaseFlowModal';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../application/auth/authContext';
 
@@ -50,16 +51,7 @@ export function PaymentStatusScreen() {
     isRenewal,
     isRenewal ? order.data?.renewalExpiresAt : undefined,
   );
-  const checkoutStarted = useRef(false);
-  const checkoutSubmitted = useRef(false);
   const [copyStatus, setCopyStatus] = useState('');
-  const [checkoutNotice, setCheckoutNotice] = useState<string | null>(null);
-  // PAY-12: loading the status page only reads the order. Creating a signed
-  // checkout attempt and submitting it are both explicit user actions.
-  useEffect(() => {
-    checkoutStarted.current = false;
-    checkoutSubmitted.current = false;
-  }, [id]);
   const renewalProjectionUpdated = Boolean(order.data?.renewalExpiresAt && license.data &&
     Math.floor(Date.parse(license.data.expiresAt) / 1000) >= Math.floor(Date.parse(order.data.renewalExpiresAt) / 1000));
   const licenseReady = license.data?.status === 'ACTIVE' && license.data.activationKeyTrustStatus === 'TRUSTED' &&
@@ -162,6 +154,10 @@ export function PaymentStatusScreen() {
     } catch { setCopyStatus('Không thể sao chép. Vui lòng lưu mã thủ công.'); }
   };
 
+  const startCheckout = () => {
+    checkout.mutate(id, { onSuccess: submitSignedCheckout });
+  };
+
   return (
     <div className="workspace-screen">
       <PageHeader
@@ -227,9 +223,6 @@ export function PaymentStatusScreen() {
               type="primary"
               onClick={() => {
                 checkout.reset();
-                checkoutStarted.current = false;
-                checkoutSubmitted.current = false;
-                setCheckoutNotice(null);
                 setSearchParams({});
               }}
             >
@@ -243,19 +236,12 @@ export function PaymentStatusScreen() {
                 <Alert
                   showIcon
                   type="info"
-                  message="Đơn hàng đã sẵn sàng thanh toán."
-                  description="Chọn nút bên dưới để tạo yêu cầu thanh toán SePay. Không có yêu cầu nào được gửi đi khi bạn vừa mở trang này."
+                  title="Đơn hàng đã sẵn sàng thanh toán."
+                  description="Chọn nút bên dưới để chuẩn bị yêu cầu và chuyển sang SePay. Không có yêu cầu nào được gửi đi khi bạn vừa mở trang này."
                 />
-                {checkoutNotice ? <Alert showIcon type="warning" message={checkoutNotice} /> : null}
-                <Button
-                  type="primary"
-                  disabled={checkout.isPending}
-                  onClick={() => {
-                    checkoutStarted.current = true;
-                    checkout.mutate(id);
-                  }}
-                >
-                  Tạo yêu cầu thanh toán
+                {checkout.error ? <Alert showIcon type="error" title="Không thể chuẩn bị thanh toán. Đơn hàng vẫn được giữ để bạn thử lại." /> : null}
+                <Button type="primary" loading={checkout.isPending} disabled={checkout.isPending} onClick={startCheckout}>
+                  Thanh toán qua SePay
                 </Button>
               </>
             )
@@ -279,11 +265,7 @@ export function PaymentStatusScreen() {
                   description="Tạo yêu cầu mới để tiếp tục thanh toán đơn hàng này."
                   action={
                     <Button
-                      onClick={() => {
-                        checkout.reset();
-                        checkoutStarted.current = false;
-                        checkoutSubmitted.current = false;
-                      }}
+                      onClick={() => checkout.reset()}
                     >
                       Tạo yêu cầu mới
                     </Button>
@@ -389,9 +371,6 @@ export function PaymentStatusScreen() {
                 {retrieveErrorMessage ? <Alert type="warning" message={retrieveErrorMessage} /> : null}
               </div>}
             </>
-          ) : null}
-          {checkout.error ? (
-            <Alert type="error" message="Không thể tạo yêu cầu thanh toán." action={current.orderStatus === 'WAITING_PAYMENT' ? <><Button disabled={checkout.isPending} onClick={() => checkout.mutate(id)}>Thử lại</Button><LoadingOverlay active={checkout.isPending} label="Đang xử lý yêu cầu: Thử lại" /></> : undefined} />
           ) : null}
         </section>
         <aside className="checkout-stack">

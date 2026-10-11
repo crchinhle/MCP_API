@@ -6,6 +6,27 @@ import { App } from '../../../EmuKey/frontend/src/presentation/app/App';
 afterEach(cleanup);
 
 describe('Provider workspace', () => {
+  it('retries loading provider plan data independently from products', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    let fail = true;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (fail && url.endsWith('/plans') && (!init?.method || init.method === 'GET')) {
+        fail = false;
+        return Response.json({ message: 'Unavailable' }, { status: 500 });
+      }
+      return original(input, init);
+    });
+    try {
+      render(<App initialEntries={['/provider/catalog']} />);
+      expect(await screen.findByText('Không thể tải danh sách gói.')).toBeTruthy();
+      fireEvent.click(screen.getAllByRole('button', { name: 'Thử lại' }).at(-1)!);
+      expect(await screen.findByRole('table')).toBeTruthy();
+      await waitFor(() => expect(screen.queryByText('Không thể tải danh sách gói.')).toBeNull());
+    } finally {
+      vi.mocked(fetch).mockImplementation(original);
+    }
+  });
   it('renders the provider dashboard without fabricated aggregates', async () => {
     render(<App initialEntries={['/provider']} />);
 
@@ -34,15 +55,47 @@ describe('Provider workspace', () => {
     expect(screen.queryByRole('button', { name: 'Công bố' })).toBeNull();
   });
 
-  it('filters provider payment history loaded from the backend', async () => {
-    render(<App initialEntries={['/provider/operations']} />);
-
-    fireEvent.change(await screen.findByLabelText('Tìm dữ liệu vận hành'), {
-      target: { value: '0218' },
+  it('retries loading provider payment history after a temporary failure', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    let fail = true;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (fail && new URL(url, 'http://localhost').pathname.endsWith('/api/v1/payments/history') && (!init?.method || init.method === 'GET')) {
+        fail = false;
+        return Response.json({ message: 'Unavailable' }, { status: 500 });
+      }
+      return original(input, init);
     });
+    try {
+      render(<App initialEntries={['/provider/operations']} />);
+      expect(await screen.findByText('Không thể tải lịch sử thanh toán.')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+      expect(await screen.findByText(/ORD-2026-0218/)).toBeTruthy();
+      expect(screen.getByText('Đã khớp')).toBeTruthy();
+    } finally {
+      vi.mocked(fetch).mockImplementation(original);
+    }
+  });
 
-    expect(await screen.findByText(/ORD-2026-0218/)).toBeTruthy();
-    expect(screen.getByText('Đã khớp')).toBeTruthy();
+  it('retries loading AI knowledge documents after a temporary failure', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    let fail = true;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (fail && new URL(url, 'http://localhost').pathname.endsWith('/api/v1/knowledge/documents') && (!init?.method || init.method === 'GET')) {
+        fail = false;
+        return Response.json({ message: 'Unavailable' }, { status: 500 });
+      }
+      return original(input, init);
+    });
+    try {
+      render(<App initialEntries={['/provider/knowledge']} />);
+      expect(await screen.findByText('Không thể tải tài liệu kiến thức.')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+      expect(await screen.findByText('Chưa có tài liệu kiến thức phù hợp.')).toBeTruthy();
+    } finally {
+      vi.mocked(fetch).mockImplementation(original);
+    }
   });
 
   it('exposes license lifecycle controls in the Provider workspace', async () => {

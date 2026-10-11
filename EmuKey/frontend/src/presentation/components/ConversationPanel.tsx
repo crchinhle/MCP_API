@@ -1,6 +1,6 @@
 import { LoadingOverlay } from './WorkspacePrimitives';
 import { Alert, Button, Input } from 'antd';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import type { ConversationMessage } from '../../domain/workspace';
 
@@ -10,8 +10,8 @@ interface ConversationPanelProps {
   readonly submitLabel: string;
   readonly author: ConversationMessage['author'];
   readonly suggestion?: string;
-  readonly onSubmit?: (content: string) => Promise<unknown>;
-  readonly onAskAi?: (question: string) => Promise<unknown>;
+  readonly onSubmit?: (content: string, clientMessageId: string) => Promise<unknown>;
+  readonly onAskAi?: (question: string, clientMessageId: string) => Promise<unknown>;
   readonly readOnly?: boolean;
 }
 
@@ -27,15 +27,21 @@ export function ConversationPanel({
   const [draft, setDraft] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState('');
+  const draftRequest = useRef<{ askAi: boolean; body: string; id: string } | undefined>(undefined);
   const sendMessage = async (askAi = false) => {
     const body = draft.trim();
     if (!body || pending) return;
+    if (draftRequest.current?.body !== body || draftRequest.current.askAi !== askAi) {
+      draftRequest.current = { askAi, body, id: crypto.randomUUID() };
+    }
+    const clientMessageId = draftRequest.current.id;
     setPending(true);
     setError('');
     try {
-      if (askAi) await onAskAi?.(body);
-      else await onSubmit?.(body);
+      if (askAi) await onAskAi?.(body, clientMessageId);
+      else await onSubmit?.(body, clientMessageId);
       setDraft('');
+      draftRequest.current = undefined;
     } catch {
       setError('Chưa gửi được yêu cầu. Nội dung được giữ lại để bạn thử lại.');
     } finally { setPending(false); }

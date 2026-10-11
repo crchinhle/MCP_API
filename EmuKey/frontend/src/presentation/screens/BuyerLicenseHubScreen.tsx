@@ -53,7 +53,7 @@ export function BuyerLicenseHubScreen() {
   if (actionToken && resolution.isError) return <Alert type="error" message={invalidActionLink ? 'Liên kết email không hợp lệ hoặc đã hết hạn.' : 'Chưa thể kiểm tra liên kết email. Vui lòng thử lại.'} description={invalidActionLink ? 'Mở lại bản quyền để yêu cầu email mới.' : 'Kiểm tra kết nối rồi tải lại trạng thái liên kết.'} action={invalidActionLink ? <Button href="/buyer/licenses">Danh sách bản quyền</Button> : <Button onClick={() => void resolution.refetch()}>Thử lại</Button>} />;
   if (resolution.data && resolution.data.action !== 'KEY_RECOVERY') return <Alert type="info" message="Liên kết này dành cho thao tác thiết bị hoặc đổi mã." description="Quay lại ứng dụng đã gửi yêu cầu để tiếp tục đúng thao tác." action={<Button href="/buyer/licenses">Danh sách bản quyền</Button>} />;
   if (licenses.isPending) return <PageLoading />;
-  if (licenses.isError) return <Alert type="error" message="Không thể tải danh sách bản quyền." />;
+  if (licenses.isError) return <Alert type="error" title="Không thể tải danh sách bản quyền." action={<Button onClick={() => void licenses.refetch()}>Thử lại</Button>} />;
   if (!rows.length) return <Empty description="Chưa có bản quyền"><Button href="/buyer/products">Khám phá sản phẩm</Button></Empty>;
 
   const activeDevices = (devices.data ?? []).filter((device) => device.status === 'ACTIVE').length;
@@ -86,7 +86,7 @@ export function BuyerLicenseHubScreen() {
               </div> },
             ]} />
         </section>
-        <Modal centered width={keyDialogOpen ? 520 : 960} open={Boolean(selected)} title={keyDialogOpen ? 'Mã bản quyền của bạn' : tab === 'devices' ? 'Quản lý thiết bị' : 'Chi tiết bản quyền'}
+        <Modal className="buyer-license-detail-modal" centered width={keyDialogOpen ? 520 : 960} open={Boolean(selected)} title={keyDialogOpen ? 'Mã bản quyền của bạn' : tab === 'devices' ? 'Quản lý thiết bị' : 'Chi tiết bản quyền'}
           onCancel={() => { if (retrieve.isPending) return; if (keyDialogOpen) { setKeyDialogOpen(false); return; } setSelectedId(''); setKeyDialogId(undefined); }}
           footer={keyDialogOpen && activationKey ? <div className="workspace-actions">
             <Button aria-label="Sao chép mã bản quyền" onClick={() => { if (!activationKey) return; if (!navigator.clipboard) { setCopyStatus('Không thể sao chép tự động. Vui lòng lưu mã thủ công.'); return; } void navigator.clipboard.writeText(activationKey).then(() => setCopyStatus('Đã sao chép mã bản quyền')).catch(() => setCopyStatus('Không thể sao chép. Vui lòng lưu mã thủ công.')); }}>Sao chép mã bản quyền</Button>

@@ -196,9 +196,10 @@ test('canonical license golden flow: purchase → Sepolia → activation → ent
 
     // ---------- Phase 2: SePay sandbox payment through the real provider UI ----------
     phase = 'payment';
-    await page.getByRole('button', { name: 'Tạo yêu cầu thanh toán' }).click();
-    const providerForm = page.getByTestId('sepay-checkout-form');
-    await expect(providerForm).toBeVisible({ timeout: 30_000 });
+    await Promise.all([
+      page.waitForURL(/sepay/i, { timeout: 30_000 }),
+      page.getByRole('button', { name: 'Thanh toán qua SePay' }).click(),
+    ]);
     const paymentDatabaseUrl = await readEnvironmentValue('DATABASE_URL');
     expect(paymentDatabaseUrl).toBeTruthy();
     const { Pool: PaymentPool } = requireBackend('pg');

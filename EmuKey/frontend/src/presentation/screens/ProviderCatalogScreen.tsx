@@ -128,7 +128,7 @@ export function ProviderCatalogScreen() {
       {mutationError ? <Alert showIcon type="error" message={describeApiError(mutationError, 'Không thể cập nhật danh mục.')} /> : null}
       <section className="workspace-card table-card">
         <div className="section-heading"><h2 className="section-title">Sản phẩm</h2></div>
-
+        {products.isError ? <Alert type="error" title="Không thể tải danh sách sản phẩm." action={<Button disabled={products.isFetching} onClick={() => void products.refetch()}>Thử lại</Button>} /> : null}
         {!products.isLoading && !products.isError && products.data?.length === 0 ? <Empty description="Chưa có sản phẩm" /> : null}
         {!products.isLoading && !products.isError && products.data?.length ? <Table dataSource={products.data.filter((product) => matches(`${product.name} ${product.code}`))} pagination={{ pageSize: 10, showSizeChanger: false, hideOnSinglePage: true }} rowKey="id" scroll={{ x: 1050 }} columns={[
           { title: 'Mã', dataIndex: 'code' }, { title: 'Sản phẩm', dataIndex: 'name' }, { title: 'Mô tả', dataIndex: 'description' },
@@ -138,7 +138,7 @@ export function ProviderCatalogScreen() {
       </section>
       <section className="workspace-card table-card spaced-card">
         <div className="section-heading"><h2 className="section-title">Gói sản phẩm</h2><Button onClick={() => openPlan()} disabled={!products.data?.length}>Tạo gói</Button></div>
-
+        {plans.isError ? <Alert type="error" title="Không thể tải danh sách gói." action={<Button disabled={plans.isFetching} onClick={() => void plans.refetch()}>Thử lại</Button>} /> : null}
         {!plans.isLoading && !plans.isError && plans.data?.length === 0 ? <Empty description="Chưa có gói sản phẩm" /> : null}
         {!plans.isLoading && !plans.isError && plans.data?.length ? <Table dataSource={plans.data.filter((plan) => matches(`${plan.name} ${plan.code} ${products.data?.find((product) => product.id === plan.productId)?.name ?? ''}`))} pagination={{ pageSize: 10, showSizeChanger: false, hideOnSinglePage: true }} rowKey="id" scroll={{ x: 1150 }} columns={[
           { title: 'Sản phẩm', dataIndex: 'productId', render: (id: string) => products.data?.find((product) => product.id === id)?.name ?? id },

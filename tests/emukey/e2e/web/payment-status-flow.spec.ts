@@ -60,14 +60,18 @@ for (const review of [false, true]) {
       await expect(page.getByText('Giao dịch đã được ghi nhận nhưng cần kiểm tra')).toBeVisible();
       await expect(page.locator('.payment-card > header .status-chip')).toHaveClass(/status-chip--warning/);
       await expect(page.locator('.progress-list li').filter({ hasText: 'Thanh toán' }).locator('.status-chip')).toHaveClass(/status-chip--warning/);
-      await expect(page.getByText('Đang xác nhận thanh toán', { exact: true })).toHaveCount(0);
+      await expect(page.getByRole('heading', { name: 'Giao dịch đã được ghi nhận nhưng cần kiểm tra' })).toHaveCount(0);
+      await expect(page.getByRole('dialog')).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Kiểm tra lại trạng thái' })).toBeVisible();
     } else {
       await expect(page.locator('.payment-card > header .status-chip')).toHaveClass(/status-chip--info/);
       await expect(page.locator('.progress-list li').filter({ hasText: 'Thanh toán' }).locator('.status-chip')).toHaveClass(/status-chip--info/);
       await page.clock.fastForward(31_000);
-      await expect(page.getByText('Chưa nhận được xác nhận thanh toán hợp lệ')).toBeVisible();
+      const delayedConfirmation = page.getByRole('dialog', { name: 'Chưa nhận được xác nhận thanh toán' });
+      await expect(delayedConfirmation).toBeVisible();
+      await expect(delayedConfirmation.getByText(/Nếu đã bị trừ tiền, không thanh toán lại/)).toBeVisible();
       accepted = true;
-      await page.getByRole('button', { name: 'Kiểm tra lại trạng thái' }).click();
+      await delayedConfirmation.getByRole('button', { name: 'Kiểm tra lại', exact: true }).click();
       await expect(page.getByRole('heading', { name: 'Thanh toán đã được xác nhận', exact: true })).toBeVisible();
     }
   });
@@ -92,23 +96,24 @@ test.describe('Payment status downstream flow', () => {
       await route.fulfill({ json: data });
     });
     await page.goto('/buyer/orders/renewal-order/payment');
-    await expect(page.getByRole('status', { name: 'Đang xử lý bản quyền' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Đang gia hạn bản quyền' })).toBeVisible();
+    await expect(page.getByText('Thanh toán đã xác nhận. Hạn sử dụng đang được cập nhật; mã bản quyền hiện tại được giữ nguyên.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Nhận mã bản quyền' })).toHaveCount(0);
     confirmed = true;
     await page.reload();
-    await expect(page.getByRole('status', { name: 'Đang xử lý bản quyền' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Đang gia hạn bản quyền' })).toBeVisible();
     projectionUpdated = true;
     await expect(page.getByRole('heading', { name: 'Gia hạn đã hoàn tất', exact: true })).toBeVisible({ timeout: 7000 });
-    await expect(page.getByRole('status', { name: 'Đang xử lý bản quyền' })).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: 'Đang gia hạn bản quyền' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Nhận mã bản quyền' })).toHaveCount(0);
     expect(licenseReads).toBeGreaterThan(2);
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Gia hạn đã hoàn tất', exact: true })).toBeVisible();
     confirmed = false;
-    await expect(page.getByRole('status', { name: 'Đang xử lý bản quyền' })).toBeVisible({ timeout: 7000 });
+    await expect(page.getByRole('dialog', { name: 'Đang gia hạn bản quyền' })).toBeVisible({ timeout: 7000 });
     review = true;
     await expect(page.getByText('Thanh toán đã xác nhận. Bản quyền đang cần được kiểm tra thêm.')).toBeVisible({ timeout: 7000 });
-    await expect(page.getByRole('status', { name: 'Đang xử lý bản quyền' })).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: 'Đang gia hạn bản quyền' })).toHaveCount(0);
   });
 
   for (const state of ['query-error', 'REVOKED', 'UNTRUSTED_REORG']) {
@@ -129,7 +134,7 @@ test.describe('Payment status downstream flow', () => {
       });
       await page.goto('/buyer/orders/test-order/payment');
       await expect(page.getByText(state === 'query-error' ? /trạng thái blockchain chưa thể tải/ : 'Thanh toán đã xác nhận. Bản quyền đang cần được kiểm tra thêm.')).toBeVisible();
-      await expect(page.getByRole('status', { name: 'Đang xử lý bản quyền' })).toHaveCount(0);
+      await expect(page.getByRole('dialog', { name: 'Đang gia hạn bản quyền' })).toHaveCount(0);
       await expect(page.getByRole('button', { name: 'Nhận mã bản quyền' })).toHaveCount(0);
     });
   }
@@ -237,15 +242,16 @@ test.describe('Payment status downstream flow', () => {
     });
 
     await page.goto(`/buyer/orders/${orderId}/payment`);
-    await expect(page.getByText('Thanh toán đã được xác nhận.').first()).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1440);
+    await expect(page.getByRole('heading', { name: 'Thanh toán đã được xác nhận', exact: true })).toBeVisible();
     await expect(page.getByText('Đang kích hoạt bản quyền', { exact: true })).toBeVisible();
-    const processing = page.getByRole('status', { name: 'Đang xử lý bản quyền' });
+    const processing = page.getByRole('dialog', { name: 'Đang cấp bản quyền' });
     await expect(processing).toBeVisible();
-    await expect(processing.locator('.ant-spin-spinning')).toBeVisible();
-    for (const width of [320, 768, 1024, 1440]) {
+    await expect(processing.getByRole('status')).toContainText('Thanh toán đã xác nhận. Bản quyền đang được chuẩn bị');
+    for (const width of [320, 390, 768, 1024, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await expect(processing).toBeVisible();
-      expect(await processing.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+      expect(await processing.evaluate((element) => element.getBoundingClientRect().width <= window.innerWidth)).toBe(true);
     }
     await expect(page.getByRole('button', { name: 'Nhận mã bản quyền' })).toBeHidden();
     ready = true;
@@ -256,7 +262,8 @@ test.describe('Payment status downstream flow', () => {
     expect(retrievals).toBe(0);
 
     await page.getByRole('button', { name: 'Nhận mã bản quyền' }).click();
-    await expect(page.getByLabel('Mã bản quyền')).toHaveValue(activationKey);
+    await expect(page.getByRole('dialog', { name: 'Mã bản quyền của bạn' })).toBeVisible();
+    await expect(page.getByRole('dialog').getByLabel('Mã bản quyền')).toHaveValue(activationKey);
     expect(retrievals).toBe(1);
 
     await page.reload();
