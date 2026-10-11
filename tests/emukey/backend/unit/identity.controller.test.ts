@@ -1,4 +1,4 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication, ServiceUnavailableException, UnauthorizedException, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { IdentityController } from '../../../../EmuKey/backend/src/modules/identity-access/identity.controller.js';
@@ -10,7 +10,7 @@ describe('IdentityController HTTP boundary', () => {
   let app: INestApplication;
   const service = {
     login: vi.fn().mockResolvedValue({ accessToken: 'access', refreshToken: 'refresh', user: { id: 'u1' } }),
-    refresh: vi.fn().mockRejectedValue(new Error('REFRESH_REUSE_DETECTED')),
+    refresh: vi.fn(),
     profile: vi.fn().mockResolvedValue({ id: 'u1' }),
     changeAccountState: vi.fn().mockResolvedValue({ id: 'u2', status: 'LOCKED' }),
     logout: vi.fn().mockResolvedValue(undefined),
@@ -57,9 +57,29 @@ describe('IdentityController HTTP boundary', () => {
     await request(server()).post('/auth/reset-password').send({ token: 'x'.repeat(20), password: passwordWithoutSpecialCharacter }).expect(400);
     await request(server()).put('/auth/password').send({ currentPassword: 'legacy-password', password: passwordWithoutSpecialCharacter }).expect(400);
   });
-  it('maps refresh failures to a cleared cookie and unauthorized response', async () => {
+  it.each(['INVALID_SESSION', 'REFRESH_REUSE_DETECTED'])('clears the refresh cookie and preserves the 401 code for %s', async (code) => {
+    service.refresh.mockRejectedValueOnce(new UnauthorizedException({ code }));
     const response = await request(server()).post('/auth/refresh').set('Cookie', 'emukey_refresh=old').expect(401);
+    expect(response.body.code).toBe(code);
     expect(response.headers['set-cookie']?.[0]).toContain('emukey_refresh=;');
+    expect(response.headers['set-cookie']?.[0]).toContain('Path=/api/v1/auth');
+    expect(response.headers['set-cookie']?.[0]).toContain('Expires=Thu, 01 Jan 1970');
+  });
+  it.each([
+    { error: new Error('Redis connection failed'), status: 500 },
+    { error: new ServiceUnavailableException('Database unavailable'), status: 503 },
+  ])('preserves the refresh cookie on a transient $status failure', async ({ error, status }) => {
+    service.refresh.mockRejectedValueOnce(error);
+    const response = await request(server()).post('/auth/refresh').set('Cookie', 'emukey_refresh=current').expect(status);
+    expect(response.headers['set-cookie']).toBeUndefined();
+  });
+  it('rotates the HttpOnly refresh cookie without exposing the token in the response body', async () => {
+    service.refresh.mockResolvedValueOnce({ accessToken: 'next-access', refreshToken: 'next-refresh', user: { id: 'u1' } });
+    const response = await request(server()).post('/auth/refresh').set('Cookie', 'emukey_refresh=current').expect(201);
+    expect(service.refresh).toHaveBeenCalledWith('current');
+    expect(response.headers['set-cookie']?.[0]).toContain('emukey_refresh=next-refresh;');
+    expect(response.headers['set-cookie']?.[0]).toContain('HttpOnly');
+    expect(response.body).toEqual({ accessToken: 'next-access', user: { id: 'u1' } });
   });
   it('routes admin state changes through the service', async () => {
     const targetId = '00000000-0000-4000-8000-000000000022';
