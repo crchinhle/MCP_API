@@ -229,6 +229,7 @@ try {
 
       expect(await screen.findByRole('button', { name: 'Thanh toán qua SePay' })).toBeTruthy();
       expect(screen.queryByTestId('sepay-checkout-form')).toBeNull();
+      await waitFor(() => expect((screen.getByRole('button', { name: 'Thanh toán qua SePay' }) as HTMLButtonElement).disabled).toBe(false));
       fireEvent.click(screen.getByRole('button', { name: 'Thanh toán qua SePay' }));
       await waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
       const form = document.querySelector<HTMLFormElement>('form[action="https://pay-sandbox.sepay.vn/v1/checkout/init"]');
@@ -241,7 +242,7 @@ try {
     }
   });
 
-  it.each(['cancel', 'error'])('offers an explicit retry after SePay %s without auto checkout', async (status) => {
+  it.each(['cancel', 'error'])('offers an explicit retry after server approval following SePay %s without auto checkout', async (status) => {
     vi.mocked(fetch).mockClear();
     render(<App initialEntries={['/buyer/orders/11111111-1111-4111-8111-111111111111/payment?sepay=' + status]} />);
     expect(await screen.findByRole('button', { name: 'Thanh toán lại' })).toBeTruthy();
@@ -251,6 +252,38 @@ try {
     expect(await screen.findByRole('button', { name: 'Thanh toán qua SePay' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Thanh toán qua SePay' }));
     await waitFor(() => expect(document.querySelector('form[action="https://pay-sandbox.sepay.vn/v1/checkout/init"]')).toBeTruthy());
+  });
+
+  it.each(['ATTEMPT_PENDING', 'PAYMENT_REVIEW', 'error'])('blocks spoofed retry redirects when verification returns %s', async (reason) => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockClear();
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      if (String(input).endsWith('/payment-retry')) return reason === 'error'
+        ? Response.json({ message: 'Unavailable' }, { status: 500 })
+        : Response.json({ allowed: false, reason });
+      return original(input, init);
+    });
+    try {
+      render(<App initialEntries={['/buyer/orders/11111111-1111-4111-8111-111111111111/payment?sepay=error']} />);
+      await screen.findByText(reason === 'error' ? 'Chưa thể xác minh an toàn trạng thái thanh toán.' : reason === 'ATTEMPT_PENDING' ? 'Yêu cầu thanh toán trước vẫn đang có hiệu lực.' : 'Giao dịch cần được kiểm tra trước khi thanh toán tiếp.');
+      expect(screen.queryByRole('button', { name: 'Thanh toán lại' })).toBeNull();
+      expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).endsWith('/checkout'))).toBe(false);
+    } finally { vi.mocked(fetch).mockImplementation(original); }
+  });
+
+  it('refreshes retry eligibility with the status refresh action', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    let allowed = false;
+    vi.mocked(fetch).mockImplementation(async (input, init) => String(input).endsWith('/payment-retry')
+      ? Response.json({ allowed, reason: allowed ? 'READY' : 'ATTEMPT_PENDING' })
+      : original(input, init));
+    try {
+      render(<App initialEntries={['/buyer/orders/11111111-1111-4111-8111-111111111111/payment?sepay=cancel']} />);
+      await screen.findByText('Yêu cầu thanh toán trước vẫn đang có hiệu lực.');
+      allowed = true;
+      fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra lại trạng thái' }));
+      expect(await screen.findByRole('button', { name: 'Thanh toán lại' })).toBeTruthy();
+    } finally { vi.mocked(fetch).mockImplementation(original); }
   });
 
   it('continues from accepted payment to trusted license without retrieving a key automatically', async () => {

@@ -91,6 +91,55 @@ describe('customer commerce and payment flow', () => {
     await Promise.all([postgres?.stop(), redisContainer?.stop()]);
   });
 
+  it('checks retry ownership and blocks a new attempt while an expired pending attempt is unresolved', async () => {
+    const order = await service.createOrder(customer, '00000000-0000-4000-8000-000000000780', undefined, { planId });
+    await acceptTerms(order.id);
+    await expect(service.paymentRetryDecision(otherCustomer, order.id)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(service.paymentRetryDecision(admin, order.id)).rejects.toThrow();
+    await expect(service.paymentRetryDecision(customer, order.id)).resolves.toEqual({ allowed: true, reason: 'READY' });
+    const attemptId = '00000000-0000-4000-8000-000000000880';
+    await pool.query("INSERT INTO payment_attempts (id, order_id, attempt_no, provider_reference, amount_vnd, expires_at) VALUES ($1::uuid,$2,1,$1::text,$3,statement_timestamp()+interval '0.1 second')", [attemptId, order.id, order.priceVndSnapshot]);
+    await pool.query('SELECT pg_sleep(0.2)');
+    await expect(service.paymentRetryDecision(customer, order.id)).resolves.toEqual({ allowed: false, reason: 'ATTEMPT_PENDING' });
+    await expect(service.checkout(customer, order.id)).rejects.toThrow();
+    expect((await pool.query('SELECT count(*)::int AS count FROM payment_attempts WHERE order_id=$1', [order.id])).rows[0].count).toBe(1);
+    await pool.query("UPDATE payment_attempts SET status='EXPIRED' WHERE id=$1", [attemptId]);
+    await expect(service.paymentRetryDecision(customer, order.id)).resolves.toEqual({ allowed: true, reason: 'READY' });
+    const retry = await service.checkout(customer, order.id);
+    expect(retry.attemptId).not.toBe(attemptId);
+    await expect(service.paymentRetryDecision(customer, order.id)).resolves.toEqual({ allowed: false, reason: 'ATTEMPT_PENDING' });
+    const same = await service.checkout(customer, order.id);
+    expect(same.attemptId).toBe(retry.attemptId);
+  });
+
+  it('blocks retry and checkout after mismatched payment evidence and exposes it only to the owning provider', async () => {
+    const order = await service.createOrder(customer, '00000000-0000-4000-8000-000000000781', undefined, { planId });
+    await acceptTerms(order.id);
+    const checkout = await service.checkout(customer, order.id);
+    await sandboxService(true).ingestIpn(sandboxPayload(checkout.checkoutReference, 1, 'retry-mismatched-evidence'), webhookSecret);
+    await expect(service.paymentRetryDecision(customer, order.id)).resolves.toEqual({ allowed: false, reason: 'PAYMENT_REVIEW' });
+    await expect(service.checkout(customer, order.id)).rejects.toThrow();
+    const provider = { ...customer, role: 'PROVIDER_ADMIN' as const, sub: order.providerUserId };
+    const repository = new CommerceRepository(pool);
+    expect((await repository.listPaymentHistory(provider)).some((row) => row.orderId === order.id && row.classification === 'AMOUNT_MISMATCH')).toBe(true);
+    expect((await repository.listPaymentHistory({ ...provider, sub: otherCustomer.sub })).some((row) => row.orderId === order.id)).toBe(false);
+  });
+
+  it('permits a definitive failed checkout but rechecks payment accepted after eligibility was read', async () => {
+    const order = await service.createOrder(customer, '00000000-0000-4000-8000-000000000782', undefined, { planId });
+    await acceptTerms(order.id);
+    const repository = new CommerceRepository(pool);
+    const first = await service.checkout(customer, order.id);
+    await repository.failCheckout(first.attemptId);
+    await expect(service.paymentRetryDecision(customer, order.id)).resolves.toEqual({ allowed: true, reason: 'READY' });
+    const second = await service.checkout(customer, order.id);
+    expect(second.attemptId).not.toBe(first.attemptId);
+    await sandboxService(true).ingestIpn(sandboxPayload(second.checkoutReference, order.priceVndSnapshot, 'retry-order-now-paid'), webhookSecret);
+    await expect(service.paymentRetryDecision(customer, order.id)).resolves.toEqual({ allowed: false, reason: 'ORDER_NOT_PAYABLE' });
+    await expect(service.checkout(customer, order.id)).rejects.toThrow();
+    expect((await pool.query('SELECT count(*)::int AS count FROM payment_attempts WHERE order_id=$1', [order.id])).rows[0].count).toBe(2);
+  });
+
   it('uses a customer-scoped idempotency key and enforces ownership', async () => {
     const idempotencyKey = '00000000-0000-4000-8000-000000000701';
     const first = await service.createOrder(customer, idempotencyKey, undefined, { planId });

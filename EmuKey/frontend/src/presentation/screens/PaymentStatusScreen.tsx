@@ -13,6 +13,7 @@ import {
 import {
   orderStatusLabel,
   usePaymentHistory,
+  usePaymentRetryDecision,
   useOrder,
   useOrderMutations,
 } from '../../application/orders/orderQueries';
@@ -34,6 +35,7 @@ export function PaymentStatusScreen() {
   const checkout = useOrderMutations().checkout;
   const waitingPayment = order.data?.orderStatus === 'WAITING_PAYMENT';
   const history = usePaymentHistory(waitingPayment, waitingPayment);
+  const retryDecision = usePaymentRetryDecision(id, waitingPayment);
   const paymentNeedsReview = waitingPayment && history.data?.some((item) => item.orderId === id && ['UNMATCHED', 'AMOUNT_MISMATCH'].includes(item.classification));
   const [confirmationDelayed, setConfirmationDelayed] = useState(false);
   const retrieveKey = useRetrieveActivationKey();
@@ -83,7 +85,7 @@ export function PaymentStatusScreen() {
     try {
       await Promise.all([
         order.refetch(),
-        ...(waitingPayment ? [history.refetch()] : []),
+        ...(waitingPayment ? [history.refetch(), retryDecision.refetch()] : []),
         ...(order.data?.orderStatus === 'PAYMENT_ACCEPTED' ? [license.refetch()] : []),
       ]);
     } finally { setChecking(false); }
@@ -154,8 +156,23 @@ export function PaymentStatusScreen() {
     } catch { setCopyStatus('Không thể sao chép. Vui lòng lưu mã thủ công.'); }
   };
 
-  const startCheckout = () => {
+  const startCheckout = async () => {
+    const latest = await retryDecision.refetch();
+    if (!latest.data?.allowed || latest.isError) {
+      await checkStatus();
+      return;
+    }
     checkout.mutate(id, { onSuccess: submitSignedCheckout });
+  };
+
+  const prepareRetry = async () => {
+    const latest = await retryDecision.refetch();
+    if (!latest.data?.allowed || latest.isError) {
+      await checkStatus();
+      return;
+    }
+    checkout.reset();
+    setSearchParams({});
   };
 
   return (
@@ -199,14 +216,14 @@ export function PaymentStatusScreen() {
             <Alert
               showIcon
               type="error"
-              message="SePay báo giao dịch không thành công. Bạn có thể tạo lại yêu cầu thanh toán."
+              message="SePay báo giao dịch không thành công. Đang kiểm tra trạng thái thanh toán để xác định bước tiếp theo an toàn."
             />
           ) : null}
           {searchParams.get('sepay') === 'cancel' && current.orderStatus === 'WAITING_PAYMENT' && !paymentNeedsReview ? (
             <Alert
               showIcon
               type="warning"
-              message="Bạn đã hủy thanh toán trên SePay. Đơn hàng vẫn được giữ đến thời hạn thanh toán."
+              message="Bạn đã hủy thanh toán trên SePay. Đang xác minh không có giao dịch nào còn chờ xác nhận."
             />
           ) : null}
           {licenseNeedsReview && current.orderStatus === 'PAYMENT_ACCEPTED' ? (
@@ -219,16 +236,13 @@ export function PaymentStatusScreen() {
           ) : current.orderStatus === 'PAYMENT_ACCEPTED' ? null : current.orderStatus !== 'WAITING_PAYMENT' ? (
             <Alert type="warning" title="Đơn hàng chưa thể thanh toán" description={<a href="/buyer/orders">Mở đơn hàng để kiểm tra điều khoản hoặc trạng thái hủy/hết hạn.</a>} />
           ) : paymentNeedsReview ? null : unsuccessfulReturn ? (
-            <Button
-              type="primary"
-              onClick={() => {
-                checkout.reset();
-                setSearchParams({});
-              }}
-            >
-              Thanh toán lại
-            </Button>
-          ) : providerReturned ? null : !payment ? (
+            retryDecision.isPending || retryDecision.isFetching ? <Spin aria-label="Đang xác minh giao dịch trước khi thanh toán lại" />
+              : retryDecision.isError ? <Alert showIcon type="warning" message="Chưa thể xác minh an toàn trạng thái thanh toán." description="Không thử thanh toán lại lúc này. Kiểm tra trạng thái hoặc liên hệ hỗ trợ nếu đã chuyển tiền." action={<Button onClick={() => void retryDecision.refetch()}>Thử xác minh lại</Button>} />
+              : retryDecision.data?.allowed ? <Button type="primary" loading={checkout.isPending} disabled={checkout.isPending} onClick={() => void prepareRetry()}>Thanh toán lại</Button>
+                : <Alert showIcon type="warning" title={retryDecision.data?.reason === 'PAYMENT_REVIEW' ? 'Giao dịch cần được kiểm tra trước khi thanh toán tiếp.' : retryDecision.data?.reason === 'ATTEMPT_PENDING' ? 'Yêu cầu thanh toán trước vẫn đang có hiệu lực.' : 'Đơn hàng hiện không thể bắt đầu thanh toán mới.'} description="Nếu đã chuyển tiền, không thanh toán lại. Hãy kiểm tra trạng thái hoặc liên hệ hỗ trợ kèm mã đơn hàng." />
+          ) : providerReturned ? null : retryDecision.isError || (!retryDecision.isPending && !retryDecision.data?.allowed) ? (
+            <Alert showIcon type="warning" title="Chưa thể bắt đầu thanh toán mới" description="Yêu cầu trước đang chờ xác nhận hoặc cần kiểm tra thêm. Hãy kiểm tra lại trạng thái; nếu đã chuyển tiền, không thanh toán lại." />
+          ) : !payment ? (
             checkout.isPending ? (
               <LoadingOverlay label="Đang tạo yêu cầu thanh toán" />
             ) : (
@@ -240,7 +254,7 @@ export function PaymentStatusScreen() {
                   description="Chọn nút bên dưới để chuẩn bị yêu cầu và chuyển sang SePay. Không có yêu cầu nào được gửi đi khi bạn vừa mở trang này."
                 />
                 {checkout.error ? <Alert showIcon type="error" title="Không thể chuẩn bị thanh toán. Đơn hàng vẫn được giữ để bạn thử lại." /> : null}
-                <Button type="primary" loading={checkout.isPending} disabled={checkout.isPending} onClick={startCheckout}>
+                <Button aria-label="Thanh toán qua SePay" type="primary" loading={checkout.isPending || retryDecision.isFetching} disabled={checkout.isPending || retryDecision.isPending || retryDecision.isFetching || order.isError} onClick={() => void startCheckout()}>
                   Thanh toán qua SePay
                 </Button>
               </>
@@ -301,7 +315,7 @@ export function PaymentStatusScreen() {
                 facts={[
                   { label: 'Sản phẩm', value: license.data?.productName ?? current.productNameSnapshot },
                   { label: 'Gói', value: license.data?.plan.name ?? current.planNameSnapshot },
-                  { label: 'Mã bản quyền', value: license.data?.publicLicenseId ?? 'Đang cập nhật' },
+                  { label: 'Mã tra cứu bản quyền', value: license.data?.publicLicenseId ?? 'Đang cập nhật' },
                   { label: 'Hạn dùng', value: license.data ? new Date(license.data.expiresAt).toLocaleDateString('vi-VN') : 'Đang cập nhật' },
                   { label: 'Thiết bị tối đa', value: license.data?.maxActiveDevices ?? current.maxActiveDevicesSnapshot },
                 ]}

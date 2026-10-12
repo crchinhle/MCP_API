@@ -319,6 +319,7 @@ vi.stubGlobal(
           planNameSnapshot: 'Business',
           productNameSnapshot: 'SecureDesk Pro',
           providerEventId: 'sepay-event-1',
+          providerOccurredAt: '2026-09-30T00:00:00.000Z',
           providerTransactionReference: 'SEPAY-TX-1',
           receivedAt: '2026-09-30T00:00:00.000Z',
           reviewStatus: null,
@@ -329,6 +330,8 @@ vi.stubGlobal(
     if (method === 'GET' && path.startsWith('/orders/renewal-preview/'))
       return jsonResponse({ licenseId: license.id, planId: orders[0].planId, planName: 'Business', productName: license.productName,
         durationMonths: 12, priceVnd: 2_500_000, currentExpiresAt: license.expiresAt, estimatedExpiresAt: '2028-09-08T00:00:00.000Z', canRenew: true, pendingOrder: null });
+    if (method === 'GET' && path.endsWith('/payment-retry'))
+      return jsonResponse({ allowed: true, reason: 'READY' });
     if (method === 'GET' && path.startsWith('/orders/'))
       return jsonResponse(path.endsWith(acceptedOrderId)
         ? { ...orders[0], id: acceptedOrderId, licenseId: license.id, orderStatus: 'PAYMENT_ACCEPTED' }

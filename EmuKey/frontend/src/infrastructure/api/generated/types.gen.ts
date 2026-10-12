@@ -510,6 +510,11 @@ export type AcceptServiceTermsDto = {
   hash: string;
 };
 
+export type PaymentRetryDecisionDto = {
+  allowed: boolean;
+  reason: 'READY' | 'ATTEMPT_PENDING' | 'PAYMENT_REVIEW' | 'ORDER_NOT_PAYABLE';
+};
+
 export type CheckoutSessionDto = {
   amountVnd: number;
   attemptId: string;
@@ -1885,6 +1890,26 @@ export type CommerceControllerAcceptServiceTermsResponses = {
 
 export type CommerceControllerAcceptServiceTermsResponse =
   CommerceControllerAcceptServiceTermsResponses[keyof CommerceControllerAcceptServiceTermsResponses];
+
+export type CommerceControllerPaymentRetryDecisionData = {
+  body?: never;
+  path: {
+    id: string;
+  };
+  query?: never;
+  url: '/api/v1/orders/{id}/payment-retry';
+};
+
+export type CommerceControllerPaymentRetryDecisionErrors = {
+  404: unknown;
+};
+
+export type CommerceControllerPaymentRetryDecisionResponses = {
+  200: PaymentRetryDecisionDto;
+};
+
+export type CommerceControllerPaymentRetryDecisionResponse =
+  CommerceControllerPaymentRetryDecisionResponses[keyof CommerceControllerPaymentRetryDecisionResponses];
 
 export type CommerceControllerCheckoutData = {
   body?: never;

@@ -371,6 +371,7 @@ export type LicenseProviderDto = {
 
 export type LicenseProjectionDto = {
   activationKeyAvailable?: boolean;
+  activationKeyLast4?: string | null;
   blockNumber?: number | null;
   confirmationCount: number;
   activeDeviceCount: number;

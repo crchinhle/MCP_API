@@ -120,6 +120,12 @@ export class RenewalPreviewDto {
   @ApiProperty({ type: OrderDto, nullable: true }) pendingOrder!: OrderDto | null;
 }
 
+export class PaymentRetryDecisionDto {
+  @ApiProperty() allowed!: boolean;
+  @ApiProperty({ enum: ['READY', 'ATTEMPT_PENDING', 'PAYMENT_REVIEW', 'ORDER_NOT_PAYABLE'] })
+  reason!: 'READY' | 'ATTEMPT_PENDING' | 'PAYMENT_REVIEW' | 'ORDER_NOT_PAYABLE';
+}
+
 export class CheckoutSessionDto {
   @ApiProperty() amountVnd!: number;
   @ApiProperty({ format: 'uuid' }) attemptId!: string;

@@ -1,6 +1,7 @@
 import { LoadingOverlay } from '../components/WorkspacePrimitives';
-import { Alert, Button, Empty, Form, Input, InputNumber, Modal, Popconfirm, Select, Table, message } from 'antd';
+import { Alert, Button, Collapse, Empty, Form, Input, InputNumber, Modal, Popconfirm, Select, Switch, Table, message } from 'antd';
 import { useEffect, useState } from 'react';
+import { mergePlanEntitlements, splitPlanEntitlements } from './planEntitlements.js';
 
 import { describeApiError } from '../../application/auth/authContext';
 import {
@@ -18,7 +19,8 @@ import { PageLoading, PageHeader, StatusChip } from '../components/WorkspacePrim
 type ProductFormValues = ProductInput;
 
 interface PlanFormValues extends Omit<PlanInput, 'entitlements'> {
-  readonly entitlementsText?: string;
+  readonly desktopEntitlement?: boolean;
+  readonly advancedEntitlementsText?: string;
 }
 
 function productStatusTone(status: string) {
@@ -34,6 +36,7 @@ export function ProviderCatalogScreen() {
   const [planOpen, setPlanOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<AdminProduct | null>(null);
   const [editingPlan, setEditingPlan] = useState<AdminPlan | null>(null);
+  const [desktopChanged, setDesktopChanged] = useState(false);
   const [messageApi, contextHolder] = message.useMessage();
   const [productForm] = Form.useForm<ProductFormValues>();
   const [planForm] = Form.useForm<PlanFormValues>();
@@ -72,8 +75,10 @@ export function ProviderCatalogScreen() {
     setProductOpen(true);
   };
   const openPlan = (plan?: AdminPlan) => {
+    setDesktopChanged(false);
     setEditingPlan(plan ?? null);
-    planForm.setFieldsValue(plan ? { productId: plan.productId, code: plan.code, name: plan.name, billingCycle: plan.billingCycle, durationMonths: plan.durationMonths, priceVnd: plan.priceVnd, maxActiveDevices: plan.maxActiveDevices, entitlementsText: JSON.stringify(plan.entitlements) } : {});
+    const entitlements = splitPlanEntitlements(plan?.entitlements);
+    planForm.setFieldsValue(plan ? { productId: plan.productId, code: plan.code, name: plan.name, billingCycle: plan.billingCycle, durationMonths: plan.durationMonths, priceVnd: plan.priceVnd, maxActiveDevices: plan.maxActiveDevices, desktopEntitlement: entitlements.desktop, advancedEntitlementsText: Object.keys(entitlements.advanced).length ? JSON.stringify(entitlements.advanced, null, 2) : '' } : { desktopEntitlement: false, advancedEntitlementsText: '' });
     setPlanOpen(true);
   };
   const submitProduct = (values: ProductFormValues) => {
@@ -96,22 +101,17 @@ export function ProviderCatalogScreen() {
       planForm.setFields([{ name: 'priceVnd', errors: ['Giá và các giới hạn phải là số nguyên dương.'] }]);
       return;
     }
-    let entitlements: Record<string, unknown> | undefined;
-    if (values.entitlementsText?.trim()) {
-      try {
-        const parsed: unknown = JSON.parse(values.entitlementsText);
-        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('invalid');
-        entitlements = parsed as Record<string, unknown>;
-        if (Object.keys(entitlements).some((key) => key !== 'desktop') || Object.values(entitlements).some((value) => !['boolean', 'number', 'string'].includes(typeof value) || (typeof value === 'number' && !Number.isFinite(value)))) throw new Error('invalid');
-      } catch {
-        planForm.setFields([{ name: 'entitlementsText', errors: ['Entitlements phải là JSON object hợp lệ.'] }]);
-        return;
-      }
+    let entitlements: Record<string, unknown>;
+    try {
+      entitlements = mergePlanEntitlements(Boolean(values.desktopEntitlement), values.advancedEntitlementsText ?? '', desktopChanged ? undefined : editingPlan?.entitlements.desktop);
+    } catch {
+      planForm.setFields([{ name: 'advancedEntitlementsText', errors: ['Quyền lợi nâng cao phải là JSON object hợp lệ với khóa chuẩn và giá trị chuỗi, số hữu hạn hoặc boolean. Không nhập desktop ở đây.'] }]);
+      return;
     }
-    const updateInput = { name: values.name.trim(), billingCycle: values.billingCycle, durationMonths: values.durationMonths, priceVnd: values.priceVnd, maxActiveDevices: values.maxActiveDevices, entitlements: entitlements ?? {} };
+    const updateInput = { name: values.name.trim(), billingCycle: values.billingCycle, durationMonths: values.durationMonths, priceVnd: values.priceVnd, maxActiveDevices: values.maxActiveDevices, entitlements };
     const createInput = { productId: values.productId, code: values.code.trim(), ...updateInput };
     const request = editingPlan ? mutations.updatePlan.mutateAsync({ id: editingPlan.id, input: updateInput }) : mutations.createPlan.mutateAsync(createInput);
-    void request.then(() => { closePlan(); void messageApi.success(editingPlan ? 'Đã cập nhật gói.' : 'Đã tạo gói nháp.'); }).catch(() => undefined);
+    void request.then(() => { closePlan(true); void messageApi.success(editingPlan ? 'Đã cập nhật gói.' : 'Đã tạo gói nháp.'); }).catch(() => undefined);
   };
   const run = (action: keyof typeof mutations, id: string) => {
     const mutation = mutations[action] as { mutateAsync: (value: string) => Promise<unknown> };
@@ -161,7 +161,8 @@ export function ProviderCatalogScreen() {
           <div className="form-grid"><Form.Item label="Mã gói" name="code" rules={[{ required: true, message: 'Vui lòng nhập mã gói.' }]}><Input disabled={Boolean(editingPlan)} /></Form.Item><Form.Item label="Tên gói" name="name" rules={[{ required: true, message: 'Vui lòng nhập tên gói.' }]}><Input /></Form.Item></div>
           <div className="form-grid"><Form.Item label="Chu kỳ" name="billingCycle" rules={[{ required: true, message: 'Vui lòng chọn chu kỳ.' }]}><Select options={[{ value: 'MONTHLY', label: 'Hàng tháng' }, { value: 'YEARLY', label: 'Hàng năm' }]} /></Form.Item><Form.Item label="Thời hạn (tháng)" name="durationMonths" rules={[{ required: true, message: 'Vui lòng nhập thời hạn.' }, { type: 'number', min: 1, message: 'Phải là số nguyên dương.' }]}><InputNumber precision={0} min={1} style={{ width: '100%' }} /></Form.Item></div>
            <div className="form-grid"><Form.Item label="Giá VND" name="priceVnd" rules={[{ required: true, message: 'Vui lòng nhập giá.' }, { type: 'number', min: 1, message: 'Giá phải lớn hơn 0.' }]}><InputNumber precision={0} min={1} style={{ width: '100%' }} /></Form.Item><Form.Item label="Số thiết bị tối đa" name="maxActiveDevices" rules={[{ required: true, message: 'Vui lòng nhập số thiết bị.' }, { type: 'number', min: 1, message: 'Phải lớn hơn 0.' }]}><InputNumber precision={0} min={1} style={{ width: '100%' }} /></Form.Item></div>
-          <Form.Item label="Quyền lợi nâng cao (JSON)" extra='Ví dụ: {"desktop": true} cho phép sử dụng ứng dụng máy tính. Chỉ hỗ trợ thuộc tính desktop.' name="entitlementsText"><Input.TextArea placeholder='{"desktop": true}' /></Form.Item>
+          <Form.Item label="Ứng dụng máy tính" name="desktopEntitlement" valuePropName="checked" extra="Bật quyền sử dụng ứng dụng máy tính cho gói này."><Switch checkedChildren="Bật" unCheckedChildren="Tắt" onChange={() => setDesktopChanged(true)} /></Form.Item>
+          <Collapse items={[{ key: 'advanced', forceRender: true, label: 'Quyền lợi nâng cao', children: <Form.Item label="Quyền lợi bổ sung (JSON)" name="advancedEntitlementsText" extra='JSON object chỉ chứa các quyền lợi bổ sung dạng boolean, số hữu hạn hoặc chuỗi. Ví dụ: {"seats": 5, "support": "priority"}.'><Input.TextArea rows={5} placeholder='{"seats": 5}' /></Form.Item> }]} />
         </Form>
       </Modal>
     </>

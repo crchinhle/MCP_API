@@ -9,6 +9,7 @@ import { canonicalizeEntitlements } from '../../../platform/crypto/license-crypt
 import type { AuthPrincipal } from '../../identity-access/identity.types.js';
 import type { VerifiedPaymentEvent } from '../application/ports/payment-gateway.port.js';
 import { renewalExpiry } from '../domain/renewal-policy.js';
+import { evaluatePaymentRetry, type PaymentRetryDecision } from '../domain/payment-retry-policy.js';
 
 export interface OrderRecord {
   billingCycleSnapshot: string;
@@ -501,14 +502,43 @@ export class CommerceRepository {
     });
   }
 
+  async paymentRetryDecision(customerUserId: string, id: string, connection: Pick<Pool, 'query'> = this.pool): Promise<PaymentRetryDecision> {
+    const result = await connection.query<Record<string, unknown>>(
+      `SELECT o.order_status, o.payment_due_at, statement_timestamp() AS checked_at,
+              EXISTS (
+                SELECT 1 FROM payment_transactions pt
+                WHERE pt.order_id = o.id AND (
+                  pt.classification <> 'MATCHED' OR pt.review_status IS NOT NULL OR
+                  pt.fulfillment_order_id IS NULL
+                )
+              ) AS has_uncertain_transaction,
+              COALESCE((
+                SELECT json_agg(json_build_object('status', pa.status, 'expiresAt', pa.expires_at))
+                FROM payment_attempts pa WHERE pa.order_id = o.id
+              ), '[]'::json) AS attempts
+       FROM orders o WHERE o.id = $1 AND o.customer_user_id = $2`,
+      [id, customerUserId],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error('ORDER_NOT_FOUND');
+    const attempts = Array.isArray(row.attempts) ? row.attempts as { status: string; expiresAt: string | Date }[] : [];
+    return evaluatePaymentRetry({
+      orderStatus: String(row.order_status),
+      paymentDueAt: date(row.payment_due_at),
+      now: date(row.checked_at),
+      attempts: attempts.map((attempt) => ({ status: attempt.status, expiresAt: date(attempt.expiresAt) })),
+      hasUncertainTransaction: row.has_uncertain_transaction === true,
+    });
+  }
+
   async prepareCheckout(
     customerUserId: string,
     id: string,
   ): Promise<CheckoutPreparation> {
     return this.withTransaction(async (client) => {
       const orderResult = await client.query<Record<string, unknown>>(
-        `SELECT *, payment_due_at <= now() AS payment_expired FROM orders
-         WHERE id = $1 AND customer_user_id = $2 FOR UPDATE`,
+        `SELECT *, payment_due_at <= statement_timestamp() AS payment_expired
+         FROM orders WHERE id = $1 AND customer_user_id = $2 FOR UPDATE`,
         [id, customerUserId],
       );
       const row = orderResult.rows[0];
@@ -519,9 +549,14 @@ export class CommerceRepository {
       if (row.payment_expired === true) {
         throw new Error('ORDER_PAYMENT_EXPIRED');
       }
+      // Recheck under the order lock shared with IPN ingestion. Never use the
+      // earlier browser eligibility response as authorization to insert an attempt.
+      const decision = await this.paymentRetryDecision(customerUserId, id, client);
+      if (decision.reason === 'PAYMENT_REVIEW') throw new Error('PAYMENT_REQUIRES_REVIEW');
+      if (decision.reason === 'ORDER_NOT_PAYABLE') throw new Error('ORDER_PAYMENT_EXPIRED');
       const existing = await client.query<Record<string, unknown>>(
         `SELECT * FROM payment_attempts
-         WHERE order_id = $1 AND status = 'PENDING' AND expires_at > now()
+         WHERE order_id = $1 AND status = 'PENDING' AND expires_at > statement_timestamp()
          ORDER BY attempt_no DESC LIMIT 1`,
         [id],
       );
@@ -535,6 +570,7 @@ export class CommerceRepository {
           orderId: id,
         };
       }
+      if (!decision.allowed) throw new Error('PAYMENT_ATTEMPT_NOT_RETRYABLE');
       const attemptId = randomUUID();
       const checkoutReference = attemptId;
       const created = await client.query<Record<string, unknown>>(
@@ -992,7 +1028,7 @@ export class CommerceRepository {
         FROM payment_transactions pt
         LEFT JOIN orders o ON o.id = pt.order_id
         WHERE ${scope}
-          AND pt.fulfillment_order_id IS NOT NULL
+          AND (pt.fulfillment_order_id IS NOT NULL OR pt.order_id IS NOT NULL)
         ORDER BY pt.received_at DESC`,
       parameters,
     );

@@ -191,7 +191,6 @@ export function PurchaseFlowModal({
         productSlug: product.slug,
       });
       onOrderPrepared?.(created);
-      setStage('terms');
     } catch (cause) {
       setError(describeApiError(cause, 'Không thể chuẩn bị đơn hàng. Vui lòng thử lại.'));
     }

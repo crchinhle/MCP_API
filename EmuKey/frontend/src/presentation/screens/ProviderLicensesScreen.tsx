@@ -72,6 +72,7 @@ export function ProviderLicensesScreen() {
               <div>
                 <strong>{license.productName} · {license.publicLicenseId}</strong>
                 <small>{license.plan.name} v{license.plan.version} · hết hạn {new Date(license.expiresAt).toLocaleDateString('vi-VN')}</small>
+                <small>Thiết bị đang dùng: {license.activeDeviceCount}/{license.maxActiveDevices}</small>
                 <small>{finalityLabel(license.finality)} ({license.confirmationCount})</small>
               </div>
               <StatusChip tone={license.status === 'ACTIVE' ? 'success' : license.status === 'REVOKED' ? 'error' : 'warning'}>{licenseStatusLabel(license.status)}</StatusChip>

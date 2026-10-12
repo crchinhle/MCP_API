@@ -1,6 +1,6 @@
 import type { Server } from 'node:http';
 
-import type { INestApplication } from '@nestjs/common';
+import type { ExecutionContext, INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 
 import { CommerceService } from '../../../../EmuKey/backend/src/modules/commerce-payment/application/commerce.service.js';
-import { PaymentController } from '../../../../EmuKey/backend/src/modules/commerce-payment/presentation/commerce.controller.js';
+import { CommerceController, PaymentController } from '../../../../EmuKey/backend/src/modules/commerce-payment/presentation/commerce.controller.js';
 import { AuthGuard, RolesGuard } from '../../../../EmuKey/backend/src/modules/identity-access/security.guards.js';
 import type { CommerceRepository, OrderRecord } from '../../../../EmuKey/backend/src/modules/commerce-payment/infrastructure/commerce.repository.js';
 import type { PaymentGatewayPort } from '../../../../EmuKey/backend/src/modules/commerce-payment/application/ports/payment-gateway.port.js';
@@ -107,6 +107,30 @@ describe('PaymentController', () => {
 
   afterEach(async () => {
     await app?.close();
+  });
+
+  it('exposes the retry contract only to customers and validates the order UUID', async () => {
+    let actor = customer;
+    const target = service({ paymentRetryDecision: async (owner, id) => {
+      if (owner !== customer.sub || id !== orderId) throw new Error('ORDER_NOT_FOUND');
+      return { allowed: false, reason: 'ATTEMPT_PENDING' };
+    } });
+    const module = await Test.createTestingModule({
+      controllers: [CommerceController],
+      providers: [{ provide: CommerceService, useValue: target }],
+    }).overrideGuard(AuthGuard).useValue({ canActivate: (context: ExecutionContext) => {
+      context.switchToHttp().getRequest<{ user: typeof customer }>().user = actor;
+      return true;
+    } }).compile();
+    app = module.createNestApplication();
+    await app.init();
+    const http = app.getHttpServer() as Server;
+    await request(http).get(`/orders/${orderId}/payment-retry`).expect(200, { allowed: false, reason: 'ATTEMPT_PENDING' });
+    await request(http).get('/orders/invalid/payment-retry').expect(400);
+    actor = { ...customer, sub: '00000000-0000-4000-8000-000000000099' };
+    await request(http).get(`/orders/${orderId}/payment-retry`).expect(404);
+    actor = admin as typeof customer;
+    await request(http).get(`/orders/${orderId}/payment-retry`).expect(403);
   });
 
   it('passes the official SePay X-Secret-Key header to IPN verification', async () => {

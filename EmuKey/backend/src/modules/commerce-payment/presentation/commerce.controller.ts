@@ -34,6 +34,7 @@ import {
   PaymentHistoryDto,
   PaymentIngestResultDto,
   PaymentReceiptDto,
+  PaymentRetryDecisionDto,
   PaymentReviewDto,
   ReviewPaymentDto,
   RenewalPreviewDto,
@@ -102,6 +103,14 @@ export class CommerceController {
     @Body() dto: AcceptServiceTermsDto,
   ) {
     return this.service.acceptServiceTerms(actor, id, dto);
+  }
+
+  @Get(':id/payment-retry')
+  @ApiOperation({ summary: 'Check whether a new payment attempt is safe for this order' })
+  @ApiOkResponse({ type: PaymentRetryDecisionDto })
+  @ApiNotFoundResponse()
+  paymentRetryDecision(@CurrentUser() actor: AuthPrincipal, @Param('id', ParseUUIDPipe) id: string) {
+    return this.service.paymentRetryDecision(actor, id);
   }
 
   @Post(':id/checkout')

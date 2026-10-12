@@ -4481,6 +4481,11 @@
           "activationKeyAvailable": {
             "type": "boolean"
           },
+          "activationKeyLast4": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^[0-9a-f]{4}$"
+          },
           "blockNumber": {
             "type": "number",
             "nullable": true

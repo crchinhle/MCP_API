@@ -141,6 +141,16 @@ export class CommerceService {
     }
   }
 
+  async paymentRetryDecision(actor: AuthPrincipal, id: string) {
+    this.requireCustomer(actor);
+    try {
+      return await this.repository.paymentRetryDecision(actor.sub, id);
+    } catch (error) {
+      this.translate(error);
+      throw error;
+    }
+  }
+
   async cancelOrder(actor: AuthPrincipal, id: string) {
     this.requireCustomer(actor);
     try {
@@ -382,7 +392,9 @@ export class CommerceService {
       code === 'ORDER_TERMS_SNAPSHOT_CHANGED' ||
       code === 'ORDER_NOT_CANCELLABLE' ||
       code === 'ORDER_NOT_WAITING_PAYMENT' ||
-      code === 'ORDER_PAYMENT_EXPIRED'
+      code === 'ORDER_PAYMENT_EXPIRED' ||
+      code === 'PAYMENT_REQUIRES_REVIEW' ||
+      code === 'PAYMENT_ATTEMPT_NOT_RETRYABLE'
     ) {
       throw new ConflictException({
         code,

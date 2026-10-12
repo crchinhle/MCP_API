@@ -232,6 +232,24 @@ describe('PurchaseFlowModal offer configuration', () => {
 });
 
 describe('PurchaseFlowModal order creation from Tiếp tục', () => {
+  it.each(['PAYMENT_ACCEPTED', 'CANCELLED', 'EXPIRED'])('shows status when idempotent creation returns %s', async (orderStatus) => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const response = await original(input, init);
+      if (String(input).endsWith('/orders') && init?.method === 'POST') {
+        return Response.json({ ...await response.json(), orderStatus });
+      }
+      return response;
+    });
+    try {
+      renderModal({ product: singleOfferProduct });
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Tiếp tục' }));
+      expect(await screen.findByRole('link', { name: orderStatus === 'PAYMENT_ACCEPTED' ? 'Theo dõi cấp bản quyền' : 'Mở trạng thái đơn hàng' })).toBeTruthy();
+      expect(screen.queryByRole('region', { name: /Điều khoản dịch vụ/ })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Thanh toán qua SePay' })).toBeNull();
+    } finally { vi.mocked(fetch).mockImplementation(original); }
+  });
+
   it('creates exactly one order with the selected exact plan ID', async () => {
     const user = userEvent.setup();
     renderModal();

@@ -46,6 +46,7 @@ describe('Phase 8 HTTP authorization negative matrix', () => {
 
   it.each([
     ['GET', '/api/v1/orders'],
+    ['GET', '/api/v1/orders/00000000-0000-4000-8000-000000000501/payment-retry'],
     ['POST', '/api/v1/orders'],
     ['GET', '/api/v1/orders/renewal-preview/00000000-0000-4000-8000-000000000401'],
     ['GET', '/api/v1/operations/audit-logs'],

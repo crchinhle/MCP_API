@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../../../EmuKey/frontend/src/presentation/app/App';
@@ -6,6 +6,62 @@ import { App } from '../../../EmuKey/frontend/src/presentation/app/App';
 afterEach(cleanup);
 
 describe('Provider workspace', () => {
+  it('preserves advanced entitlements when saving without expanding the editor', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    let submitted: Record<string, unknown> | undefined;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      if (String(input).endsWith('/plans') && (!init?.method || init.method === 'GET')) {
+        const plans = await (await original(input, init)).json();
+        return Response.json(plans.map((plan: Record<string, unknown>) => ({ ...plan, status: 'DRAFT', entitlements: { desktop: true, seats: 5, support: 'priority' } })));
+      }
+      if (String(input).endsWith('/plans/plan-1') && init?.method === 'PUT') {
+        submitted = JSON.parse(String(init.body));
+        return Response.json(submitted);
+      }
+      return original(input, init);
+    });
+    try {
+      render(<App initialEntries={['/provider/catalog']} />);
+      const row = (await screen.findByText('Gói tháng')).closest('tr')!;
+      fireEvent.click(within(row).getByRole('button', { name: 'Sửa' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Sửa gói' });
+      expect(within(dialog).getByRole('switch').getAttribute('aria-checked')).toBe('true');
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu' }));
+      await waitFor(() => expect(submitted?.entitlements).toEqual({ desktop: true, seats: 5, support: 'priority' }));
+      await waitFor(() => expect(dialog.closest('.ant-modal')?.className).toContain('ant-zoom-leave'));
+      expect(screen.queryByText('Bỏ thay đổi chưa lưu?')).toBeNull();
+    } finally { vi.mocked(fetch).mockImplementation(original); }
+  });
+
+  it('shows searchable transaction evidence in reconciliation without admin actions', async () => {
+    render(<App initialEntries={['/provider/operations']} />);
+    fireEvent.click(await screen.findByRole('tab', { name: 'Đối soát thanh toán' }));
+    const panel = await screen.findByRole('tabpanel', { name: 'Đối soát thanh toán' });
+    expect(within(panel).getByText(/SEPAY-TX-1/)).toBeTruthy();
+    expect(within(panel).getByText(/sepay-event-1/)).toBeTruthy();
+    expect(within(panel).queryByRole('button', { name: /Xử lý|Chấp nhận/ })).toBeNull();
+    fireEvent.change(screen.getByLabelText('Tìm dữ liệu vận hành'), { target: { value: 'missing-event' } });
+    expect(await within(panel).findByText('Không có giao dịch đối chiếu phù hợp.')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Tìm dữ liệu vận hành'), { target: { value: 'sepay-event-1' } });
+    expect(await within(panel).findByText(/SEPAY-TX-1/)).toBeTruthy();
+  });
+
+  it.each([0, 2])('shows device usage %s on the license row', async (activeDeviceCount) => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const response = await original(input, init);
+      if (String(input).endsWith('/licenses')) {
+        const licenses = await response.json();
+        return Response.json(licenses.map((license: Record<string, unknown>) => ({ ...license, activeDeviceCount, maxActiveDevices: 5 })));
+      }
+      return response;
+    });
+    try {
+      render(<App initialEntries={['/provider/licenses']} />);
+      expect(await screen.findByText(`Thiết bị đang dùng: ${activeDeviceCount}/5`)).toBeTruthy();
+    } finally { vi.mocked(fetch).mockImplementation(original); }
+  });
+
   it('retries loading provider plan data independently from products', async () => {
     const original = vi.mocked(fetch).getMockImplementation()!;
     let fail = true;

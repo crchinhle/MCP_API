@@ -11,6 +11,7 @@ import type {
   OrderDto,
   OrderTermsDto,
   PaymentHistoryDto,
+  PaymentRetryDecisionDto,
   PaymentReviewDto,
   ReviewPaymentDto,
   RenewalPreviewDto,
@@ -56,6 +57,15 @@ export function usePaymentHistory(enabled = true, poll = false) {
     queryKey: ['payments', 'history'],
     queryFn: () => requestJson<PaymentHistoryDto[]>('/payments/history'),
     refetchInterval: poll ? 2_000 : false,
+  });
+}
+
+export function usePaymentRetryDecision(id: string, enabled = true) {
+  return useQuery({
+    enabled: Boolean(id) && enabled,
+    queryKey: ['orders', id, 'payment-retry'],
+    queryFn: () => requestJson<PaymentRetryDecisionDto>(`/orders/${encodeURIComponent(id)}/payment-retry`),
+    staleTime: 0,
   });
 }
 

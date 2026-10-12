@@ -3,6 +3,40 @@ import { expect, test } from '@playwright/test';
 test.use({ trace: 'off', screenshot: 'off', video: 'off' });
 
 for (const width of [320, 1440]) {
+  test(`payment retry requires fresh server approval at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    let allowed = false;
+    let decisionReads = 0;
+    let checkoutPosts = 0;
+    await page.route('**/api/v1/**', async (route) => {
+      const path = new URL(route.request().url()).pathname.replace('/api/v1', '');
+      let data: unknown = [];
+      if (path === '/auth/refresh') data = { accessToken: 'test', user: { id: 'buyer', role: 'CUSTOMER', displayName: 'Buyer', email: 'test@example.com', status: 'ACTIVE' } };
+      if (path === '/orders/test-order') data = { id: 'test-order', orderNumber: 'ORD-TEST', orderStatus: 'WAITING_PAYMENT', serviceTermsAcceptedAt: '2026-09-28T00:00:00Z' };
+      if (path.endsWith('/payment-retry')) {
+        decisionReads++;
+        data = { allowed, reason: allowed ? 'READY' : 'ATTEMPT_PENDING' };
+      }
+      if (path.endsWith('/checkout')) checkoutPosts++;
+      await route.fulfill({ json: data });
+    });
+    await page.goto('/buyer/orders/test-order/payment?sepay=error');
+    await expect(page.getByText('Yêu cầu thanh toán trước vẫn đang có hiệu lực.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Thanh toán lại', exact: true })).toHaveCount(0);
+    allowed = true;
+    await page.getByRole('button', { name: 'Kiểm tra lại trạng thái' }).click();
+    await expect(page.getByRole('button', { name: 'Thanh toán lại', exact: true })).toBeVisible();
+    // The decision changes after rendering the button; clicking must recheck it.
+    allowed = false;
+    await page.getByRole('button', { name: 'Thanh toán lại', exact: true }).click();
+    await expect(page.getByText('Yêu cầu thanh toán trước vẫn đang có hiệu lực.')).toBeVisible();
+    expect(decisionReads).toBeGreaterThanOrEqual(3);
+    expect(checkoutPosts).toBe(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+}
+
+for (const width of [320, 1440]) {
   test(`account renewal needs no secret and resumes after reload at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     let created = false;
