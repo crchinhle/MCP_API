@@ -1,4 +1,4 @@
-import { Alert, Button, Empty, Input, Tabs } from 'antd';
+import { Alert, Button, Empty, Input, Select } from 'antd';
 import { useMemo, useState } from 'react';
 
 import { usePaymentHistory } from '../../application/orders/orderQueries';
@@ -23,13 +23,15 @@ export function paymentClassificationTone(classification: string): 'success' | '
 export function ProviderOperationsScreen() {
   const payments = usePaymentHistory();
   const [query, setQuery] = useState('');
+  const [classification, setClassification] = useState('');
   const normalized = query.trim().toLocaleLowerCase('vi');
   const visiblePayments = useMemo(
     () => (payments.data ?? []).filter((payment) =>
+      (!classification || payment.classification === classification) &&
       `${payment.orderNumber ?? ''} ${payment.productNameSnapshot ?? ''} ${payment.planNameSnapshot ?? ''} ${payment.providerTransactionReference ?? ''} ${payment.providerEventId} ${payment.transactionId} ${payment.classification} ${payment.reviewStatus ?? ''}`
         .toLocaleLowerCase('vi')
         .includes(normalized)),
-    [normalized, payments.data],
+    [normalized, payments.data, classification],
   );
   if (payments.isLoading) return <PageLoading />;
 
@@ -46,7 +48,7 @@ export function ProviderOperationsScreen() {
 
   return (
     <>
-      <PageHeader title="Vận hành" />
+      <PageHeader title="Thanh toán & đối soát" />
       <div className="inline-filter">
         <Input.Search
           aria-label="Tìm dữ liệu vận hành"
@@ -54,19 +56,11 @@ export function ProviderOperationsScreen() {
           placeholder="Tìm mã đơn, sản phẩm hoặc giao dịch"
           value={query}
         />
+        <Select aria-label="Lọc kết quả đối soát" value={classification} onChange={setClassification} options={[{ value: '', label: 'Tất cả giao dịch' }, ...Object.entries(paymentClassificationLabels).map(([value, label]) => ({ value, label }))]} />
       </div>
       <section className="workspace-card operations-card">
-        <Tabs items={[
-          { key: 'orders', label: 'Đơn hàng & thanh toán', children: evidenceList(false) },
-          {
-            key: 'reconcile',
-            label: 'Đối soát thanh toán',
-            children: <>
-              <p className="muted-copy">Giao dịch và dấu thời gian do SePay gửi, cùng kết quả đối chiếu. Tab này chỉ cung cấp thông tin; việc xử lý giao dịch cần kiểm tra thuộc vai trò hỗ trợ hoặc quản trị hệ thống.</p>
-              {evidenceList(true)}
-            </>,
-          },
-        ]} />
+        <p className="muted-copy">Đối chiếu giao dịch theo mã đơn, số tiền và thời gian ghi nhận. Liên hệ bộ phận hỗ trợ khi có giao dịch cần kiểm tra.</p>
+        {evidenceList(true)}
       </section>
     </>
   );

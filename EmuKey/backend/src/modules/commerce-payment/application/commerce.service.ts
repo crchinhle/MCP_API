@@ -187,7 +187,7 @@ export class CommerceService {
         amountVnd: preparation.amountVnd,
         attemptId: preparation.attemptId,
         expiresAt: preparation.expiresAt.toISOString(),
-        expiresWithOrder: true,
+        expiresWithOrder: preparation.expiresAt.getTime() === order.paymentDueAt.getTime(),
       };
     } catch (error) {
       if (!preparation.existing) {

@@ -65,7 +65,7 @@ describe('mobile License screens', () => {
     expect(remoteRevokeDeviceMock).not.toHaveBeenCalled();
     await act(async () => fireEvent.press(await screen.findByText('Xem thiết bị')));
     expect(listDevicesMock).toHaveBeenCalledWith('license-1');
-    expect(await screen.findByText(/playwright-device · ACTIVE/)).toBeOnTheScreen();
+    expect(await screen.findByText(/playwright-device · Đang hoạt động/)).toBeOnTheScreen();
     await act(async () => fireEvent.changeText(screen.getByLabelText('Mật khẩu hiện tại'), 'CurrentPassword1!'));
     await act(async () => fireEvent.changeText(screen.getByLabelText('Action token'), 'remote-action-token'));
     remoteRevokeDeviceMock.mockResolvedValue({

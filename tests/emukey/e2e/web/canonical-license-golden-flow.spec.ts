@@ -179,27 +179,36 @@ test('canonical license golden flow: purchase → Sepolia → activation → ent
     await page.getByLabel('Email').fill(email);
     await page.getByLabel('Mật khẩu').fill(password!);
     await page.getByRole('button', { name: 'Đăng nhập' }).click();
-    await page.waitForURL('**/');
-    await page.goto(checkoutPath!);
+    await page.waitForURL(/\/buyer\/checkout\?/);
     await expect(page).toHaveURL(/\/buyer\/checkout\?/);
-    await expect(page.getByRole('heading', { name: 'Hoàn tất mua bản quyền' })).toBeVisible();
-    await page.getByRole('button', { name: 'Tạo đơn hàng' }).click();
-    await expect(page.getByRole('heading', { name: 'Điều khoản cấp phép' })).toBeVisible({ timeout: 20_000 });
-    const acceptButton = page.getByRole('button', { name: 'Đồng ý và tiếp tục thanh toán' });
-    await expect(acceptButton).toBeDisabled();
-    await page.getByText('Tôi đã đọc và đồng ý với điều khoản cấp phép').click();
-    await acceptButton.click();
-    await page.waitForURL('**/buyer/orders/**/payment', { timeout: 30_000 });
-    const orderId = (/\/buyer\/orders\/([^/]+)\/payment/.exec(page.url()) ?? [])[1]!;
-    evidence.timeline.orderAccepted = new Date().toISOString();
+    await expect(page.getByRole('dialog', { name: /Mua / })).toBeVisible();
+    const [createdOrder] = await Promise.all([
+      page.waitForResponse((response) => /\/orders$/.test(new URL(response.url()).pathname) && response.request().method() === 'POST' && response.ok()),
+      page.getByRole('button', { name: 'Tiếp tục', exact: true }).click(),
+    ]);
+    const orderId = (await createdOrder.json()).id as string;
+    expect(orderId).toBeTruthy();
+    await expect(page.getByRole('region', { name: 'Điều khoản dịch vụ' })).toBeVisible({ timeout: 20_000 });
+    const payButton = page.getByRole('button', { name: 'Thanh toán qua SePay' });
+    await expect(payButton).toBeDisabled();
+    await page.getByRole('checkbox', { name: /đồng ý với đúng phiên bản điều khoản/ }).check();
+    evidence.timeline.orderPrepared = new Date().toISOString();
     evidence.purchase.orderId = orderId;
 
     // ---------- Phase 2: SePay sandbox payment through the real provider UI ----------
     phase = 'payment';
-    await Promise.all([
-      page.waitForURL(/sepay/i, { timeout: 30_000 }),
-      page.getByRole('button', { name: 'Thanh toán qua SePay' }).click(),
-    ]);
+    let providerNavigationError: unknown;
+    try {
+      await Promise.all([
+        page.waitForURL(/sepay/i, { timeout: 30_000 }),
+        page.waitForResponse((response) => response.url().endsWith(`/orders/${orderId}/accept-service-terms`) && response.request().method() === 'POST')
+          .then((response) => {
+            expect(response.ok(), 'SERVICE_TERMS_ACCEPTANCE_FAILED').toBe(true);
+            evidence.timeline.orderAccepted = new Date().toISOString();
+          }),
+        payButton.click(),
+      ]);
+    } catch (error) { providerNavigationError = error; }
     const paymentDatabaseUrl = await readEnvironmentValue('DATABASE_URL');
     expect(paymentDatabaseUrl).toBeTruthy();
     const { Pool: PaymentPool } = requireBackend('pg');
@@ -227,12 +236,8 @@ test('canonical license golden flow: purchase → Sepolia → activation → ent
       paymentMatched: false,
     };
 
-    let providerNavigationError: unknown;
     try {
-      await Promise.all([
-        page.waitForURL(/sepay/i, { timeout: 30_000 }),
-        providerForm.locator('button[type="submit"]').click(),
-      ]);
+      if (providerNavigationError) throw providerNavigationError;
       const providerPageText = await page.locator('body').innerText({ timeout: 5_000 }).catch(() => '');
       const providerBlocked = isProviderBlocked(`${page.url()} ${providerPageText}`);
       evidence.payment = {

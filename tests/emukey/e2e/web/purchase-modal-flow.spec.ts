@@ -59,6 +59,8 @@ for (const width of [320, 390, 768, 1024, 1440]) {
         expect(request.postDataJSON()).toEqual({ planId: 'plan-yearly' });
         return route.fulfill({ status: 201, json: order });
       }
+      if (path === '/orders/purchase-order') return route.fulfill({ json: { ...order, ...(termsAcceptances ? { orderStatus: 'WAITING_PAYMENT', serviceTermsAcceptedAt: '2026-10-10T00:01:00Z' } : {}) } });
+      if (path.endsWith('/payment-retry')) return route.fulfill({ json: { allowed: true, canResume: false, reason: 'READY' } });
       if (path === '/orders/purchase-order/service-terms') return route.fulfill({ json: {
         version: 'terms-v3', hash: order.serviceTermsHashSnapshot, content: 'Điều khoản của đơn hàng thử nghiệm.',
       } });
@@ -119,6 +121,14 @@ for (const width of [320, 390, 768, 1024, 1440]) {
     expect(termsDialogBounds).not.toBeNull();
     expect(termsDialogBounds!.width).toBeLessThanOrEqual(width);
     expect(termsDialogBounds!.x).toBeGreaterThanOrEqual(0);
+    expect(await dialog.locator('.ant-modal-body').evaluate((body) => body.scrollWidth <= body.clientWidth)).toBe(true);
+    // The floating support launcher must not intercept any part of the CTA.
+    expect(await payment.evaluate((button) => {
+      const rect = button.getBoundingClientRect();
+      return [0.1, 0.5, 0.9].every((x) => [0.1, 0.5, 0.9].every((y) =>
+        button.contains(document.elementFromPoint(rect.x + rect.width * x, rect.y + rect.height * y))));
+    })).toBe(true);
+    if (width === 390) await page.screenshot({ path: test.info().outputPath('purchase-mobile.png'), fullPage: true });
     await payment.click();
     await page.waitForURL(/pay-sandbox\.sepay\.vn/);
     expect(capturedCheckout?.method).toBe('POST');
@@ -127,5 +137,94 @@ for (const width of [320, 390, 768, 1024, 1440]) {
     expect(creates).toBe(1);
     expect(termsAcceptances).toBe(1);
     expect(checkoutPreparations).toBe(1);
+  });
+}
+
+for (const scenario of ['cancelled', 'cancelled-deeplink', 'switch-plan-deeplink', 'expired-pending', 'paid-elsewhere', 'decision-changed', 'checkout-conflict'] as const) {
+  test(`purchase recovery handles ${scenario}`, async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 844 });
+    let status = scenario.startsWith('cancelled') ? 'CANCELLED' : 'WAITING_PAYMENT';
+    let canResume = scenario !== 'expired-pending';
+    let replacement = { ...order, id: 'replacement-order' };
+    let creates = 0;
+    let checkouts = 0;
+    await page.addInitScript(() => sessionStorage.setItem('emukey:checkout-intent:purchase-customer', JSON.stringify({
+      orderId: 'purchase-order', planId: 'plan-yearly', productSlug: 'securedesk',
+    })));
+    await page.route('**/api/v1/**', async (route) => {
+      const request = route.request();
+      const path = new URL(request.url()).pathname.replace('/api/v1', '');
+      let data: unknown = [];
+      if (path === '/auth/refresh') data = customer;
+      if (path === '/products/securedesk') data = product;
+      if (path === '/orders/purchase-order') data = { ...order, orderStatus: status, serviceTermsAcceptedAt: '2026-10-10T00:01:00Z' };
+      if (path.endsWith('/service-terms')) data = { version: 'terms-v3', hash: order.serviceTermsHashSnapshot, content: 'Điều khoản của đơn hàng.' };
+      if (path.endsWith('/payment-retry')) data = { allowed: false, canResume, reason: 'ATTEMPT_PENDING' };
+      if (path.endsWith('/checkout')) {
+        checkouts++;
+        if (scenario === 'checkout-conflict') {
+          canResume = false;
+          return route.fulfill({ status: 409, json: { message: 'PAYMENT_ATTEMPT_NOT_RETRYABLE' } });
+        }
+      }
+      if (path === '/orders' && request.method() === 'POST') {
+        creates++;
+        const plan = product.plans.find((item) => item.id === request.postDataJSON().planId)!;
+        replacement = { ...order, id: 'replacement-order', planId: plan.id, planNameSnapshot: plan.name, priceVndSnapshot: plan.priceVnd };
+        data = replacement;
+      }
+      if (path === '/orders/replacement-order') data = replacement;
+      await route.fulfill({ json: data });
+    });
+    if (scenario.endsWith('deeplink')) {
+      await page.goto('/buyer/checkout?product=securedesk&orderId=purchase-order');
+    } else {
+      await page.goto('/buyer/products/securedesk');
+      await page.getByRole('button', { name: 'Mua ngay' }).click();
+    }
+    const dialog = page.getByRole('dialog');
+    if (scenario.startsWith('cancelled')) {
+      await dialog.getByRole('button', { name: 'Chọn gói khác' }).click();
+      await expect(dialog.getByRole('button', { name: 'Tiếp tục', exact: true })).toBeVisible();
+      await dialog.getByRole('button', { name: 'Tiếp tục', exact: true }).click();
+      await expect(dialog.getByRole('checkbox')).toBeVisible();
+      expect(creates).toBe(1);
+    } else if (scenario === 'switch-plan-deeplink') {
+      await dialog.getByRole('button', { name: 'Quay lại' }).click();
+      await dialog.getByRole('radio', { name: /Gói tháng/ }).check();
+      await dialog.getByRole('button', { name: 'Tiếp tục', exact: true }).click();
+      await expect(dialog.getByRole('checkbox')).toBeVisible();
+      expect(creates).toBe(1);
+      await expect(page).toHaveURL(/orderId=replacement-order/);
+      await page.reload();
+      await expect(page.getByRole('dialog').getByRole('checkbox')).toBeVisible();
+      await expect(page.getByRole('dialog').getByText('120.000 ₫', { exact: true })).toBeVisible();
+      expect(creates).toBe(1);
+    } else if (scenario === 'checkout-conflict') {
+      await dialog.getByRole('button', { name: 'Tiếp tục thanh toán', exact: true }).click();
+      await expect(dialog.getByText('Trạng thái đơn hoặc phiên thanh toán đã thay đổi. Hãy kiểm tra trạng thái đơn hàng trước khi tiếp tục.')).toBeVisible();
+      await expect(dialog.getByText('PAYMENT_ATTEMPT_NOT_RETRYABLE')).toHaveCount(0);
+      await expect(dialog.getByRole('link', { name: 'Mở trạng thái đơn hàng' })).toBeVisible();
+      expect(checkouts).toBe(1);
+    } else if (scenario === 'decision-changed') {
+      const resume = dialog.getByRole('button', { name: 'Tiếp tục thanh toán', exact: true });
+      await expect(resume).toBeEnabled();
+      canResume = false;
+      await resume.click();
+      await expect(resume).toBeDisabled();
+      await expect(dialog.getByText('Phiên thanh toán cần được xác nhận hoặc đối soát. Nếu đã chuyển tiền, không thanh toán lại.')).toBeVisible();
+      expect(checkouts).toBe(0);
+    } else if (scenario === 'expired-pending') {
+      await expect(dialog.getByRole('button', { name: 'Tiếp tục thanh toán', exact: true })).toBeDisabled();
+      await expect(dialog.getByRole('link', { name: 'Mở trạng thái đơn hàng' })).toHaveAttribute('href', '/buyer/orders/purchase-order/payment');
+      expect(checkouts).toBe(0);
+      expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    } else {
+      await expect(dialog.getByRole('button', { name: 'Tiếp tục thanh toán', exact: true })).toBeVisible();
+      status = 'PAYMENT_ACCEPTED';
+      await expect(dialog.getByRole('link', { name: 'Theo dõi cấp bản quyền' })).toBeVisible({ timeout: 6000 });
+      await expect(dialog.getByRole('button', { name: 'Tiếp tục thanh toán', exact: true })).toHaveCount(0);
+      expect(checkouts).toBe(0);
+    }
   });
 }

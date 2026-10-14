@@ -1,4 +1,4 @@
-import type { LicenseDeviceDto, LicenseProjectionDto, OrderDto } from '../infrastructure/api/generated';
+import type { LicenseProjectionDto, OrderDto } from '../infrastructure/api/generated';
 
 export interface BuyerHomeMetrics {
   readonly recentOrders: number;
@@ -8,15 +8,14 @@ export interface BuyerHomeMetrics {
 
 export function selectBuyerHomeMetrics(
   orders: readonly Pick<OrderDto, 'id'>[],
-  licenses: readonly Pick<LicenseProjectionDto, 'expiresAt'>[],
-  devices: readonly Pick<LicenseDeviceDto, 'status'>[],
+  licenses: readonly Pick<LicenseProjectionDto, 'expiresAt' | 'activeDeviceCount'>[],
   now: Date,
 ): BuyerHomeMetrics {
   const start = now.getTime();
   const end = start + 30 * 24 * 60 * 60 * 1000;
   return {
     recentOrders: orders.length,
-    activeDevices: devices.filter((device) => device.status === 'ACTIVE').length,
+    activeDevices: licenses.reduce((total, license) => total + (license.activeDeviceCount ?? 0), 0),
     licensesExpiringWithin30Days: licenses.filter((license) => {
       const expiresAt = new Date(license.expiresAt).getTime();
       return expiresAt >= start && expiresAt <= end;

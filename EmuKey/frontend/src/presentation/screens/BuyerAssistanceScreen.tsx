@@ -1,6 +1,6 @@
 import { LoadingOverlay } from '../components/WorkspacePrimitives';
 import { Alert, Button, Empty } from 'antd';
-import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { conversationContextLabels, conversationStatusLabels, useAppendConversationMessage, useAskAi, useConversationMessages, useConversations, useCreateConversation } from '../../application/assistance/assistanceQueries';
 import { useRequestSupport } from '../../application/assistance/supportQueries';
@@ -14,12 +14,14 @@ import {
 
 export function BuyerAssistanceScreen() {
   const conversations = useConversations();
-  const [selectedId, setSelectedId] = useState<string>();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const selectedId = searchParams.get('conversation');
+  const setSelectedId = (id: string) => setSearchParams({ conversation: id });
   const append = useAppendConversationMessage();
   const askAi = useAskAi();
   const create = useCreateConversation();
   const requestSupport = useRequestSupport();
-  const conversation = conversations.data?.find((item) => item.id === selectedId) ?? conversations.data?.[0];
+  const conversation = selectedId ? conversations.data?.find((item) => item.id === selectedId) : conversations.data?.[0];
   const messages = useConversationMessages(conversation?.id);
   const startConversation = () => create.mutate(
     { contextType: 'GENERAL', title: 'Hội thoại hỗ trợ' },
@@ -27,6 +29,7 @@ export function BuyerAssistanceScreen() {
   );
   if (conversations.isLoading) return <PageLoading />;
   if (conversations.isError) return <Alert type="error" title="Không thể tải hội thoại" action={<Button onClick={() => void conversations.refetch()}>Thử lại</Button>} />;
+  if (selectedId && !conversation) return <Alert type="warning" title="Không tìm thấy hội thoại được yêu cầu." description="Hội thoại có thể chưa tải xong hoặc bạn không có quyền truy cập." action={<><Button onClick={() => void conversations.refetch()}>Thử lại</Button><Button onClick={() => setSearchParams({})}>Xem các hội thoại của tôi</Button></>} />;
   if (!conversation) {
     return (
       <>
@@ -80,7 +83,7 @@ export function BuyerAssistanceScreen() {
             readOnly={conversation.status === 'CLOSED'}
             submitLabel="Gửi tin nhắn"
           />
-          {askAi.data ? <section aria-label="Câu trả lời AI"><h3>Trợ lý AI</h3><p>{askAi.data.answer}</p><p className="muted-copy">{askAi.data.grounded ? `Nguồn tham khảo: ${askAi.data.citedSourceIds.join(', ')}` : 'Chưa tìm thấy nguồn xác thực. Bạn nên kiểm tra lại với nhân viên hỗ trợ.'}</p></section> : null}
+          {askAi.variables?.conversationId === conversation.id && askAi.data ? <section aria-label="Câu trả lời AI"><h3>Trợ lý AI</h3><p>{askAi.data.answer}</p><p className="muted-copy">{askAi.data.grounded ? `Nguồn tham khảo: ${askAi.data.citedSourceIds.join(', ')}` : 'Chưa tìm thấy nguồn xác thực. Bạn nên kiểm tra lại với nhân viên hỗ trợ.'}</p></section> : null}
         </section>
         <aside className="workspace-card detail-card">
           <h2>Thông tin liên quan</h2>

@@ -38,10 +38,10 @@ export function ProviderDashboardScreen() {
 
       {error ? <Alert showIcon type="error" message="Không thể tải tổng quan Provider." /> : null}
       <section className="metric-grid metric-grid--four" aria-label="Chỉ số hoạt động">
-        <article className="metric-card"><span className="status-chip status-chip--neutral">Sản phẩm đang bán</span><strong>{publishedProducts.length}</strong><small>Trạng thái PUBLISHED</small></article>
-        <article className="metric-card"><span className="status-chip status-chip--success">Bản quyền hoạt động</span><strong>{activeLicenses.length}</strong><small>Trạng thái ACTIVE</small></article>
-        <article className="metric-card"><span className="status-chip status-chip--warning">Chờ xác nhận</span><strong>{pendingLicenses.length}</strong><small>Trạng thái PENDING_ONCHAIN</small></article>
-        <article className="metric-card"><span className="status-chip status-chip--commerce">Giao dịch cần kiểm tra</span><strong>{paymentExceptions.length}</strong><small>Chưa MATCHED</small></article>
+        <article className="metric-card"><span className="status-chip status-chip--neutral">Sản phẩm đang bán</span><strong>{publishedProducts.length}</strong><small>Trạng thái Đã công bố</small></article>
+        <article className="metric-card"><span className="status-chip status-chip--success">Bản quyền hoạt động</span><strong>{activeLicenses.length}</strong><small>Trạng thái Đang có hiệu lực</small></article>
+        <article className="metric-card"><span className="status-chip status-chip--warning">Chờ xác nhận</span><strong>{pendingLicenses.length}</strong><small>Trạng thái Đang chờ blockchain xác nhận</small></article>
+        <article className="metric-card"><span className="status-chip status-chip--commerce">Giao dịch cần kiểm tra</span><strong>{paymentExceptions.length}</strong><small>Chưa đối chiếu thành công</small></article>
       </section>
       <section className="workspace-card section-card">
         <h2>Cần chú ý</h2>

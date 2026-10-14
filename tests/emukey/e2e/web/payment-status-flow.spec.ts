@@ -2,6 +2,33 @@ import { expect, test } from '@playwright/test';
 
 test.use({ trace: 'off', screenshot: 'off', video: 'off' });
 
+test('resumes a live session after returning from SePay and rechecks before POST', async ({ page }) => {
+  let decisions = 0;
+  let checkouts = 0;
+  await page.route('**/api/v1/**', async (route) => {
+    const path = new URL(route.request().url()).pathname.replace('/api/v1', '');
+    let data: unknown = [];
+    if (path === '/auth/refresh') data = { accessToken: 'test', user: { id: 'buyer', role: 'CUSTOMER', displayName: 'Buyer', email: 'test@example.com', status: 'ACTIVE' } };
+    if (path === '/orders/test-order') data = { id: 'test-order', orderNumber: 'ORD-TEST', orderStatus: 'WAITING_PAYMENT' };
+    if (path.endsWith('/payment-retry')) { decisions++; data = { allowed: false, canResume: true, reason: 'ATTEMPT_PENDING' }; }
+    if (path.endsWith('/checkout')) {
+      checkouts++;
+      data = { attemptId: 'same-attempt', checkoutReference: 'same-reference', amountVnd: 1000, checkoutMethod: 'POST', checkoutUrl: 'https://pay-sandbox.sepay.vn/v1/checkout/init', checkoutFields: { order_invoice_number: 'same-reference', signature: 'signed-resume' }, expiresAt: '2099-01-01T00:00:00Z' };
+    }
+    await route.fulfill({ json: data });
+  });
+  await page.route('https://pay-sandbox.sepay.vn/**', async (route) => {
+    expect(route.request().method()).toBe('POST');
+    expect(route.request().postData()).toContain('same-reference');
+    await route.fulfill({ contentType: 'text/html', body: '<h1>Resumed session</h1>' });
+  });
+  await page.goto('/buyer/orders/test-order/payment?sepay=cancel');
+  await page.getByRole('button', { name: 'Tiếp tục phiên thanh toán' }).click();
+  await expect(page.getByRole('heading', { name: 'Resumed session' })).toBeVisible();
+  expect(checkouts).toBe(1);
+  expect(decisions).toBeGreaterThanOrEqual(2);
+});
+
 for (const width of [320, 1440]) {
   test(`payment retry requires fresh server approval at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
@@ -21,7 +48,7 @@ for (const width of [320, 1440]) {
       await route.fulfill({ json: data });
     });
     await page.goto('/buyer/orders/test-order/payment?sepay=error');
-    await expect(page.getByText('Yêu cầu thanh toán trước vẫn đang có hiệu lực.')).toBeVisible();
+    await expect(page.getByText('Yêu cầu thanh toán trước đang chờ xác nhận hoặc đối soát.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Thanh toán lại', exact: true })).toHaveCount(0);
     allowed = true;
     await page.getByRole('button', { name: 'Kiểm tra lại trạng thái' }).click();
@@ -29,7 +56,7 @@ for (const width of [320, 1440]) {
     // The decision changes after rendering the button; clicking must recheck it.
     allowed = false;
     await page.getByRole('button', { name: 'Thanh toán lại', exact: true }).click();
-    await expect(page.getByText('Yêu cầu thanh toán trước vẫn đang có hiệu lực.')).toBeVisible();
+    await expect(page.getByText('Yêu cầu thanh toán trước đang chờ xác nhận hoặc đối soát.')).toBeVisible();
     expect(decisionReads).toBeGreaterThanOrEqual(3);
     expect(checkoutPosts).toBe(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
@@ -306,3 +333,22 @@ test.describe('Payment status downstream flow', () => {
     expect(retrievals).toBe(1);
   });
 });
+
+for (const state of ['ready', 'success-return', 'cancelled'] as const) {
+  test(`payment page presents honest summary and actions for ${state}`, async ({ page }) => {
+    await page.route('**/api/v1/**', async (route) => {
+      const path = new URL(route.request().url()).pathname.replace('/api/v1', '');
+      let data: unknown = [];
+      if (path === '/auth/refresh') data = { accessToken: 'test', user: { id: 'buyer', role: 'CUSTOMER', displayName: 'Buyer', email: 'test@example.com', status: 'ACTIVE' } };
+      if (path === '/orders/test-order') data = { id: 'test-order', orderNumber: 'ORD-TEST', orderStatus: state === 'cancelled' ? 'CANCELLED' : 'WAITING_PAYMENT', productNameSnapshot: 'SecureDesk Pro', planNameSnapshot: 'Gói năm', priceVndSnapshot: 1200000 };
+      if (path.endsWith('/payment-retry')) data = { allowed: state === 'ready', canResume: state === 'success-return', reason: state === 'ready' ? 'READY' : 'ATTEMPT_PENDING' };
+      await route.fulfill({ json: data });
+    });
+    await page.goto(`/buyer/orders/test-order/payment${state === 'success-return' ? '?sepay=success' : ''}`);
+    if (state === 'success-return') await page.getByRole('dialog').getByRole('button', { name: 'Đóng', exact: true }).click();
+    await expect(page.getByText('SecureDesk Pro', { exact: true })).toBeVisible();
+    await expect(page.getByText('1.200.000 ₫', { exact: true })).toBeVisible();
+    if (state === 'success-return') await expect(page.getByRole('button', { name: 'Tiếp tục phiên thanh toán' })).toHaveCount(0);
+    if (state === 'cancelled') await expect(page.getByText('Chưa xác nhận', { exact: true })).toBeVisible();
+  });
+}

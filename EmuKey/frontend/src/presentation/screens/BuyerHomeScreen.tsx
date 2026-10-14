@@ -2,7 +2,7 @@ import { PageLoading } from '../components/WorkspacePrimitives';
 import { Alert, Button } from 'antd';
 import { useNavigate } from 'react-router-dom';
 
-import { useAllLicenseDevices, useLicenses } from '../../application/licenses/licenseQueries';
+import { useLicenses } from '../../application/licenses/licenseQueries';
 import { useOrders } from '../../application/orders/orderQueries';
 import { selectBuyerHomeMetrics } from '../../domain/buyerHome';
 
@@ -14,17 +14,15 @@ export function BuyerHomeScreen() {
   const navigate = useNavigate();
   const licenses = useLicenses();
   const orders = useOrders();
-  const deviceQueries = useAllLicenseDevices((licenses.data ?? []).map((license) => license.id));
   const licenseRows = licenses.data ?? [];
   const orderRows = orders.data ?? [];
-  const deviceRows = deviceQueries.flatMap((query) => query.data ?? []);
-  const metrics = selectBuyerHomeMetrics(orderRows, licenseRows, deviceRows, new Date());
-  const loading = licenses.isLoading || orders.isLoading || deviceQueries.some((query) => query.isLoading);
-  const failed = licenses.isError || orders.isError || deviceQueries.some((query) => query.isError);
+  const metrics = selectBuyerHomeMetrics(orderRows, licenseRows, new Date());
+  const loading = licenses.isLoading || orders.isLoading;
+  const failed = licenses.isError || orders.isError;
 
   if (loading) return <PageLoading />;
-  if (failed && (!licenses.data || !orders.data || deviceQueries.some((query) => query.isError && !query.data))) {
-    return <Alert showIcon message="Không thể tải dữ liệu trang chủ." type="error" action={<Button onClick={() => { void licenses.refetch(); void orders.refetch(); deviceQueries.forEach((query) => { void query.refetch(); }); }}>Thử lại</Button>} />;
+  if (failed && (!licenses.data || !orders.data)) {
+    return <Alert showIcon message="Không thể tải dữ liệu trang chủ." type="error" action={<Button onClick={() => { void licenses.refetch(); void orders.refetch(); }}>Thử lại</Button>} />;
   }
 
   return (

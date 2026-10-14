@@ -236,7 +236,7 @@ describe('PurchaseFlowModal order creation from Tiếp tục', () => {
     const original = vi.mocked(fetch).getMockImplementation()!;
     vi.mocked(fetch).mockImplementation(async (input, init) => {
       const response = await original(input, init);
-      if (String(input).endsWith('/orders') && init?.method === 'POST') {
+      if ((String(input).endsWith('/orders') && init?.method === 'POST') || String(input).endsWith(`/orders/${testOrderId}`)) {
         return Response.json({ ...await response.json(), orderStatus });
       }
       return response;

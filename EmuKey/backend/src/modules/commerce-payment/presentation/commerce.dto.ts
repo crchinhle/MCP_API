@@ -122,6 +122,7 @@ export class RenewalPreviewDto {
 
 export class PaymentRetryDecisionDto {
   @ApiProperty() allowed!: boolean;
+  @ApiProperty({ description: 'The existing live checkout can be resumed without creating another attempt.' }) canResume!: boolean;
   @ApiProperty({ enum: ['READY', 'ATTEMPT_PENDING', 'PAYMENT_REVIEW', 'ORDER_NOT_PAYABLE'] })
   reason!: 'READY' | 'ATTEMPT_PENDING' | 'PAYMENT_REVIEW' | 'ORDER_NOT_PAYABLE';
 }

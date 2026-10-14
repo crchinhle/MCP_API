@@ -26,6 +26,7 @@ import {
   closeConversation,
   comparePlans,
   createCheckout,
+  getPaymentRetryDecision,
   createOrder,
   getOrder,
   getOrderTerms,
@@ -64,9 +65,9 @@ import {
 } from '../infrastructure/api/client';
 
 type RootStackParamList = {
-  Assistance: undefined;
+  Assistance: { conversationId?: string } | undefined;
   Catalog: undefined;
-  Checkout: { planId: string; planName: string; priceVnd: number; productName: string };
+  Checkout: { orderId?: string; planId: string; planName: string; priceVnd: number; productName: string };
   ComparePlans: { ids: string[] };
   Licenses: undefined;
   Notifications: undefined;
@@ -155,7 +156,8 @@ function CustomerNavigation({ navigation }: { readonly navigation: Pick<NativeSt
   );
 }
 
-export function AssistanceScreen() {
+export function AssistanceScreen({ route }: { readonly route?: NativeStackScreenProps<RootStackParamList, 'Assistance'>['route'] }) {
+  const requestedId = route?.params?.conversationId;
   const [conversations, setConversations] = useState<MobileConversation[]>([]);
   const [selected, setSelected] = useState<MobileConversation | null>(null);
   const [messages, setMessages] = useState<MobileConversationMessage[]>([]);
@@ -173,28 +175,39 @@ export function AssistanceScreen() {
   };
   useEffect(() => {
     let active = true;
+    const generation = ++requestGeneration.current;
+    setAiAnswer(null);
+    setSelected(null);
+    setMessages([]);
     void listConversations().then((items) => {
-      if (!active) return;
+      if (!active || generation !== requestGeneration.current) return;
       setConversations(items);
-      if (items[0]) {
-        setSelected(items[0]);
-        requestGeneration.current += 1;
-        return listConversationMessages(items[0].id).then((loaded) => { if (active) setMessages(loaded); });
+      const target = requestedId ? items.find((item) => item.id === requestedId) : items[0];
+      setSelected(null);
+      setMessages([]);
+      setError(requestedId && !target ? 'Không tìm thấy hội thoại được yêu cầu.' : null);
+      if (target) {
+        setSelected(target);
+        return listConversationMessages(target.id).then((loaded) => { if (active && generation === requestGeneration.current) setMessages(loaded); });
       }
       return undefined;
-    }).catch(() => { if (active) setError('Không thể tải hội thoại hỗ trợ.'); });
+    }).catch(() => { if (active && generation === requestGeneration.current) setError('Không thể tải hội thoại hỗ trợ.'); });
     return () => { active = false; };
-  }, []);
+  }, [requestedId]);
   useEffect(() => {
     if (!selected) return;
     const conversationId = selected.id;
-    const timer = setInterval(() => { void listConversationMessages(conversationId).then((items) => { if (selected?.id === conversationId) setMessages(items); }).catch(() => undefined); }, 5_000);
-    return () => clearInterval(timer);
+    const generation = requestGeneration.current;
+    let active = true;
+    const timer = setInterval(() => { void listConversationMessages(conversationId).then((items) => { if (active && generation === requestGeneration.current) setMessages(items); }).catch(() => undefined); }, 5_000);
+    return () => { active = false; clearInterval(timer); };
   }, [selected]);
 
   const selectConversation = async (conversation: MobileConversation) => {
     const generation = ++requestGeneration.current;
     setSelected(conversation);
+    setMessages([]);
+    setError(null);
     setAiAnswer(null);
     try { await loadMessages(conversation.id, generation); }
     catch { if (generation === requestGeneration.current) setError('Không thể tải nội dung hội thoại.'); }
@@ -202,6 +215,7 @@ export function AssistanceScreen() {
   const send = async () => {
     const content = draft.trim();
     const conversation = selected;
+    const generation = requestGeneration.current;
     if (!content || !conversation || conversation.status === 'CLOSED' || content.length > 8000) return;
     const clientMessageId = outgoingIds.current[conversation.id] ?? crypto.randomUUID();
     outgoingIds.current[conversation.id] = clientMessageId;
@@ -209,21 +223,22 @@ export function AssistanceScreen() {
       await appendConversationMessage(conversation.id, clientMessageId, content);
       delete outgoingIds.current[conversation.id];
       setDrafts((current) => ({ ...current, [conversation.id]: '' }));
-      await loadMessages(conversation.id);
+      await loadMessages(conversation.id, generation);
     } catch { setError('Không thể gửi tin nhắn. Có thể thử lại.'); }
   };
   const ask = async () => {
     const question = draft.trim();
     const conversation = selected;
+    const generation = requestGeneration.current;
     if (!question || !conversation || conversation.status === 'CLOSED' || question.length > 4000) return;
     const clientMessageId = outgoingIds.current[conversation.id] ?? crypto.randomUUID();
     outgoingIds.current[conversation.id] = clientMessageId;
     try {
       const answer = await askConversationAi(conversation.id, question, clientMessageId);
       delete outgoingIds.current[conversation.id];
-      if (selected?.id === conversation.id) setAiAnswer(answer);
+      if (generation === requestGeneration.current) setAiAnswer(answer);
       setDrafts((current) => ({ ...current, [conversation.id]: '' }));
-      await loadMessages(conversation.id);
+      await loadMessages(conversation.id, generation);
     } catch { setError('Không thể hỏi AI lúc này. Có thể thử lại.'); }
   };
   const close = async () => {
@@ -235,7 +250,7 @@ export function AssistanceScreen() {
     } catch { setError('Không thể đóng hội thoại.'); }
   };
   const start = async () => {
-    try { const conversation = await createConversation(); setConversations((items) => [conversation, ...items]); setSelected(conversation); setMessages([]); }
+    try { const conversation = await createConversation(); requestGeneration.current += 1; setAiAnswer(null); setError(null); setConversations((items) => [conversation, ...items]); setSelected(conversation); setMessages([]); }
     catch { setError('Không thể tạo hội thoại mới.'); }
   };
   return (
@@ -243,7 +258,7 @@ export function AssistanceScreen() {
       <Text accessibilityRole="header" style={styles.heading}>Hỗ trợ</Text>
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
       <Button onPress={() => void start()} title="Hội thoại mới" />
-      {conversations.map((conversation) => <Pressable accessibilityRole="button" accessibilityState={{ selected: selected?.id === conversation.id }} key={conversation.id} onPress={() => void selectConversation(conversation)} style={[styles.card, selected?.id === conversation.id ? styles.selectedCard : null]}><Text style={styles.cardTitle}>{conversation.title ?? 'Hội thoại hỗ trợ'}</Text><Text style={styles.muted}>{conversation.status}</Text></Pressable>)}
+      {conversations.map((conversation) => <Pressable accessibilityRole="button" accessibilityState={{ selected: selected?.id === conversation.id }} key={conversation.id} onPress={() => void selectConversation(conversation)} style={[styles.card, selected?.id === conversation.id ? styles.selectedCard : null]}><Text style={styles.cardTitle}>{conversation.title ?? 'Hội thoại hỗ trợ'}</Text><Text style={styles.muted}>{conversation.status === 'CLOSED' ? 'Đã đóng' : 'Đang mở'}</Text></Pressable>)}
       {!selected ? <Text>Chưa có hội thoại hỗ trợ.</Text> : <View style={styles.card}>
         {messages.map((message) => <View key={message.id} style={styles.messageRow}><Text style={styles.muted}>{message.senderType === 'CUSTOMER' ? 'Bạn' : message.senderType === 'AI' ? 'AI' : 'Hỗ trợ'}</Text><Text>{message.content}</Text></View>)}
         {aiAnswer ? <View style={styles.aiNotice}><Text>{aiAnswer.answer}</Text><Text style={styles.muted}>{aiAnswer.grounded ? `Mã nguồn tham khảo: ${aiAnswer.citedSourceIds.join(', ')}` : 'AI không đủ nguồn chính thức.'}</Text></View> : null}
@@ -498,17 +513,17 @@ function OrdersScreen({ navigation }: NativeStackScreenProps<RootStackParamList,
   const load = async () => { setError(null); setLoading(true); try { setOrders(await listOrders()); } catch { setError('Không thể tải danh sách đơn hàng.'); } finally { setLoading(false); } };
   useEffect(() => { void load(); }, []);
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} />}>
       <Text accessibilityRole="header" style={styles.brand}>Emukey</Text>
       <Text style={styles.subtitle}>Đơn hàng gắn với tài khoản Emukey đang đăng nhập</Text>
       <CustomerNavigation navigation={navigation} />
       <Button onPress={() => navigation.navigate('VerifyLicense')} title="Xác minh License công khai" />
-      {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+      {error ? <><Text accessibilityRole="alert" style={styles.error}>{error}</Text><Button title="Thử lại" onPress={() => void load()} /></> : null}
       {!loading && orders.length === 0 && !error ? <Text>Chưa có đơn hàng.</Text> : null}
       {orders.map((order) => (
         <Pressable key={order.id} onPress={() => navigation.navigate('OrderDetail', { id: order.id })} style={styles.card}>
           <Text style={styles.cardTitle}>{order.orderNumber}</Text>
-          <Text>{order.orderStatus}</Text>
+          <Text>{mobileOrderStatusLabel(order.orderStatus)}</Text>
           <Text>{order.priceVndSnapshot.toLocaleString('vi-VN')} VND</Text>
         </Pressable>
       ))}
@@ -517,12 +532,14 @@ function OrdersScreen({ navigation }: NativeStackScreenProps<RootStackParamList,
 }
 
 export function CheckoutScreen({ navigation, route }: NativeStackScreenProps<RootStackParamList, 'Checkout'>) {
+  const [busy, setBusy] = useState(false);
   const [order, setOrder] = useState<MobileOrderDetail | null>(null);
   const [terms, setTerms] = useState<import('../infrastructure/api/client').MobileOrderTerms | null>(null);
   const [termsState, setTermsState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const loadTerms = async (orderId: string) => {
+    setError(null);
     setTermsState('loading');
     try {
       const loaded = await getOrderTerms(orderId);
@@ -535,24 +552,28 @@ export function CheckoutScreen({ navigation, route }: NativeStackScreenProps<Roo
     }
   };
   const startOrder = async () => {
+    if (busy) return;
+    setBusy(true);
     setError(null);
     try {
-      const created = await createOrder({ planId: route.params.planId });
+      const created = route.params.orderId ? await getOrder(route.params.orderId) : await createOrder({ planId: route.params.planId });
       setOrder(created);
-      await loadTerms(created.id);
+      if (created.orderStatus === 'WAITING_SERVICE_TERMS_ACCEPTANCE') await loadTerms(created.id);
+      else if (created.orderStatus === 'WAITING_PAYMENT' || created.orderStatus === 'PAYMENT_ACCEPTED') navigation.replace('Payment', { orderId: created.id });
     } catch {
-      setError('Không thể tạo đơn hàng.');
-    }
+      setError('Không thể mở đơn hàng.');
+    } finally { setBusy(false); }
   };
   const continueToPayment = async () => {
-    if (!order || !accepted || !terms || termsState !== 'ready') return;
+    if (busy || !order || !accepted || !terms || termsState !== 'ready') return;
+    setBusy(true);
     setError(null);
     try {
       const updated = await acceptServiceTerms(order, terms);
       navigation.replace('Payment', { orderId: updated.id });
     } catch {
       setError('Không thể xác nhận điều khoản của đơn hàng.');
-    }
+    } finally { setBusy(false); }
   };
   return (
     <ScrollView contentContainerStyle={styles.content}>
@@ -564,13 +585,13 @@ export function CheckoutScreen({ navigation, route }: NativeStackScreenProps<Roo
         {order && order.priceVndSnapshot !== route.params.priceVnd ? <Text style={styles.error}>Giá server đã thay đổi so với danh mục: {order.priceVndSnapshot.toLocaleString('vi-VN')} ₫.</Text> : null}
       </View>
       {!order ? (
-        <Button onPress={() => void startOrder()} title="Tạo đơn hàng" />
-      ) : (
+        <Button disabled={busy} onPress={() => void startOrder()} title="Tiếp tục" />
+      ) : order.orderStatus === 'WAITING_SERVICE_TERMS_ACCEPTANCE' ? (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Điều khoản cấp phép</Text>
+          <Text accessibilityRole="header" style={styles.cardTitle}>Điều khoản dịch vụ</Text>
           {termsState === 'error' ? (
             <>
-              <Text style={styles.terms}>Chưa tải được điều khoản cấp phép.</Text>
+              <Text style={styles.terms}>Chưa tải được điều khoản dịch vụ.</Text>
               <Button disabled title="Tiếp tục thanh toán" />
               <Button onPress={() => void loadTerms(order.id)} title="Tải lại điều khoản" />
             </>
@@ -580,19 +601,19 @@ export function CheckoutScreen({ navigation, route }: NativeStackScreenProps<Roo
               {termsState === 'ready' ? (
                 <Pressable
                   accessibilityRole="checkbox"
-                  accessibilityLabel="Tôi đã đọc và đồng ý với điều khoản cấp phép"
+                  accessibilityLabel="Tôi đã đọc và đồng ý với điều khoản dịch vụ"
                   accessibilityState={{ checked: accepted }}
                   onPress={() => setAccepted((value) => !value)}
                   style={[styles.acceptance, accepted ? styles.acceptanceSelected : null]}
                 >
-                  <Text>{accepted ? '✓ ' : ''}Tôi đã đọc và đồng ý với điều khoản cấp phép</Text>
+                  <Text>{accepted ? '✓ ' : ''}Tôi đã đọc và đồng ý với điều khoản dịch vụ</Text>
                 </Pressable>
               ) : null}
-              <Button disabled={termsState !== 'ready' || !accepted} onPress={() => void continueToPayment()} title="Tiếp tục thanh toán" />
+              <Button disabled={busy || termsState !== 'ready' || !accepted} onPress={() => void continueToPayment()} title="Tiếp tục thanh toán" />
             </>
           )}
         </View>
-      )}
+      ) : <Text>{mobileOrderStatusLabel(order.orderStatus)}</Text>}
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
     </ScrollView>
   );
@@ -627,6 +648,8 @@ function checkoutDocument(checkout: MobileCheckoutSession): string {
 export function PaymentScreen({ navigation, route }: NativeStackScreenProps<RootStackParamList, 'Payment'>) {
   const [order, setOrder] = useState<MobileOrderDetail | null>(null);
   const [checkout, setCheckout] = useState<MobileCheckoutSession | null>(null);
+  const [decision, setDecision] = useState<Awaited<ReturnType<typeof getPaymentRetryDecision>> | null>(null);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const handlePaymentReturn = (url: string) => {
     if (!url.startsWith('emukey://payment/')) return false;
@@ -646,25 +669,35 @@ export function PaymentScreen({ navigation, route }: NativeStackScreenProps<Root
   useEffect(() => {
     let active = true;
     const refresh = () => void getOrder(route.params.orderId)
-      .then((value) => { if (active) setOrder(value); })
-      .catch(() => { if (active) setError('Không thể cập nhật trạng thái đơn hàng.'); });
+      .then(async (value) => {
+        const next = value.orderStatus === 'WAITING_PAYMENT' ? await getPaymentRetryDecision(value.id) : null;
+        if (active) { setOrder(value); setDecision(next); }
+      })
+      .catch(() => { if (active) { setDecision(null); setError('Không thể cập nhật trạng thái đơn hàng.'); } });
     void refresh();
     const timer = setInterval(refresh, 5_000);
     return () => { active = false; clearInterval(timer); };
   }, [route.params.orderId]);
   const openCheckout = async () => {
+    if (busy) return;
+    setBusy(true);
     setError(null);
     try {
+      const latest = await getPaymentRetryDecision(route.params.orderId);
+      setDecision(latest);
+      if (!latest.allowed && !latest.canResume) return;
       const session = await createCheckout(route.params.orderId);
       if (!session.checkoutUrl.startsWith('https://')) throw new Error('UNSAFE_CHECKOUT_URL');
       setCheckout(session);
     } catch {
+      setDecision(null);
       setError('Không thể tạo phiên thanh toán SePay.');
-    }
+    } finally { setBusy(false); }
   };
   if (checkout) {
     return (
       <View style={styles.webViewContainer}>
+        <Button title="Về trạng thái đơn hàng" onPress={() => { setCheckout(null); setDecision(null); }} />
         <WebView
           javaScriptEnabled
           onShouldStartLoadWithRequest={(request) => {
@@ -691,7 +724,7 @@ export function PaymentScreen({ navigation, route }: NativeStackScreenProps<Root
         {order ? <Text style={styles.price}>{order.priceVndSnapshot.toLocaleString('vi-VN')} ₫</Text> : null}
       </View>
       {order?.orderStatus === 'WAITING_PAYMENT' ? (
-        <Button onPress={() => void openCheckout()} title="Thanh toán trên SePay" />
+        decision?.allowed || decision?.canResume ? <><Text>Nếu đã chuyển tiền, hãy chờ xác nhận và không thanh toán thêm.</Text><Button disabled={busy} onPress={() => void openCheckout()} title={decision.canResume ? 'Tiếp tục phiên thanh toán' : 'Thanh toán trên SePay'} /></> : <Text>Đang chờ xác nhận hoặc đối soát thanh toán. Không chuyển tiền thêm.</Text>
       ) : null}
       {order?.orderStatus === 'PAYMENT_ACCEPTED' ? (
         <>
@@ -738,11 +771,11 @@ export function LicensesScreen({
       return;
     }
     try {
-      const revoked = await remoteRevokeDevice(licenseId, deviceId, {
+      await remoteRevokeDevice(licenseId, deviceId, {
         actionToken: actionToken.trim(),
         currentPassword: currentPassword.trim(),
       });
-      setMessage(`Thiết bị ${revoked.status} ngay trong PostgreSQL.`);
+      setMessage('Đã thu hồi thiết bị.');
       await loadDevices(licenseId);
       setActionToken('');
       setCurrentPassword('');
@@ -778,7 +811,7 @@ export function LicensesScreen({
           ) : null}
           {(devices[license.id] ?? []).map((device) => (
             <View key={device.id} style={styles.card}>
-              <Text>{device.deviceRef} · {device.status}</Text>
+              <Text>{device.deviceRef} · {device.status === 'ACTIVE' ? 'Đang hoạt động' : 'Đã thu hồi'}</Text>
               {device.status === 'ACTIVE' ? (
                 <>
                   <Button onPress={() => void requestLicensingActionVerification(license.id, 'REMOTE_REVOKE_DEVICE', device.id).then(() => setMessage('Đã gửi email xác nhận thu hồi.')).catch(() => setError('Không thể gửi email xác nhận.'))} title="Gửi email xác nhận thu hồi" />
@@ -810,6 +843,7 @@ export function RenewalScreen({ navigation, route }: NativeStackScreenProps<Root
       .catch(() => setError('Không thể tải thông tin gia hạn.'));
   }, [route.params.originOrderId, route.params.licenseId]);
   const loadTerms = async (orderId: string) => {
+    setError(null);
     setTermsState('loading');
     setTerms(null);
     setAccepted(false);
@@ -910,13 +944,30 @@ export function VerifyLicenseScreen() {
   );
 }
 
-function OrderDetailScreen({ route }: NativeStackScreenProps<RootStackParamList, 'OrderDetail'>) {
+export function OrderDetailScreen({ route, navigation }: NativeStackScreenProps<RootStackParamList, 'OrderDetail'>) {
   const [order, setOrder] = useState<MobileOrderDetail | null>(null);
   const [error, setError] = useState(false);
+  const [supportError, setSupportError] = useState(false);
+  const [supportPending, setSupportPending] = useState(false);
+  const requestSupport = async () => {
+    if (!order || supportPending) return;
+    setSupportPending(true);
+    setSupportError(false);
+    try {
+      const conversation = await createConversation(`Hỗ trợ đơn ${order.orderNumber}`, order.id);
+      navigation.navigate('Assistance', { conversationId: conversation.id });
+    } catch { setSupportError(true); }
+    finally { setSupportPending(false); }
+  };
   useEffect(() => { void getOrder(route.params.id).then(setOrder).catch(() => setError(true)); }, [route.params.id]);
   if (error) return <View style={styles.container}><Text accessibilityRole="alert">Không thể tải đơn hàng.</Text></View>;
   if (!order) return <View style={styles.container}><Text>Đang tải...</Text></View>;
-  return <View style={styles.container}><Text style={styles.heading}>{order.orderNumber}</Text><Text style={styles.cardTitle}>{order.productNameSnapshot}</Text><Text>{order.planNameSnapshot}</Text><Text>{mobileOrderStatusLabel(order.orderStatus)}</Text><Text style={styles.price}>{order.priceVndSnapshot.toLocaleString('vi-VN')} ₫</Text><Text>{order.durationMonthsSnapshot} tháng · tối đa {order.maxActiveDevicesSnapshot} thiết bị</Text></View>;
+  return <View style={styles.container}><Text style={styles.heading}>{order.orderNumber}</Text><Text style={styles.cardTitle}>{order.productNameSnapshot}</Text><Text>{order.planNameSnapshot}</Text><Text>{mobileOrderStatusLabel(order.orderStatus)}</Text><Text style={styles.price}>{order.priceVndSnapshot.toLocaleString('vi-VN')} ₫</Text><Text>{order.durationMonthsSnapshot} tháng · tối đa {order.maxActiveDevicesSnapshot} thiết bị</Text>
+    {order.orderStatus === 'WAITING_SERVICE_TERMS_ACCEPTANCE' ? <Button title="Tiếp tục mua hàng" onPress={() => navigation.navigate('Checkout', { orderId: order.id, planId: order.planId, planName: order.planNameSnapshot, productName: order.productNameSnapshot, priceVnd: order.priceVndSnapshot })} /> : null}
+    {order.orderStatus === 'WAITING_PAYMENT' || order.orderStatus === 'PAYMENT_ACCEPTED' ? <Button title="Xem trạng thái thanh toán" onPress={() => navigation.navigate('Payment', { orderId: order.id })} /> : null}
+    <Button disabled={supportPending} title="Cần hỗ trợ về đơn này" onPress={() => void requestSupport()} />
+    {supportError ? <Text accessibilityRole="alert">Không thể mở hội thoại hỗ trợ. Vui lòng thử lại.</Text> : null}
+  </View>;
 }
 
 export function EmuKeyMobileApp() {

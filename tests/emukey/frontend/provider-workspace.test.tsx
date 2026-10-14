@@ -6,13 +6,39 @@ import { App } from '../../../EmuKey/frontend/src/presentation/app/App';
 afterEach(cleanup);
 
 describe('Provider workspace', () => {
+  it('does not offer editing a published product', async () => {
+    render(<App initialEntries={['/provider/catalog']} />);
+    const row = (await screen.findAllByRole('button', { name: 'Sửa' }))[0]!;
+    expect((row as HTMLButtonElement).disabled).toBe(true);
+  });
+  it('submits an HTTPS product image on the existing draft', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    let submitted: Record<string, unknown> | undefined;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      if (String(input).endsWith('/products/product-2') && init?.method === 'PUT') {
+        submitted = JSON.parse(String(init.body));
+        return Response.json(submitted);
+      }
+      return original(input, init);
+    });
+    try {
+      render(<App initialEntries={['/provider/catalog']} />);
+      const edits = await screen.findAllByRole('button', { name: 'Sửa', exact: true });
+      fireEvent.click(edits.find((button) => !(button as HTMLButtonElement).disabled)!);
+      const dialog = await screen.findByRole('dialog', { name: 'Sửa sản phẩm' });
+      fireEvent.change(within(dialog).getByLabelText('Ảnh sản phẩm (URL HTTPS)'), { target: { value: 'https://example.com/product.png' } });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu' }));
+      await waitFor(() => expect(submitted?.imageUrl).toBe('https://example.com/product.png'));
+    } finally { vi.mocked(fetch).mockImplementation(original); }
+  });
+
   it('preserves advanced entitlements when saving without expanding the editor', async () => {
     const original = vi.mocked(fetch).getMockImplementation()!;
     let submitted: Record<string, unknown> | undefined;
     vi.mocked(fetch).mockImplementation(async (input, init) => {
       if (String(input).endsWith('/plans') && (!init?.method || init.method === 'GET')) {
         const plans = await (await original(input, init)).json();
-        return Response.json(plans.map((plan: Record<string, unknown>) => ({ ...plan, status: 'DRAFT', entitlements: { desktop: true, seats: 5, support: 'priority' } })));
+        return Response.json(plans.map((plan: Record<string, unknown>) => ({ ...plan, status: 'DRAFT', entitlements: { desktop: true, seats: 5, support: { tier: 'priority', regions: ['vn', null] } } })));
       }
       if (String(input).endsWith('/plans/plan-1') && init?.method === 'PUT') {
         submitted = JSON.parse(String(init.body));
@@ -26,8 +52,10 @@ describe('Provider workspace', () => {
       fireEvent.click(within(row).getByRole('button', { name: 'Sửa' }));
       const dialog = await screen.findByRole('dialog', { name: 'Sửa gói' });
       expect(within(dialog).getByRole('switch').getAttribute('aria-checked')).toBe('true');
+      expect(within(dialog).getByLabelText('Thời hạn (tháng)')).toHaveProperty('readOnly', true);
+      expect(within(dialog).getByLabelText('Thời hạn (tháng)')).toHaveProperty('value', '1');
       fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu' }));
-      await waitFor(() => expect(submitted?.entitlements).toEqual({ desktop: true, seats: 5, support: 'priority' }));
+      await waitFor(() => expect(submitted?.entitlements).toEqual({ desktop: true, seats: 5, support: { tier: 'priority', regions: ['vn', null] } }));
       await waitFor(() => expect(dialog.closest('.ant-modal')?.className).toContain('ant-zoom-leave'));
       expect(screen.queryByText('Bỏ thay đổi chưa lưu?')).toBeNull();
     } finally { vi.mocked(fetch).mockImplementation(original); }
@@ -35,8 +63,9 @@ describe('Provider workspace', () => {
 
   it('shows searchable transaction evidence in reconciliation without admin actions', async () => {
     render(<App initialEntries={['/provider/operations']} />);
-    fireEvent.click(await screen.findByRole('tab', { name: 'Đối soát thanh toán' }));
-    const panel = await screen.findByRole('tabpanel', { name: 'Đối soát thanh toán' });
+    await screen.findByText(/SEPAY-TX-1/);
+    const panel = screen.getByRole('main');
+    expect(screen.queryByRole('tab')).toBeNull();
     expect(within(panel).getByText(/SEPAY-TX-1/)).toBeTruthy();
     expect(within(panel).getByText(/sepay-event-1/)).toBeTruthy();
     expect(within(panel).queryByRole('button', { name: /Xử lý|Chấp nhận/ })).toBeNull();
@@ -77,7 +106,7 @@ describe('Provider workspace', () => {
       render(<App initialEntries={['/provider/catalog']} />);
       expect(await screen.findByText('Không thể tải danh sách gói.')).toBeTruthy();
       fireEvent.click(screen.getAllByRole('button', { name: 'Thử lại' }).at(-1)!);
-      expect(await screen.findByRole('table')).toBeTruthy();
+      expect((await screen.findAllByRole('table')).length).toBeGreaterThan(0);
       await waitFor(() => expect(screen.queryByText('Không thể tải danh sách gói.')).toBeNull());
     } finally {
       vi.mocked(fetch).mockImplementation(original);
@@ -155,6 +184,7 @@ describe('Provider workspace', () => {
   });
 
   it('exposes license lifecycle controls in the Provider workspace', async () => {
+    vi.mocked(fetch).mockClear();
     render(<App initialEntries={['/provider/licenses']} />);
 
     expect(await screen.findByRole('heading', { name: 'Bản quyền nhà cung cấp' })).toBeTruthy();
@@ -169,7 +199,14 @@ describe('Provider workspace', () => {
         return url.endsWith('/commands/00000000-0000-4000-8000-000000000902');
       }),
     ).toBe(true));
-    expect(await screen.findByText(/Đã xác nhận · 00000000-0000-4000-8000-000000000902/)).toBeTruthy();
+    expect(await screen.findByText('Đã xác nhận')).toBeTruthy();
     await waitFor(() => expect(screen.getByText('Hoạt động')).toBeTruthy());
+    const licenseReads = () => vi.mocked(fetch).mock.calls.filter(([input, init]) => String(input).endsWith('/licenses') && (!init?.method || init.method === 'GET')).length;
+    await waitFor(() => expect(licenseReads()).toBe(3));
+    fireEvent.change(screen.getByLabelText('Tìm bản quyền'), { target: { value: 'missing-license' } });
+    expect(await screen.findByText('Không có bản quyền phù hợp.')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Tìm bản quyền'), { target: { value: '' } });
+    expect(await screen.findByText('Hoạt động')).toBeTruthy();
+    expect(licenseReads()).toBe(3);
   });
 });

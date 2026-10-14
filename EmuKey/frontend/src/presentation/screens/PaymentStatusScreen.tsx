@@ -1,3 +1,4 @@
+import { OrderSummary } from '../components/OrderSummary';
 import { LoadingOverlay } from '../components/WorkspacePrimitives';
 import { Alert, Button, Input, Modal, Spin } from 'antd';
 import { useEffect, useState } from 'react';
@@ -158,7 +159,7 @@ export function PaymentStatusScreen() {
 
   const startCheckout = async () => {
     const latest = await retryDecision.refetch();
-    if (!latest.data?.allowed || latest.isError) {
+    if ((!latest.data?.allowed && !latest.data?.canResume) || latest.isError) {
       await checkStatus();
       return;
     }
@@ -199,6 +200,12 @@ export function PaymentStatusScreen() {
                         screenState === 'KEY_RETRIEVED' ? 'Mã bản quyền đã được cấp' : screenState === 'REVIEW' ? 'Cần kiểm tra' : orderStatusLabel(current)}
             </StatusChip>
           </header>
+          {current.orderStatus !== 'PAYMENT_ACCEPTED' ? <OrderSummary order={{
+            total: current.priceVndSnapshot, productName: current.productNameSnapshot,
+            planName: current.planNameSnapshot, billingCycle: current.billingCycleSnapshot,
+            durationMonths: current.durationMonthsSnapshot, maxActiveDevices: current.maxActiveDevicesSnapshot,
+            entitlements: current.entitlementsSnapshot, orderNumber: current.orderNumber,
+          }} /> : null}
           {paymentNeedsReview ? <Alert showIcon type="warning" title="Giao dịch đã được ghi nhận nhưng cần kiểm tra" description={<>Backend chưa chấp nhận giao dịch cho đơn {current.orderNumber}. Không thanh toán lại. <a href="/buyer/support">Liên hệ hỗ trợ</a> và cung cấp mã đơn để đối chiếu thời gian, số tiền và chứng từ.</>} /> : null}
           {processingStage ? <div className="workspace-actions"><Button onClick={() => setDismissedOrder(undefined)}>Xem tiến trình</Button><Button href="/buyer/orders">Về đơn hàng</Button></div> : null}
           {waitingPayment && !processingStage ? <div className="workspace-actions"><Button disabled={checking} onClick={() => void checkStatus()}>Kiểm tra lại trạng thái</Button><Button href="/buyer/support">Liên hệ hỗ trợ</Button></div> : null}
@@ -235,11 +242,13 @@ export function PaymentStatusScreen() {
             />
           ) : current.orderStatus === 'PAYMENT_ACCEPTED' ? null : current.orderStatus !== 'WAITING_PAYMENT' ? (
             <Alert type="warning" title="Đơn hàng chưa thể thanh toán" description={<a href="/buyer/orders">Mở đơn hàng để kiểm tra điều khoản hoặc trạng thái hủy/hết hạn.</a>} />
-          ) : paymentNeedsReview ? null : unsuccessfulReturn ? (
+          ) : paymentNeedsReview ? null : retryDecision.data?.canResume && !retryDecision.isError && (!providerReturned || unsuccessfulReturn) ? (
+            <><Alert type="info" title="Phiên thanh toán trước vẫn còn hiệu lực" description="Bạn có thể tiếp tục đúng phiên này. Nếu đã chuyển tiền, hãy chờ xác nhận và không thanh toán thêm." /><Button type="primary" disabled={checkout.isPending || retryDecision.isFetching || order.isError} onClick={() => void startCheckout()}>Tiếp tục phiên thanh toán</Button></>
+          ) : unsuccessfulReturn ? (
             retryDecision.isPending || retryDecision.isFetching ? <Spin aria-label="Đang xác minh giao dịch trước khi thanh toán lại" />
               : retryDecision.isError ? <Alert showIcon type="warning" message="Chưa thể xác minh an toàn trạng thái thanh toán." description="Không thử thanh toán lại lúc này. Kiểm tra trạng thái hoặc liên hệ hỗ trợ nếu đã chuyển tiền." action={<Button onClick={() => void retryDecision.refetch()}>Thử xác minh lại</Button>} />
               : retryDecision.data?.allowed ? <Button type="primary" loading={checkout.isPending} disabled={checkout.isPending} onClick={() => void prepareRetry()}>Thanh toán lại</Button>
-                : <Alert showIcon type="warning" title={retryDecision.data?.reason === 'PAYMENT_REVIEW' ? 'Giao dịch cần được kiểm tra trước khi thanh toán tiếp.' : retryDecision.data?.reason === 'ATTEMPT_PENDING' ? 'Yêu cầu thanh toán trước vẫn đang có hiệu lực.' : 'Đơn hàng hiện không thể bắt đầu thanh toán mới.'} description="Nếu đã chuyển tiền, không thanh toán lại. Hãy kiểm tra trạng thái hoặc liên hệ hỗ trợ kèm mã đơn hàng." />
+                : <Alert showIcon type="warning" title={retryDecision.data?.reason === 'PAYMENT_REVIEW' ? 'Giao dịch cần được kiểm tra trước khi thanh toán tiếp.' : retryDecision.data?.reason === 'ATTEMPT_PENDING' ? 'Yêu cầu thanh toán trước đang chờ xác nhận hoặc đối soát.' : 'Đơn hàng hiện không thể bắt đầu thanh toán mới.'} description="Nếu đã chuyển tiền, không thanh toán lại. Hãy kiểm tra trạng thái hoặc liên hệ hỗ trợ kèm mã đơn hàng." />
           ) : providerReturned ? null : retryDecision.isError || (!retryDecision.isPending && !retryDecision.data?.allowed) ? (
             <Alert showIcon type="warning" title="Chưa thể bắt đầu thanh toán mới" description="Yêu cầu trước đang chờ xác nhận hoặc cần kiểm tra thêm. Hãy kiểm tra lại trạng thái; nếu đã chuyển tiền, không thanh toán lại." />
           ) : !payment ? (
@@ -392,12 +401,12 @@ export function PaymentStatusScreen() {
             <h2>Tiến trình đơn hàng</h2>
             <ProgressList
               items={[
+                { label: 'Tạo đơn hàng', status: 'Hoàn tất', tone: 'success' },
                 {
                   label: 'Chấp nhận điều khoản',
-                  status: current.orderStatus === 'WAITING_SERVICE_TERMS_ACCEPTANCE' ? 'Chưa xác nhận' : 'Đã xác nhận',
-                  tone: current.orderStatus === 'WAITING_SERVICE_TERMS_ACCEPTANCE' ? 'warning' : 'success',
+                  status: current.serviceTermsAcceptedAt ? 'Đã xác nhận' : 'Chưa xác nhận',
+                  tone: current.serviceTermsAcceptedAt ? 'success' : 'warning',
                 },
-                { label: 'Tạo đơn hàng', status: 'Hoàn tất', tone: 'success' },
                  {
                    label: 'Thanh toán',
                    status: paymentNeedsReview ? 'Cần kiểm tra' : current.orderStatus === 'PAYMENT_ACCEPTED' ? 'Hoàn tất' : ['CANCELLED', 'EXPIRED'].includes(current.orderStatus) ? orderStatusLabel(current) : unsuccessfulReturn ? 'Chưa hoàn tất' : providerReturned ? 'Đang xác nhận' : 'Đang chờ',

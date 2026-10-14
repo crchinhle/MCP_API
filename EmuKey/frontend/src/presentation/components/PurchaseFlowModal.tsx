@@ -1,9 +1,10 @@
 import { Alert, Button, Checkbox, Modal, Radio, Spin } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { describeApiError, useAuth } from '../../application/auth/authContext';
+import { ApiRequestError, describeApiError, useAuth } from '../../application/auth/authContext';
 import { formatVnd } from '../../application/catalog/catalogQueries';
 import {
+  clearCheckoutIntent,
   readCheckoutIntent,
   writeCheckoutIntent,
   type CheckoutIntent,
@@ -13,6 +14,7 @@ import {
   useOrder,
   useOrderMutations,
   useOrderTerms,
+  usePaymentRetryDecision,
 } from '../../application/orders/orderQueries';
 import { resolvePurchasableOffer, type DevicePlan, type Product } from '../../domain/product';
 import type { CheckoutSessionDto } from '../../infrastructure/api/generated';
@@ -103,15 +105,18 @@ export function PurchaseFlowModal({
   // a successful create mutate its own effect dependencies.
   const intentRef = useRef<CheckoutIntent | null>(null);
   const [intentOrderId, setIntentOrderId] = useState('');
-  const resumableOrderId = resumeOrderId ?? intentOrderId;
-  const effectiveIntent = resumeOrderId
+  const [ignoredResumeOrderId, setIgnoredResumeOrderId] = useState<string>();
+  const requestedResumeId = resumeOrderId !== ignoredResumeOrderId ? resumeOrderId : undefined;
+  const resumableOrderId = requestedResumeId ?? intentOrderId;
+  const effectiveIntent = requestedResumeId
     ? null
     : intentRef.current?.productSlug === product.slug
       ? intentRef.current
       : null;
   const resumedOrder = useOrder(resumableOrderId);
   const terms = useOrderTerms(order?.id ?? '');
-  const pending = mutations.create.isPending || mutations.acceptServiceTerms.isPending || mutations.checkout.isPending;
+  const [preparingPayment, setPreparingPayment] = useState(false);
+  const pending = preparingPayment || mutations.create.isPending || mutations.acceptServiceTerms.isPending || mutations.checkout.isPending;
 
   const selectedOffer = useMemo(
     () => resolvePurchasableOffer(product.plans, selectedPlanId),
@@ -121,6 +126,8 @@ export function PurchaseFlowModal({
   const orderStatus = order?.orderStatus;
   const needsConsent = orderStatus === 'WAITING_SERVICE_TERMS_ACCEPTANCE';
   const waitingPayment = orderStatus === 'WAITING_PAYMENT';
+  const retryDecision = usePaymentRetryDecision(order?.id ?? '', open && waitingPayment);
+  const paymentBlocked = waitingPayment && (retryDecision.isError || !retryDecision.data || (!retryDecision.data.allowed && !retryDecision.data.canResume));
   const paymentAccepted = orderStatus === 'PAYMENT_ACCEPTED';
   const terminalOrder = orderStatus === 'CANCELLED' || orderStatus === 'EXPIRED';
   const termsReady = Boolean(terms.data) && !terms.isFetching && !terms.isError;
@@ -144,19 +151,35 @@ export function PurchaseFlowModal({
   // still needs their decision, without creating a second order.
   useEffect(() => {
     const intentOrderId = effectiveIntent?.orderId;
-    const shouldResume = Boolean(resumeOrderId || intentOrderId);
-    if (!open || !shouldResume || order || !resumedOrder.data) return;
+    const shouldResume = Boolean(requestedResumeId || intentOrderId);
+    if (!open || !shouldResume || !resumedOrder.data || pending) return;
     if (resumedOrder.data.id !== resumableOrderId) return;
     if (intentOrderId && resumedOrder.data.id !== intentOrderId) return;
+    if (order === resumedOrder.data) return;
     setOrder(resumedOrder.data);
-    setSelectedPlanId(resumedOrder.data.planId);
-    setStage(resumedOrder.data.orderStatus === 'WAITING_SERVICE_TERMS_ACCEPTANCE' || resumedOrder.data.orderStatus === 'WAITING_PAYMENT' ? 'terms' : 'status');
-  }, [open, resumeOrderId, resumableOrderId, effectiveIntent?.orderId, order, resumedOrder.data, intentVersion]);
+    if (!order) {
+      setSelectedPlanId(resumedOrder.data.planId);
+      setStage(resumedOrder.data.orderStatus === 'WAITING_SERVICE_TERMS_ACCEPTANCE' || resumedOrder.data.orderStatus === 'WAITING_PAYMENT' ? 'terms' : 'status');
+    } else if (!['WAITING_SERVICE_TERMS_ACCEPTANCE', 'WAITING_PAYMENT'].includes(resumedOrder.data.orderStatus)) {
+      setStage('status');
+    }
+  }, [open, requestedResumeId, resumableOrderId, effectiveIntent?.orderId, order, resumedOrder.data, intentVersion, pending]);
 
   useEffect(() => {
     if (!order) return;
     setAccepted(order.orderStatus !== 'WAITING_SERVICE_TERMS_ACCEPTANCE' && Boolean(order.serviceTermsAcceptedAt));
-  }, [order]);
+  }, [order?.id, order?.orderStatus, order?.serviceTermsAcceptedAt]);
+
+  function startNewOrder() {
+    clearCheckoutIntent(user?.id, order?.id);
+    setIgnoredResumeOrderId(resumeOrderId);
+    intentRef.current = null;
+    setIntentOrderId('');
+    setOrder(undefined);
+    setStage('configuration');
+    setAccepted(false);
+    setError(null);
+  }
 
   function close() {
     // A created order is never destroyed by closing; the intent keeps it
@@ -181,6 +204,7 @@ export function PurchaseFlowModal({
       // PAY-04 / PAY-12: the order is created only from this explicit action,
       // with an idempotency key owned by the mutation layer.
       const created = await mutations.create.mutateAsync({ planId: selectedOffer.id });
+      setIgnoredResumeOrderId(resumeOrderId);
       setOrder(created);
       setStage(created.orderStatus === 'WAITING_SERVICE_TERMS_ACCEPTANCE' || created.orderStatus === 'WAITING_PAYMENT' ? 'terms' : 'status');
       intentRef.current = { orderId: created.id, planId: created.planId, productSlug: product.slug };
@@ -203,18 +227,28 @@ export function PurchaseFlowModal({
       return;
     }
     setError(null);
+    setPreparingPayment(true);
     try {
       let payable = order;
       if (needsConsent) {
         payable = await mutations.acceptServiceTerms.mutateAsync({ order, terms: terms.data });
         setOrder(payable);
       }
-      // Merges the former "Tạo yêu cầu thanh toán" step: the backend reuses an
-      // unexpired PENDING attempt, so clicking twice cannot double-charge.
+      const decision = await retryDecision.refetch();
+      if (decision.isError || (!decision.data?.allowed && !decision.data?.canResume)) {
+        setError('Phiên thanh toán cần được xác nhận hoặc đối soát. Nếu đã chuyển tiền, không thanh toán lại.');
+        return;
+      }
       const session = await mutations.checkout.mutateAsync(payable.id);
       submitSignedCheckout(session);
     } catch (cause) {
-      setError(describeApiError(cause, 'Không thể chuẩn bị thanh toán. Đơn hàng vẫn được giữ để bạn thử lại.'));
+      setError(cause instanceof ApiRequestError && cause.status === 409
+        ? 'Trạng thái đơn hoặc phiên thanh toán đã thay đổi. Hãy kiểm tra trạng thái đơn hàng trước khi tiếp tục.'
+        : describeApiError(cause, 'Không thể chuẩn bị thanh toán. Đơn hàng vẫn được giữ để bạn thử lại.'));
+      void resumedOrder.refetch();
+      void retryDecision.refetch();
+    } finally {
+      setPreparingPayment(false);
     }
   }
 
@@ -235,9 +269,11 @@ export function PurchaseFlowModal({
   const termsFooter = (
     <div className="purchase-flow-modal__footer">
       <Button disabled={pending} onClick={() => setStage('configuration')}>Quay lại</Button>
+      {waitingPayment && order ? <Button href={`/buyer/orders/${encodeURIComponent(order.id)}/payment`}>Mở trạng thái đơn hàng</Button> : null}
       <Button
-        disabled={!order || !termsReady || pending || (needsConsent && Boolean(conflict)) || (needsConsent && !accepted)}
-        loading={mutations.acceptServiceTerms.isPending || mutations.checkout.isPending}
+        disabled={!order || !termsReady || pending || paymentBlocked || (waitingPayment && retryDecision.isFetching) || (needsConsent && Boolean(conflict)) || (needsConsent && !accepted)}
+        aria-label={waitingPayment ? 'Tiếp tục thanh toán' : 'Thanh toán qua SePay'}
+        loading={preparingPayment}
         onClick={() => void payThroughSePay()}
         type="primary"
       >
@@ -247,7 +283,7 @@ export function PurchaseFlowModal({
   );
   const statusFooter = (
     <div className="purchase-flow-modal__footer">
-      {terminalOrder ? <Button disabled={pending} onClick={() => { setOrder(undefined); setStage('configuration'); setAccepted(false); }}>Chọn gói khác</Button> : null}
+      {terminalOrder ? <Button disabled={pending} onClick={startNewOrder}>Chọn gói khác</Button> : null}
       {order ? <Button href={`/buyer/orders/${encodeURIComponent(order.id)}/payment`} type="primary">{paymentAccepted ? 'Theo dõi cấp bản quyền' : 'Mở trạng thái đơn hàng'}</Button> : null}
       <Button disabled={pending} onClick={close}>Đóng</Button>
     </div>
@@ -264,6 +300,7 @@ export function PurchaseFlowModal({
       open={open}
       title={stage === 'configuration' ? `Mua ${product.name}` : stage === 'terms' ? `Xác nhận ${product.name}` : `Trạng thái đơn hàng`}
       width={720}
+      zIndex={1200}
     >
       <div aria-live="polite" className="purchase-flow-modal__content">
         {stage === 'configuration' ? (
@@ -324,6 +361,7 @@ export function PurchaseFlowModal({
           </>
         ) : stage === 'terms' ? (
           <>
+            {paymentBlocked && !retryDecision.isPending ? <Alert type="warning" title="Chưa thể tiếp tục thanh toán" description="Phiên trước đang chờ xác nhận hoặc cần đối soát. Nếu đã chuyển tiền, không thanh toán lại." action={<Button disabled={retryDecision.isFetching} onClick={() => void retryDecision.refetch()}>Kiểm tra lại</Button>} /> : null}
             {conflict ? (
               <Alert
                 action={<Button onClick={() => setStage('configuration')}>Chọn lại cấu hình</Button>}

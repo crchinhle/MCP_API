@@ -27,7 +27,7 @@ export const providerShell: RoleShellConfig = {
     { label: 'Tổng quan', to: '/provider', end: true },
     { label: 'Sản phẩm & gói', to: '/provider/catalog' },
     { label: 'Bản quyền', to: '/provider/licenses' },
-    { label: 'Đơn hàng & vận hành', to: '/provider/operations' },
+    { label: 'Thanh toán & đối soát', to: '/provider/operations' },
     { label: 'Kho tri thức AI', to: '/provider/knowledge' },
     { label: 'Hồ sơ', to: '/provider/profile' },
   ],

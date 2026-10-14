@@ -117,12 +117,14 @@ describe('completed API-backed flows', () => {
     const original = vi.mocked(fetch).getMockImplementation()!;
     vi.mocked(fetch).mockImplementation((input, init) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-      if (url.includes('/operations/audit-logs?')) return Promise.resolve(Response.json({ items: [{ id: '1', action: 'ACCOUNT_LOCKED', outcome: 'SUCCESS', actorRole: 'SYSTEM_ADMIN', actorUserId: 'admin', targetType: 'USER', targetId: 'user', reason: 'Kiểm tra an toàn', createdAt: '2026-09-27T00:00:00Z' }], page: 1, hasMore: false }));
+      if (url.includes('/operations/audit-logs?')) return Promise.resolve(Response.json({ items: [{ id: '1', internalToken: 'DO_NOT_RENDER_SECRET', action: 'ACCOUNT_LOCKED', outcome: 'SUCCESS', actorRole: 'SYSTEM_ADMIN', actorUserId: 'admin', targetType: 'USER', targetId: 'user', reason: 'Kiểm tra an toàn', createdAt: '2026-09-27T00:00:00Z' }], page: 1, hasMore: false }));
       return original(input, init);
     });
     try {
       render(<App initialEntries={['/system/console?view=audit']} />);
       fireEvent.click(await screen.findByRole('button', { name: 'Chi tiết nhật ký' }));
+      expect(screen.queryByText('DO_NOT_RENDER_SECRET')).toBeNull();
+      expect(screen.queryByText('internalToken')).toBeNull();
       expect(await screen.findByText('Kiểm tra an toàn')).toBeTruthy();
     } finally { vi.mocked(fetch).mockImplementation(original); }
   });

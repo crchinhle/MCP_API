@@ -1,18 +1,25 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import {
+  AssistanceScreen,
   CatalogScreen,
   CheckoutScreen,
   ComparePlansScreen,
   PaymentScreen,
+  OrderDetailScreen,
   ProfileScreen,
   RenewalScreen,
 } from '../../../../EmuKey/mobile/src/presentation/EmuKeyMobileApp';
 import {
+  askConversationAi,
+  listConversations,
+  listConversationMessages,
   acceptServiceTerms,
   comparePlans,
   createOrder,
+  createConversation,
   createCheckout,
+  getPaymentRetryDecision,
 getOrder,
   getOrderTerms,
   getRenewalPreview,
@@ -24,11 +31,16 @@ getOrder,
 } from '../../../../EmuKey/mobile/src/infrastructure/api/client';
 
 jest.mock('../../../../EmuKey/mobile/src/infrastructure/api/client', () => ({
+  askConversationAi: jest.fn(),
+  listConversations: jest.fn(),
+  listConversationMessages: jest.fn(),
   acceptServiceTerms: jest.fn(),
   closeConversation: jest.fn(),
   comparePlans: jest.fn(),
   createCheckout: jest.fn(),
+  getPaymentRetryDecision: jest.fn(),
   createOrder: jest.fn(),
+  createConversation: jest.fn(),
   getOrder: jest.fn(),
   getOrderTerms: jest.fn(),
   getRenewalPreview: jest.fn(),
@@ -76,7 +88,36 @@ const order: MobileOrderDetail = {
 describe('mobile Phase 3 and Phase 4 screens', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.mocked(getPaymentRetryDecision).mockResolvedValue({ allowed: true, canResume: false, reason: 'READY' });
     listNotificationsMock.mockResolvedValue([]);
+  });
+
+  it('keeps order details available and retries a failed support request', async () => {
+    getOrderMock.mockResolvedValue(order);
+    jest.mocked(createConversation).mockRejectedValueOnce(new Error('unavailable')).mockResolvedValueOnce({ id: 'support-order' } as never);
+    const navigate = jest.fn();
+    await render(<OrderDetailScreen route={{ params: { id: order.id } } as never} navigation={{ navigate } as never} />);
+    await act(async () => fireEvent.press(await screen.findByText('Cần hỗ trợ về đơn này')));
+    expect(screen.getByText(order.orderNumber)).toBeOnTheScreen();
+    await act(async () => fireEvent.press(screen.getByText('Cần hỗ trợ về đơn này')));
+    expect(createConversation).toHaveBeenLastCalledWith(`Hỗ trợ đơn ${order.orderNumber}`, order.id);
+    expect(navigate).toHaveBeenCalledWith('Assistance', { conversationId: 'support-order' });
+  });
+
+  it('clears previous conversation AI answers when opening support for another order', async () => {
+    jest.mocked(listConversations).mockResolvedValue([
+      { id: 'a', title: 'Order A', status: 'AI_ACTIVE', contextType: 'ORDER' },
+      { id: 'b', title: 'Order B', status: 'AI_ACTIVE', contextType: 'ORDER' },
+    ] as never);
+    jest.mocked(listConversationMessages).mockResolvedValue([]);
+    jest.mocked(askConversationAi).mockResolvedValue({ answer: 'Answer for A', grounded: false, citedSourceIds: [] });
+    const view = await render(<AssistanceScreen route={{ params: { conversationId: 'a' } } as never} />);
+    await act(async () => fireEvent.changeText(await screen.findByLabelText('Tin nhắn hỗ trợ'), 'Question'));
+    await act(async () => fireEvent.press(screen.getByText('Hỏi AI có nguồn')));
+    expect(await screen.findByText('Answer for A')).toBeOnTheScreen();
+    await view.rerender(<AssistanceScreen route={{ params: { conversationId: 'b' } } as never} />);
+    await waitFor(() => expect(listConversationMessages).toHaveBeenLastCalledWith('b'));
+    expect(screen.queryByText('Answer for A')).toBeNull();
   });
 
   it('renders the published catalog and opens checkout with the selected plan', async () => {
@@ -126,8 +167,8 @@ describe('mobile Phase 3 and Phase 4 screens', () => {
     const route = { params: { planId: 'plan-1', planName: 'Pro', priceVnd: 990_000, productName: 'Emukey Desktop' } };
     await render(<CheckoutScreen navigation={navigation as never} route={route as never} />);
 
-    await act(async () => fireEvent.press(screen.getByText('Tạo đơn hàng')));
-    expect(await screen.findByText('Điều khoản dịch vụ')).toBeOnTheScreen();
+    await act(async () => fireEvent.press(screen.getByText('Tiếp tục')));
+    expect(await screen.findByRole('header', { name: 'Điều khoản dịch vụ' })).toBeOnTheScreen();
     expect(createOrderMock).toHaveBeenCalledWith({ planId: 'plan-1' });
   });
 
@@ -137,11 +178,11 @@ describe('mobile Phase 3 and Phase 4 screens', () => {
     const navigation = { replace: jest.fn() };
     const route = { params: { planId: 'plan-1', planName: 'Pro', priceVnd: 990_000, productName: 'Emukey Desktop' } };
     await render(<CheckoutScreen navigation={navigation as never} route={route as never} />);
-    await act(async () => fireEvent.press(screen.getByText('Tạo đơn hàng')));
-    expect(await screen.findByText('Chưa tải được điều khoản cấp phép.')).toBeOnTheScreen();
+    await act(async () => fireEvent.press(screen.getByText('Tiếp tục')));
+    expect(await screen.findByText('Chưa tải được điều khoản dịch vụ.')).toBeOnTheScreen();
     expect(screen.getByText('Tiếp tục thanh toán')).toBeDisabled();
     await act(async () => fireEvent.press(screen.getByText('Tải lại điều khoản')));
-    expect(await screen.findByText('Điều khoản dịch vụ')).toBeOnTheScreen();
+    expect(await screen.findByRole('header', { name: 'Điều khoản dịch vụ' })).toBeOnTheScreen();
     expect(getOrderTermsMock).toHaveBeenLastCalledWith(order.id);
     expect(createOrderMock).toHaveBeenCalledTimes(1);
   });
@@ -173,9 +214,18 @@ describe('mobile Phase 3 and Phase 4 screens', () => {
     const navigation = { replace: jest.fn() };
     const route = { params: { planId: 'plan-1', planName: 'Pro', priceVnd: 990_000, productName: 'Emukey Desktop' } };
     await render(<CheckoutScreen navigation={navigation as never} route={route as never} />);
-    await act(async () => fireEvent.press(screen.getByText('Tạo đơn hàng')));
+    await act(async () => fireEvent.press(screen.getByText('Tiếp tục')));
     expect(await screen.findByText('1.200.000 ₫')).toBeOnTheScreen();
     expect(screen.getByText(/Giá server đã thay đổi/)).toBeOnTheScreen();
+  });
+
+  it('waits instead of paying again when the previous attempt is uncertain', async () => {
+    getOrderMock.mockResolvedValue({ ...order, orderStatus: 'WAITING_PAYMENT' });
+    jest.mocked(getPaymentRetryDecision).mockResolvedValue({ allowed: false, canResume: false, reason: 'ATTEMPT_PENDING' });
+    await render(<PaymentScreen navigation={{ navigate: jest.fn() } as never} route={{ params: { orderId: order.id } } as never} />);
+    expect(await screen.findByText('Đang chờ xác nhận hoặc đối soát thanh toán. Không chuyển tiền thêm.')).toBeOnTheScreen();
+    expect(screen.queryByText('Thanh toán trên SePay')).toBeNull();
+    expect(createCheckoutMock).not.toHaveBeenCalled();
   });
 
   it('renders the signed SePay POST fields inside the native checkout WebView', async () => {

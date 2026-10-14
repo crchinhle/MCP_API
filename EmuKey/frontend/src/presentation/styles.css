@@ -2160,11 +2160,14 @@ a {
 
 .purchase-flow-modal__content {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
+  overflow-wrap: anywhere;
 }
 
 .purchase-flow-modal__footer {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
 }
@@ -2257,6 +2260,7 @@ a {
 
 .purchase-flow-modal__terms {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 
@@ -2319,8 +2323,10 @@ a {
   }
 
   .purchase-flow-modal__footer .ant-btn {
-    flex: 1;
+    flex: 1 1 auto;
     min-height: 44px;
+    height: auto;
+    white-space: normal;
   }
 
   .purchase-flow-modal__terms-scroll {

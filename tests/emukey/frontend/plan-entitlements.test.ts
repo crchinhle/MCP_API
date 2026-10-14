@@ -21,7 +21,11 @@ describe('plan entitlement editor', () => {
     expect(mergePlanEntitlements(false, '')).toEqual({});
   });
 
-  it.each(['[]', 'null', '{"bad-key":true}', '{"nested":{"enabled":true}}', '{"ratio":1e999}'])(
+  it('preserves nested JSON values', () => {
+    expect(mergePlanEntitlements(false, '{"nested":{"enabled":true},"list":[1,null,"x"]}')).toEqual({ nested: { enabled: true }, list: [1, null, 'x'] });
+  });
+
+  it.each(['[]', 'null', '{"bad-key":true}', '{"ratio":1e999}'])(
     'rejects unsupported advanced entitlement JSON %s',
     (text) => {
       expect(() => mergePlanEntitlements(false, text)).toThrow();

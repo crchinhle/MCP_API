@@ -7,6 +7,7 @@ import type {
   ActivationKeyDto,
   DeviceChallengeDto,
   CheckoutSessionDto,
+  PaymentRetryDecisionDto,
   ComparePlansResponseDto,
   CreateOrderDto,
   OrderTermsDto,
@@ -277,6 +278,10 @@ export async function acceptServiceTerms(order: MobileOrderDetail, terms: Pick<M
   );
 }
 
+export async function getPaymentRetryDecision(id: string): Promise<PaymentRetryDecisionDto> {
+  return json(await request(`/orders/${encodeURIComponent(id)}/payment-retry`));
+}
+
 export async function createCheckout(id: string): Promise<MobileCheckoutSession> {
   return json(
     await request(`/orders/${encodeURIComponent(id)}/checkout`, { method: 'POST' }),
@@ -361,10 +366,10 @@ export async function closeConversation(conversationId: string): Promise<MobileC
   );
 }
 
-export async function createConversation(title = 'Hội thoại hỗ trợ'): Promise<MobileConversation> {
+export async function createConversation(title = 'Hội thoại hỗ trợ', orderId?: string): Promise<MobileConversation> {
   return json(await request('/conversations', {
     method: 'POST',
-    body: JSON.stringify({ contextType: 'GENERAL', title }),
+    body: JSON.stringify({ contextType: orderId ? 'ORDER' : 'GENERAL', ...(orderId ? { contextId: orderId } : {}), title }),
   }));
 }
 

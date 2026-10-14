@@ -102,6 +102,7 @@ export function useOrderMutations() {
   // Retain uncertain keys across retries and page reloads until acknowledged.
   const pendingCreates = useRef(new Map<string, string>());
   const refresh = (order?: OrderSummary) => {
+    if (order) queryClient.setQueryData(['orders', order.id], order);
     void queryClient.invalidateQueries({ queryKey: ['orders'] });
     if (order)
       void queryClient.invalidateQueries({ queryKey: ['orders', order.id] });

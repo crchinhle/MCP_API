@@ -2397,6 +2397,45 @@
         ]
       }
     },
+    "/api/v1/orders/{id}/payment-retry": {
+      "get": {
+        "operationId": "CommerceController_paymentRetryDecision",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentRetryDecisionDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Check whether a new payment attempt is safe for this order",
+        "tags": [
+          "commerce"
+        ]
+      }
+    },
     "/api/v1/orders/{id}/checkout": {
       "post": {
         "operationId": "CommerceController_checkout",
@@ -4608,11 +4647,13 @@
             "type": "number"
           },
           "activatedAt": {
-            "type": "object",
+            "type": "string",
+            "format": "date-time",
             "nullable": true
           },
           "revokedAt": {
-            "type": "object",
+            "type": "string",
+            "format": "date-time",
             "nullable": true
           }
         },
@@ -4952,6 +4993,32 @@
           "accepted",
           "version",
           "hash"
+        ]
+      },
+      "PaymentRetryDecisionDto": {
+        "type": "object",
+        "properties": {
+          "allowed": {
+            "type": "boolean"
+          },
+          "canResume": {
+            "type": "boolean",
+            "description": "The existing live checkout can be resumed without creating another attempt."
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "READY",
+              "ATTEMPT_PENDING",
+              "PAYMENT_REVIEW",
+              "ORDER_NOT_PAYABLE"
+            ]
+          }
+        },
+        "required": [
+          "allowed",
+          "canResume",
+          "reason"
         ]
       },
       "CheckoutSessionDto": {

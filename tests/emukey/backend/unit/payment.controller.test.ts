@@ -113,7 +113,7 @@ describe('PaymentController', () => {
     let actor = customer;
     const target = service({ paymentRetryDecision: async (owner, id) => {
       if (owner !== customer.sub || id !== orderId) throw new Error('ORDER_NOT_FOUND');
-      return { allowed: false, reason: 'ATTEMPT_PENDING' };
+      return { allowed: false, canResume: false, reason: 'ATTEMPT_PENDING' };
     } });
     const module = await Test.createTestingModule({
       controllers: [CommerceController],
@@ -125,7 +125,7 @@ describe('PaymentController', () => {
     app = module.createNestApplication();
     await app.init();
     const http = app.getHttpServer() as Server;
-    await request(http).get(`/orders/${orderId}/payment-retry`).expect(200, { allowed: false, reason: 'ATTEMPT_PENDING' });
+    await request(http).get(`/orders/${orderId}/payment-retry`).expect(200, { allowed: false, canResume: false, reason: 'ATTEMPT_PENDING' });
     await request(http).get('/orders/invalid/payment-retry').expect(400);
     actor = { ...customer, sub: '00000000-0000-4000-8000-000000000099' };
     await request(http).get(`/orders/${orderId}/payment-retry`).expect(404);

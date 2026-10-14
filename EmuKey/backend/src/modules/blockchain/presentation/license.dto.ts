@@ -55,8 +55,8 @@ export class LicenseDeviceDto {
   @ApiProperty() deviceRef!: string;
   @ApiProperty({ enum: ['ACTIVE', 'REVOKED'] }) status!: string;
   @ApiProperty() bindingGeneration!: number;
-  @ApiPropertyOptional({ nullable: true }) activatedAt!: string | null;
-  @ApiPropertyOptional({ nullable: true }) revokedAt!: string | null;
+  @ApiPropertyOptional({ type: String, format: 'date-time', nullable: true }) activatedAt!: string | null;
+  @ApiPropertyOptional({ type: String, format: 'date-time', nullable: true }) revokedAt!: string | null;
 }
 
 export class PublicLicenseVerificationDto {

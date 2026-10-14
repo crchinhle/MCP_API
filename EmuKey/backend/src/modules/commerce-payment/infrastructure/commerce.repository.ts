@@ -554,6 +554,7 @@ export class CommerceRepository {
       const decision = await this.paymentRetryDecision(customerUserId, id, client);
       if (decision.reason === 'PAYMENT_REVIEW') throw new Error('PAYMENT_REQUIRES_REVIEW');
       if (decision.reason === 'ORDER_NOT_PAYABLE') throw new Error('ORDER_PAYMENT_EXPIRED');
+      if (!decision.allowed && !decision.canResume) throw new Error('PAYMENT_ATTEMPT_NOT_RETRYABLE');
       const existing = await client.query<Record<string, unknown>>(
         `SELECT * FROM payment_attempts
          WHERE order_id = $1 AND status = 'PENDING' AND expires_at > statement_timestamp()
@@ -730,13 +731,28 @@ export class CommerceRepository {
         row.payment_attempt_status === 'SUCCEEDED'
       ) {
         if (reconciliation) throw new Error('SANDBOX_PAYMENT_ALREADY_FULFILLED');
-        const original = await client.query<{ id: string }>(
-          `SELECT id FROM payment_transactions
-           WHERE fulfillment_order_id = $1
-             AND fulfillment_payment_attempt_id = $2`,
-          [orderId, attemptId],
+        const original = await client.query<{ id: string; provider_transaction_ref: string | null; payment_attempt_id: string }>(
+          `SELECT id, provider_transaction_ref, payment_attempt_id FROM payment_transactions
+           WHERE fulfillment_order_id = $1`,
+          [orderId],
         );
         if (!original.rows[0]) throw new Error('PAYMENT_EFFECT_NOT_FOUND');
+        const sameTransfer = Boolean(event.transactionReference) &&
+          event.transactionReference === original.rows[0].provider_transaction_ref &&
+          attemptId === original.rows[0].payment_attempt_id;
+        if (!sameTransfer) {
+          await client.query(
+            `INSERT INTO payment_transactions
+              (id, provider_event_id, provider_transaction_ref, order_id,
+               payment_attempt_id, amount_minor, currency, classification,
+               review_status, review_reason, raw_payload, provider_occurred_at, timing_basis)
+             VALUES ($1, $2, $3, $4, $5, $6, 'VND', 'UNMATCHED', 'OPEN',
+                     'ADDITIONAL_PAYMENT', $7, $8, $9)`,
+            [transactionId, event.eventId, event.transactionReference ?? null,
+              orderId, attemptId, event.amountVnd, evidencePayload, event.occurredAt, timingBasis],
+          );
+          return { classification: 'UNMATCHED', transactionId };
+        }
         await client.query(
           `INSERT INTO payment_transactions
             (id, provider_event_id, provider_transaction_ref, order_id,

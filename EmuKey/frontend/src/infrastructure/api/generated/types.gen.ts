@@ -400,12 +400,8 @@ export type LicenseDeviceDto = {
   deviceRef: string;
   status: 'ACTIVE' | 'REVOKED';
   bindingGeneration: number;
-  activatedAt?: {
-    [key: string]: unknown;
-  } | null;
-  revokedAt?: {
-    [key: string]: unknown;
-  } | null;
+  activatedAt?: string | null;
+  revokedAt?: string | null;
 };
 
 export type ActivationKeyDto = {
@@ -512,6 +508,10 @@ export type AcceptServiceTermsDto = {
 
 export type PaymentRetryDecisionDto = {
   allowed: boolean;
+  /**
+   * The existing live checkout can be resumed without creating another attempt.
+   */
+  canResume: boolean;
   reason: 'READY' | 'ATTEMPT_PENDING' | 'PAYMENT_REVIEW' | 'ORDER_NOT_PAYABLE';
 };
 

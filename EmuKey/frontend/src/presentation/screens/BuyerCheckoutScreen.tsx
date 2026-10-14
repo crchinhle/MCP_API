@@ -9,7 +9,7 @@ import { PurchaseFlowModal } from '../components/PurchaseFlowModal';
 import { PageLoading } from '../components/WorkspacePrimitives';
 
 export function BuyerCheckoutScreen() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const productSlug = searchParams.get('product') ?? 'securedesk';
   const requestedPlanId = searchParams.get('planId') ?? undefined;
@@ -51,6 +51,7 @@ export function BuyerCheckoutScreen() {
       <PurchaseFlowModal
         {...(planId ? { initialPlanId: planId } : {})}
         onClose={() => setOpen(false)}
+        onOrderPrepared={(order) => setSearchParams({ product: productSlug, planId: order.planId, orderId: order.id }, { replace: true })}
         open={open}
         product={product}
         {...(resumableOrderId ? { resumeOrderId: resumableOrderId } : {})}

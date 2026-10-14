@@ -29,7 +29,16 @@ export function AuditLogPanel() {
     ]} /><LoadingOverlay active={logs.isPending} label="Đang tải dữ liệu" /></>
     <div className="workspace-actions"><Button disabled={page === 1 || logs.isFetching} onClick={() => setPage(page - 1)}>Trang trước</Button><span>Trang {page}</span><Button disabled={!logs.data?.hasMore || logs.isFetching} onClick={() => setPage(page + 1)}>Trang sau</Button></div>
     <Drawer title="Chi tiết nhật ký" open={Boolean(selected)} onClose={() => setSelected(undefined)}>
-      {selected ? <FactList facts={Object.entries(selected).map(([label, value]) => ({ label, value: value ?? '—' }))} /> : null}
+      {selected ? <FactList facts={[
+        { label: 'Thời gian', value: new Date(selected.createdAt).toLocaleString('vi-VN') },
+        { label: 'Hành động', value: selected.action },
+        { label: 'Kết quả', value: selected.outcome },
+        { label: 'Vai trò', value: selected.actorRole ?? '—' },
+        { label: 'Người thực hiện', value: selected.actorUserId ?? '—' },
+        { label: 'Loại đối tượng', value: selected.targetType ?? '—' },
+        { label: 'Đối tượng', value: selected.targetId ?? '—' },
+        { label: 'Lý do', value: selected.reason ?? '—' },
+      ]} /> : null}
     </Drawer>
   </section>;
 }

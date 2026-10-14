@@ -11,6 +11,40 @@ afterEach(() => {
 });
 
 describe('Customer commerce', () => {
+  it('never falls back to another support conversation when the requested conversation is missing', async () => {
+    render(<App initialEntries={['/buyer/support?conversation=missing-conversation']} />);
+    expect(await screen.findByText('Không tìm thấy hội thoại được yêu cầu.')).toBeTruthy();
+    expect(screen.queryByLabelText('Tin nhắn hỗ trợ')).toBeNull();
+  });
+
+  it('loads the requested conversation even when it is not first', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith('/conversations')) return Response.json([
+        { id: 'first', title: 'Other conversation', status: 'AI_ACTIVE', contextType: 'GENERAL' },
+        { id: 'requested', title: 'Requested order', status: 'AI_ACTIVE', contextType: 'ORDER' },
+      ]);
+      if (url.endsWith('/conversations/requested/messages')) return Response.json([{ id: 'message', content: 'Correct order reply', senderType: 'SUPPORT', serverSequence: 1 }]);
+      return original(input, init);
+    });
+    try {
+      render(<App initialEntries={['/buyer/support?conversation=requested']} />);
+      expect(await screen.findByText('Correct order reply')).toBeTruthy();
+      expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).endsWith('/conversations/first/messages'))).toBe(false);
+    } finally { vi.mocked(fetch).mockImplementation(original); }
+  });
+
+  it('offers resuming the existing checkout after an unsuccessful redirect', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (input, init) => String(input).endsWith('/payment-retry')
+      ? Response.json({ allowed: false, canResume: true, reason: 'ATTEMPT_PENDING' }) : original(input, init));
+    try {
+      render(<App initialEntries={['/buyer/orders/11111111-1111-4111-8111-111111111111/payment?sepay=cancel']} />);
+      expect(await screen.findByRole('button', { name: 'Tiếp tục phiên thanh toán' })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Thanh toán lại' })).toBeNull();
+    } finally { vi.mocked(fetch).mockImplementation(original); }
+  });
   it('retries loading the order history after a temporary failure', async () => {
     const original = vi.mocked(fetch).getMockImplementation()!;
     let fail = true;
@@ -265,7 +299,7 @@ try {
     });
     try {
       render(<App initialEntries={['/buyer/orders/11111111-1111-4111-8111-111111111111/payment?sepay=error']} />);
-      await screen.findByText(reason === 'error' ? 'Chưa thể xác minh an toàn trạng thái thanh toán.' : reason === 'ATTEMPT_PENDING' ? 'Yêu cầu thanh toán trước vẫn đang có hiệu lực.' : 'Giao dịch cần được kiểm tra trước khi thanh toán tiếp.');
+      await screen.findByText(reason === 'error' ? 'Chưa thể xác minh an toàn trạng thái thanh toán.' : reason === 'ATTEMPT_PENDING' ? 'Yêu cầu thanh toán trước đang chờ xác nhận hoặc đối soát.' : 'Giao dịch cần được kiểm tra trước khi thanh toán tiếp.');
       expect(screen.queryByRole('button', { name: 'Thanh toán lại' })).toBeNull();
       expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).endsWith('/checkout'))).toBe(false);
     } finally { vi.mocked(fetch).mockImplementation(original); }
@@ -279,7 +313,7 @@ try {
       : original(input, init));
     try {
       render(<App initialEntries={['/buyer/orders/11111111-1111-4111-8111-111111111111/payment?sepay=cancel']} />);
-      await screen.findByText('Yêu cầu thanh toán trước vẫn đang có hiệu lực.');
+      await screen.findByText('Yêu cầu thanh toán trước đang chờ xác nhận hoặc đối soát.');
       allowed = true;
       fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra lại trạng thái' }));
       expect(await screen.findByRole('button', { name: 'Thanh toán lại' })).toBeTruthy();
