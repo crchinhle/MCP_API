@@ -1,8 +1,10 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ValidationPipe } from '@nestjs/common';
 import { CatalogAdminService } from '../../../../EmuKey/backend/src/modules/catalog/application/catalog-admin.service.js';
 import type { CatalogAdminRepository, PlanRecord, ProductRecord } from '../../../../EmuKey/backend/src/modules/catalog/infrastructure/catalog-admin.repository.js';
 import type { AuthPrincipal } from '../../../../EmuKey/backend/src/modules/identity-access/identity.types.js';
 import { vi } from 'vitest';
+import { CatalogService } from '../../../../EmuKey/backend/src/modules/catalog/application/catalog.service.js';
+import { CreateProductDto, UpdateProductDto } from '../../../../EmuKey/backend/src/modules/catalog/presentation/catalog.dto.js';
 
 const actor: AuthPrincipal = { sub: '00000000-0000-4000-8000-000000000002', role: 'PROVIDER_ADMIN', sessionVersion: 1 };
 const product: ProductRecord = { code: 'EMUKEY', createdAt: new Date(), description: null, imageUrl: null, id: '00000000-0000-4000-8000-000000000200', name: 'Emukey', providerUserId: actor.sub, publishedAt: null, status: 'DRAFT', updatedAt: new Date() };
@@ -21,6 +23,47 @@ function repository() {
 }
 
 describe('CatalogAdminService', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it.each(['javascript:alert(1)', 'data:image/png;base64,abc', 'not-a-url', '', 'https://', 'https:/example.com/a.png', 'https:///example.com/a.png', '//example.com/a.png', '/\\example.com/a.png', 'https://example.com/\na.png', '/images/\u0000a.png'])('rejects unsafe or malformed image URL %s on create and update', async (imageUrl) => {
+    const service = new CatalogAdminService(repository());
+    await expect(service.createProduct(actor, { code: 'IMAGE', name: 'Image', imageUrl }))
+      .rejects.toMatchObject({ response: { code: 'INVALID_PRODUCT_IMAGE_URL' } });
+    await expect(service.updateProduct(actor, product.id, { imageUrl }))
+      .rejects.toMatchObject({ response: { code: 'INVALID_PRODUCT_IMAGE_URL' } });
+  });
+
+  it.each([null, '/images/product.png', 'https://cdn.example.com/product.png'])('accepts image URL %s through DTO validation and persistence', async (imageUrl) => {
+    const pipe = new ValidationPipe({ transform: true, whitelist: true });
+    const repo = repository();
+    repo.createProduct = async (_actor, input) => ({ ...product, imageUrl: input.imageUrl ?? null });
+    repo.updateProduct = async (_actor, _id, input) => ({ ...product, imageUrl: input.imageUrl ?? null });
+    const service = new CatalogAdminService(repo);
+    const create = await pipe.transform({ code: 'IMAGE', name: 'Image', imageUrl }, { type: 'body', metatype: CreateProductDto });
+    const update = await pipe.transform({ imageUrl }, { type: 'body', metatype: UpdateProductDto });
+    await expect(service.createProduct(actor, create)).resolves.toMatchObject({ imageUrl });
+    await expect(service.updateProduct(actor, product.id, update)).resolves.toMatchObject({ imageUrl });
+  });
+
+  it.each(['development', 'test', 'production'])('allows HTTP images only in local environments (%s)', async (environment) => {
+    vi.stubEnv('NODE_ENV', environment);
+    const pipe = new ValidationPipe({ transform: true, whitelist: true });
+    const dto = await pipe.transform({ code: 'IMAGE', name: 'Image', imageUrl: 'http://localhost:3000/a.png' }, { type: 'body', metatype: CreateProductDto });
+    const service = new CatalogAdminService(repository());
+    if (environment === 'production') {
+      await expect(service.createProduct(actor, dto)).rejects.toMatchObject({ response: { code: 'INVALID_PRODUCT_IMAGE_URL' } });
+    } else {
+      await expect(service.createProduct(actor, dto)).resolves.toMatchObject({ id: product.id });
+    }
+  });
+
+  it('rejects an unsafe stored image in both public catalog reads', async () => {
+    const row = { id: product.id, code: product.code, name: product.name, image_url: 'javascript:alert(1)' };
+    const service = new CatalogService({ listPublished: async () => [row], findPublished: async () => [row] } as never);
+    await expect(service.list()).rejects.toMatchObject({ response: { code: 'INVALID_PRODUCT_IMAGE_URL' } });
+    await expect(service.find(product.code)).rejects.toMatchObject({ response: { code: 'INVALID_PRODUCT_IMAGE_URL' } });
+  });
+
   it('rejects non-canonical monthly duration and non-positive price', async () => {
     const service = new CatalogAdminService(repository());
     await expect(service.createPlan(actor, { productId: product.id, code: 'M', name: 'Monthly', billingCycle: 'MONTHLY', durationMonths: 12, priceVnd: 1, maxActiveDevices: 1 })).rejects.toBeInstanceOf(BadRequestException);

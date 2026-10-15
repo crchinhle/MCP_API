@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
@@ -176,7 +176,7 @@ describe('Emukey public web screens', () => {
     expect(await screen.findByText('DataGuard SDK')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Tìm sản phẩm'), { target: { value: 'cloud' } });
     expect(screen.getByText('CloudStudio AI')).toBeTruthy();
-    expect(screen.queryByText('DataGuard SDK')).toBeNull();
+    await waitFor(() => expect(screen.queryByText('DataGuard SDK')).toBeNull());
   });
 
   it('shows the generic forgot-password response for internal accounts', async () => {

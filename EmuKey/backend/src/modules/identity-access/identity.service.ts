@@ -72,20 +72,6 @@ export interface IdentityTokenDelivery {
   sendPasswordReset(email: string, token: string): Promise<void>;
 }
 
-class NoopIdentityTokenDelivery implements IdentityTokenDelivery {
-  sendLicensingActionVerification(): Promise<void> {
-    return Promise.resolve();
-  }
-
-  sendEmailVerification(): Promise<void> {
-    return Promise.resolve();
-  }
-
-  sendPasswordReset(): Promise<void> {
-    return Promise.resolve();
-  }
-}
-
 interface RefreshSession {
   familyId: string;
   id: string;
@@ -107,9 +93,11 @@ export class IdentityService {
     private readonly repo: PasswordRepository,
     private readonly redis: IdentityRedis,
     private readonly secret: Uint8Array,
-    private readonly delivery: IdentityTokenDelivery = new NoopIdentityTokenDelivery(),
+    private readonly delivery: IdentityTokenDelivery,
     private readonly accessTtl = 900,
-  ) {}
+  ) {
+    if (!delivery) throw new Error('IDENTITY_TOKEN_DELIVERY_REQUIRED');
+  }
 
   private digest(value: string): string {
     return createHash('sha256').update(value).digest('hex');

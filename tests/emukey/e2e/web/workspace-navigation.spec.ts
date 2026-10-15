@@ -1,5 +1,31 @@
 import { expect, test } from '@playwright/test';
 
+test('license command Retry stays reachable after lifecycle confirmation closes', async ({ page }) => {
+  let failCommand = true;
+  await page.route('**/api/v1/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/auth/refresh')) return route.fulfill({ json: { accessToken: 'ux-fixture', user: { id: 'ux-user', email: 'ux@example.test', displayName: 'UX User', role: 'PROVIDER_ADMIN', status: 'ACTIVE' } } });
+    if (path.endsWith('/licenses')) return route.fulfill({ json: [{ id: 'license-1', publicLicenseId: 'LICENSE-PUBLIC-ID', productName: 'UX Product', plan: { name: 'Plan', version: 1 }, status: 'ACTIVE', maxActiveDevices: 1, activeDeviceCount: 0, expiresAt: '2030-01-01T00:00:00Z', finality: 'CONFIRMED', confirmationCount: 2 }] });
+    if (path.endsWith('/lifecycle')) {
+      // A slow response makes the nested processing overlay appear before close.
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      return route.fulfill({ json: { commandId: 'ux-command', licenseId: 'license-1', status: 'PENDING' } });
+    }
+    if (path.endsWith('/commands/ux-command')) return route.fulfill(failCommand ? { status: 500, json: { message: 'Unavailable' } } : { json: { commandId: 'ux-command', licenseId: 'license-1', status: 'CONFIRMED' } });
+    return route.fulfill({ json: [] });
+  });
+  await page.goto('/provider/licenses');
+  await page.getByRole('button', { name: 'Tạm ngưng', exact: true }).click();
+  const confirmation = page.getByRole('dialog', { name: 'Xác nhận tạm ngưng bản quyền', exact: true });
+  await confirmation.getByLabel('Lý do thay đổi trạng thái license').fill('UX regression reason');
+  await confirmation.getByRole('button', { name: 'Xác nhận', exact: true }).click();
+  await expect(page.getByText('Không thể tải trạng thái yêu cầu')).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  failCommand = false;
+  await page.getByRole('button', { name: 'Thử lại', exact: true }).click();
+  await expect(page.getByText('Bản quyền đã được cập nhật.')).toBeVisible();
+});
+
 // Navigation/empty-state checks with an isolated API; these are not live integration evidence.
 const workspaces = [
   { role: 'PROVIDER_ADMIN', routes: [

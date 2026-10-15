@@ -1,6 +1,6 @@
 import { SettingOutlined } from '@ant-design/icons';
 import { Button } from 'antd';
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
 
 import { roleSettingsPath, type RoleShellConfig } from '../../domain/workspace';
@@ -10,7 +10,6 @@ import { Brand } from './Brand';
 
 export const buyerShell: RoleShellConfig = {
   role: 'CUSTOMER',
-  account: 'buyer@demo.emukey.vn',
   items: [
     { label: 'Tổng quan', to: '/buyer', end: true },
     { label: 'Sản phẩm & gói', to: '/buyer/products' },
@@ -22,7 +21,6 @@ export const buyerShell: RoleShellConfig = {
 
 export const providerShell: RoleShellConfig = {
   role: 'PROVIDER_ADMIN',
-  account: 'admin@securedesk.vn',
   items: [
     { label: 'Tổng quan', to: '/provider', end: true },
     { label: 'Sản phẩm & gói', to: '/provider/catalog' },
@@ -35,7 +33,6 @@ export const providerShell: RoleShellConfig = {
 
 export const supportShell: RoleShellConfig = {
   role: 'SUPPORT_STAFF',
-  account: 'support@demo.emukey.vn',
   items: [
     { label: 'Hàng đợi', to: '/support', end: true },
     { label: 'Đang xử lý', to: '/support?view=active' },
@@ -46,7 +43,6 @@ export const supportShell: RoleShellConfig = {
 
 export const systemShell: RoleShellConfig = {
   role: 'SYSTEM_ADMIN',
-  account: 'sysadmin@demo.emukey.vn',
   items: [
     { label: 'Tổng quan', to: '/system/console', end: true },
     { label: 'Người dùng', to: '/system/console?view=users' },
@@ -95,17 +91,11 @@ export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
 
   const navigation = (
     <nav aria-label={`Điều hướng ${config.role}`} className="role-nav">
-      {config.items.map((item) => (
+      <Link onClick={() => setMenuOpen(false)} to="/catalog">Mua sắm</Link>
+      {config.items.map((item) => item.to.includes('?') ? (
         <Link
-          className={
-            item.end
-              ? current === item.to
-                ? 'active'
-                : ''
-              : current === item.to || (!item.to.includes('?') && location.pathname.startsWith(item.to))
-                ? 'active'
-                : ''
-          }
+          className={current === item.to ? 'active' : ''}
+          aria-current={current === item.to ? 'page' : undefined}
           key={`${item.to}-${item.label}`}
           onClick={() => setMenuOpen(false)}
           to={item.to}
@@ -113,6 +103,16 @@ export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
         >
           {item.label}
         </Link>
+      ) : (
+        <NavLink
+          className={({ isActive }) => isActive && (!item.end || !location.search) ? 'active' : ''}
+          aria-current={item.end && location.search ? false : 'page'}
+          {...(item.end ? { end: true } : {})}
+          key={`${item.to}-${item.label}`}
+          onClick={() => setMenuOpen(false)}
+          to={item.to}
+          aria-label={item.ariaLabel}
+        >{item.label}</NavLink>
       ))}
     </nav>
   );
@@ -138,7 +138,7 @@ export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
         <div className="role-account-footer">
           {auth?.user ? <NotificationCenter /> : null}
           <div className="role-account-row">
-            <small>{auth?.user?.email ?? config.account}</small>
+            {auth?.user ? <div className="role-account-identity"><strong>{auth.user.displayName}</strong><small>{auth.user.email}</small></div> : null}
             {auth?.user ? <Button type="text" onClick={() => void auth.logout()}>Đăng xuất</Button> : null}
             {auth?.user ? <Button aria-label="Cài đặt tài khoản" icon={<SettingOutlined />} onClick={() => void navigate(roleSettingsPath(auth.user!.role))} type="text" /> : null}
           </div>

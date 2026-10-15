@@ -6,7 +6,6 @@ import {
   IsObject,
   IsOptional,
   IsString,
-  IsUrl,
   IsUUID,
   Length,
   Min,
@@ -31,10 +30,10 @@ export class CreateProductDto {
   @IsString()
   description?: string;
 
-  @ApiPropertyOptional({ example: 'https://picsum.photos/seed/emukey-product/1200/800' })
+  @ApiPropertyOptional({ example: 'https://picsum.photos/seed/emukey-product/1200/800', nullable: true, type: String })
   @IsOptional()
-  @IsUrl({ protocols: ['https'], require_protocol: true })
-  imageUrl?: string;
+  @IsString()
+  imageUrl?: string | null;
 }
 
 export class UpdateProductDto {
@@ -49,10 +48,10 @@ export class UpdateProductDto {
   @IsString()
   description?: string;
 
-  @ApiPropertyOptional({ example: 'https://picsum.photos/seed/emukey-product/1200/800' })
+  @ApiPropertyOptional({ example: 'https://picsum.photos/seed/emukey-product/1200/800', nullable: true, type: String })
   @IsOptional()
-  @IsUrl({ protocols: ['https'], require_protocol: true })
-  imageUrl?: string;
+  @IsString()
+  imageUrl?: string | null;
 }
 
 export class CreatePlanDto {

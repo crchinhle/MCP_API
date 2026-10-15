@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { describeApiError } from '../../application/auth/authContext';
 import { licenseStatusLabel, finalityLabel, useLicenseLifecycle, usePhase6Command, useProviderLicenses } from '../../application/licenses/licenseQueries';
-import { PageLoading, PageHeader, StatusChip } from '../components/WorkspacePrimitives';
+import { CopyableId, PageLoading, PageHeader, StatusChip, useDebouncedValue } from '../components/WorkspacePrimitives';
 
 const commandLabels: Record<string, string> = {
   PENDING: 'Đang chờ xử lý',
@@ -23,13 +23,16 @@ export function ProviderLicensesScreen() {
   const queryClient = useQueryClient();
   const refreshedCommand = useRef<string | undefined>(undefined);
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebouncedValue(search);
+  const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('');
+  useEffect(() => setPage(1), [search, statusFilter]);
   const lifecycle = useLicenseLifecycle();
   const [reason, setReason] = useState('');
   const [selected, setSelected] = useState<{ licenseId: string; action: 'SUSPEND_LICENSE' | 'RESUME_LICENSE' | 'REVOKE_LICENSE' } | null>(null);
   const [command, setCommand] = useState<{ commandId: string; status: string; licenseId: string } | null>(null);
   const commandStatus = usePhase6Command(command?.commandId);
-  const [errorByLicense, setErrorByLicense] = useState<Record<string, string>>({});
+  const [errorByLicense, setErrorByLicense] = useState<Record<string, { message: string; action: NonNullable<typeof selected>['action']; reason: string } | undefined>>({});
 
   useEffect(() => {
     if (command?.commandId && commandStatus.data?.status === 'CONFIRMED' && refreshedCommand.current !== command.commandId) {
@@ -49,9 +52,9 @@ export function ProviderLicensesScreen() {
           setCommand({ commandId: result.commandId, status: result.status, licenseId: current.licenseId });
           setSelected(null);
           setReason('');
-          setErrorByLicense((errors) => ({ ...errors, [current.licenseId]: '' }));
+          setErrorByLicense((errors) => ({ ...errors, [current.licenseId]: undefined }));
         },
-        onError: (cause) => setErrorByLicense((errors) => ({ ...errors, [current.licenseId]: describeApiError(cause, 'Không thể gửi yêu cầu thay đổi trạng thái.') })),
+        onError: (cause) => setErrorByLicense((errors) => ({ ...errors, [current.licenseId]: { message: describeApiError(cause, 'Không thể gửi yêu cầu thay đổi trạng thái.'), action: current.action, reason: note } })),
       },
     );
   };
@@ -64,6 +67,7 @@ export function ProviderLicensesScreen() {
       <div className="inline-filter"><Input.Search aria-label="Tìm bản quyền" placeholder="Tên sản phẩm hoặc mã tra cứu" value={search} onChange={(event) => setSearch(event.target.value)} /><Select aria-label="Lọc trạng thái bản quyền" value={statusFilter} onChange={setStatusFilter} options={['', 'ACTIVE', 'SUSPENDED', 'REVOKED', 'EXPIRED', 'PENDING_ONCHAIN'].map((value) => ({ value, label: value ? licenseStatusLabel(value) : 'Tất cả trạng thái' }))} /></div>
 
       {licenses.isError ? <Alert showIcon type="error" message="Không thể tải danh sách license." action={<Button onClick={() => void licenses.refetch()}>Thử lại</Button>} /> : null}
+      {commandStatus.isError ? <Alert showIcon type="error" title="Không thể tải trạng thái yêu cầu" action={<Button disabled={commandStatus.isFetching} onClick={() => void commandStatus.refetch()}>Thử lại</Button>} /> : null}
       {!licenses.isPending && !licenses.isError && licenses.data?.length === 0 ? <Empty description="Chưa có license." /> : null}
       {command ? (
         <Alert
@@ -76,17 +80,18 @@ export function ProviderLicensesScreen() {
       <Table
         rowKey="id"
         scroll={{ x: 900 }}
-        pagination={{ pageSize: 10, hideOnSinglePage: true }}
+        pagination={{ current: page, onChange: setPage, pageSize: 10, showSizeChanger: false, hideOnSinglePage: true }}
         locale={{ emptyText: 'Không có bản quyền phù hợp.' }}
-        dataSource={(licenses.data ?? []).filter((license) => (!statusFilter || license.status === statusFilter) && `${license.productName} ${license.publicLicenseId} ${license.plan.name}`.toLocaleLowerCase('vi').includes(search.trim().toLocaleLowerCase('vi')))}
+        dataSource={(licenses.data ?? []).filter((license) => (!statusFilter || license.status === statusFilter) && `${license.productName} ${license.publicLicenseId} ${license.plan.name}`.toLocaleLowerCase('vi').includes(debouncedSearch.trim().toLocaleLowerCase('vi')))}
         columns={[
-          { title: 'Sản phẩm / mã tra cứu', render: (_, license) => <><strong>{license.productName}</strong><p>{license.publicLicenseId}</p></> },
+          { title: 'Sản phẩm / mã tra cứu', render: (_, license) => <><strong>{license.productName}</strong><CopyableId value={license.publicLicenseId} /></> },
           { title: 'Gói / thời hạn', render: (_, license) => <>{license.plan.name} v{license.plan.version}<p>Hết hạn {new Date(license.expiresAt).toLocaleDateString('vi-VN')}</p></> },
           { title: 'Thiết bị', render: (_, license) => <>Thiết bị đang dùng: {license.activeDeviceCount}/{license.maxActiveDevices}</> },
           { title: 'Trạng thái', render: (_, license) => <><StatusChip tone={license.status === 'ACTIVE' ? 'success' : license.status === 'REVOKED' ? 'error' : 'warning'}>{licenseStatusLabel(license.status)}</StatusChip><p>{finalityLabel(license.finality)} ({license.confirmationCount})</p></> },
           { title: 'Thao tác', render: (_, license) => {
             const rowPending = lifecycle.isPending && selected?.licenseId === license.id;
-            return <>{errorByLicense[license.id] ? <Alert type="error" title={errorByLicense[license.id]} /> : null}
+            const failure = errorByLicense[license.id];
+            return <>{failure ? <Alert type="error" title={failure.message} action={<Button disabled={lifecycle.isPending} onClick={() => { setReason(failure.reason); setSelected({ licenseId: license.id, action: failure.action }); }}>Thử lại</Button>} /> : null}
               <div className="table-actions">
                 {license.status === 'ACTIVE' ? <><Button  disabled={(lifecycle.isPending) || (rowPending)} onClick={() => { setReason(''); setSelected({ licenseId: license.id, action: 'SUSPEND_LICENSE' }); }}>Tạm ngưng</Button><LoadingOverlay active={rowPending} label="Đang xử lý yêu cầu: Tạm ngưng" /></> : null}
                 {license.status === 'SUSPENDED' ? <><Button  disabled={(lifecycle.isPending) || (rowPending)} onClick={() => { setReason(''); setSelected({ licenseId: license.id, action: 'RESUME_LICENSE' }); }}>Tiếp tục</Button><LoadingOverlay active={rowPending} label="Đang xử lý yêu cầu: Tiếp tục" /></> : null}
@@ -97,6 +102,7 @@ export function ProviderLicensesScreen() {
         ]}
       />
       <Modal
+        destroyOnHidden
         open={Boolean(selected)}
         title={selected?.action === 'REVOKE_LICENSE' ? 'Xác nhận thu hồi bản quyền' : selected?.action === 'SUSPEND_LICENSE' ? 'Xác nhận tạm ngưng bản quyền' : 'Xác nhận tiếp tục bản quyền'}
         okText="Xác nhận"

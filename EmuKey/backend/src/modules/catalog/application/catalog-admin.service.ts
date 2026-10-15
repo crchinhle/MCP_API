@@ -4,6 +4,7 @@ import type { AuthPrincipal } from '../../identity-access/identity.types.js';
 import type { CreatePlanDto, CreateProductDto, UpdatePlanDto, UpdateProductDto } from '../presentation/catalog.dto.js';
 import { CatalogAdminRepository, type PlanInput, type ProductInput } from '../infrastructure/catalog-admin.repository.js';
 import { canonicalizeEntitlements } from '../../../platform/crypto/license-crypto.js';
+import { validateImageUrl } from './catalog.service.js';
 
 function publicProduct(value: Awaited<ReturnType<CatalogAdminRepository['findProduct']>>) {
   if (!value) throw new NotFoundException({ code: 'PRODUCT_NOT_FOUND', message: 'Product not found.' });
@@ -85,6 +86,7 @@ export class CatalogAdminService {
       name: dto.name.trim(),
     };
     if (!input.code || !input.name) throw new BadRequestException({ code: 'INVALID_PRODUCT', message: 'Product code and name are required.' });
+    validateImageUrl(input.imageUrl);
     try { return publicProduct(await this.repository.createProduct(actor, input)); } catch (error) { this.translateUnique(error, 'PRODUCT_CODE_CONFLICT'); throw error; }
   }
 
@@ -95,7 +97,10 @@ export class CatalogAdminService {
       if (!input.name) throw new BadRequestException({ code: 'INVALID_PRODUCT', message: 'Product name is required.' });
     }
     if (dto.description !== undefined) input.description = dto.description.trim();
-    if (dto.imageUrl !== undefined) input.imageUrl = dto.imageUrl.trim();
+    if (dto.imageUrl !== undefined) {
+      input.imageUrl = dto.imageUrl?.trim() ?? null;
+      validateImageUrl(input.imageUrl);
+    }
     try { return publicProduct(await this.repository.updateProduct(actor, id, input)); } catch (error) { this.translate(error, 'PRODUCT_NOT_FOUND'); throw error; }
   }
 

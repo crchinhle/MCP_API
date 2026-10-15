@@ -1,6 +1,6 @@
-import { PageLoading } from '../components/WorkspacePrimitives';
+import { PageLoading, useDebouncedValue } from '../components/WorkspacePrimitives';
 import { Alert, Button, Card, Empty, Input, Pagination, Select } from 'antd';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Link } from 'react-router-dom';
 import { PurchaseFlowModal } from '../components/PurchaseFlowModal';
@@ -21,13 +21,15 @@ const sortOptions = [
 export function CatalogScreen({ authenticated = false }: { readonly authenticated?: boolean }) {
   const [params, setParams] = useSearchParams();
   const search = params.get('q') ?? '';
+  const debouncedSearch = useDebouncedValue(search);
   const [page, setPage] = useState(1);
   const [sort, setSort] =
     useState<(typeof sortOptions)[number]['value']>('popular');
   const [purchase, setPurchase] = useState<Product | null>(null);
   const { data: products = [], isLoading, isError, refetch } = useProducts();
+  useEffect(() => setPage(1), [search, sort]);
   const visibleProducts = useMemo(() => {
-    const normalizedSearch = search.trim().toLocaleLowerCase('vi');
+    const normalizedSearch = debouncedSearch.trim().toLocaleLowerCase('vi');
     const filtered = products.filter(
       (product) =>
         !normalizedSearch ||
@@ -41,7 +43,7 @@ export function CatalogScreen({ authenticated = false }: { readonly authenticate
           (left, right) => Math.min(...left.plans.map((plan) => plan.priceVnd)) - Math.min(...right.plans.map((plan) => plan.priceVnd)),
         )
       : filtered;
-  }, [products, search, sort]);
+  }, [products, debouncedSearch, sort]);
   const currentPage = Math.min(page, Math.max(1, Math.ceil(visibleProducts.length / 12)));
 
   if (isLoading) return <div className="page-shell">{!authenticated ? <SiteHeader /> : null}<PageLoading /></div>;

@@ -1,8 +1,34 @@
 import type { ReactNode } from 'react';
-import { useEffect, useId, useSyncExternalStore } from 'react';
-import { Modal, Spin } from 'antd';
+import { useEffect, useId, useState, useSyncExternalStore } from 'react';
+import { Button, Modal, Spin, Tooltip } from 'antd';
 
 import type { MetricRecord, StatusTone } from '../../domain/workspace';
+
+export function useDebouncedValue(value: string, delay = 300): string {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), delay);
+    return () => window.clearTimeout(timer);
+  }, [value, delay]);
+  return debounced;
+}
+
+export function CopyableId({ value, onOpen }: { readonly value: string; readonly onOpen?: () => void }) {
+  const [copyStatus, setCopyStatus] = useState('');
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopyStatus('Đã sao chép');
+    } catch {
+      setCopyStatus('Không thể sao chép. Vui lòng sao chép mã thủ công.');
+    }
+  };
+  return <span className="copyable-id">
+    <Tooltip title={value}>{onOpen ? <button className="buyer-orders-id" onClick={onOpen} type="button">{value}</button> : <span className="buyer-orders-id">{value}</span>}</Tooltip>
+    <Button aria-label="Copy ID" size="small" onClick={() => void copy()}>Copy ID</Button>
+    {copyStatus ? <span className="copyable-id-status" role="status" aria-live="polite">{copyStatus}</span> : null}
+  </span>;
+}
 
 const pendingOverlays = new Set<string>();
 const overlayListeners = new Set<() => void>();

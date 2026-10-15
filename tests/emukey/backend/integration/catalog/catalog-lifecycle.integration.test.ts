@@ -54,10 +54,17 @@ describe('provider-scoped catalog lifecycle', () => {
     if (container) await container.stop();
   });
 
+  it('persists internal image paths and clears images explicitly with null', async () => {
+    const product = await service.createProduct(providerA, { code: 'IMAGE_PATH', name: 'Image path', imageUrl: '/images/product.png' });
+    expect(product.imageUrl).toBe('/images/product.png');
+    await expect(service.updateProduct(providerA, product.id, { imageUrl: null })).resolves.toMatchObject({ imageUrl: null });
+    await expect(service.findProduct(providerA, product.id)).resolves.toMatchObject({ imageUrl: null });
+  });
+
   it('seeds one product with exact published edition and device offers', async () => {
     const result = await pool.query<{
       name: string;
-      price_vnd: number;
+      price_vnd: string;
       max_active_devices: number;
       duration_months: number;
       plan_commitment: Buffer;
@@ -70,7 +77,7 @@ describe('provider-scoped catalog lifecycle', () => {
     );
 
     expect(result.rows.map((row) => row.name)).toEqual(['Business', 'Professional', 'Starter']);
-    expect(result.rows.map((row) => [row.price_vnd, row.max_active_devices, row.duration_months])).toEqual([
+    expect(result.rows.map((row) => [Number(row.price_vnd), row.max_active_devices, row.duration_months])).toEqual([
       [1_800_000, 5, 12],
       [900_000, 3, 12],
       [300_000, 1, 1],

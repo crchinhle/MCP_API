@@ -99,6 +99,7 @@ function DocumentTitle() {
       '/auth': 'Đăng nhập — EmuKey',
       '/help': 'Hướng dẫn sử dụng — EmuKey',
       '/products': 'Sản phẩm & gói — EmuKey',
+      '/catalog': 'Sản phẩm & gói — EmuKey',
       '/verify': 'Xác minh License — EmuKey',
     };
     document.title = titles[location.pathname]
@@ -115,6 +116,7 @@ function AppRoutes() {
       <Route element={<PublicHomeScreen />} path="/" />
       <Route element={<AuthScreen />} path="/auth" />
       <Route element={<CatalogScreen />} path="/products" />
+      <Route element={<CatalogScreen />} path="/catalog" />
       <Route element={<ComparePlansScreen />} path="/compare" />
       <Route element={<ProductDetailScreen />} path="/products/:slug" />
       <Route element={<PublicVerificationScreen />} path="/verify" />

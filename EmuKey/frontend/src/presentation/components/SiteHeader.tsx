@@ -1,16 +1,11 @@
 import { Button, Dropdown, type MenuProps } from 'antd';
-import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useLocation, useMatch, useNavigate } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
 
 import { roleHomePath, roleSettingsPath } from '../../domain/workspace';
 import { useOptionalAuth } from '../../application/auth/authContext';
 import { UserAvatar } from './Avatar';
 import { NotificationCenter } from './NotificationCenter';
-
-function activeFor(pathname: string, target: string, prefix = false): boolean {
-  if (prefix) return pathname.startsWith(target);
-  return pathname === target;
-}
 
 /**
  * Single, shared site header used on every public and Customer route.
@@ -19,6 +14,8 @@ function activeFor(pathname: string, target: string, prefix = false): boolean {
  */
 export function SiteHeader() {
   const location = useLocation();
+  const publicCatalogMatch = useMatch('/products/*');
+  const customerCatalogMatch = useMatch('/buyer/products/*');
   const navigate = useNavigate();
   const auth = useOptionalAuth();
   const user = auth?.user ?? null;
@@ -50,6 +47,11 @@ export function SiteHeader() {
     ? [
         { key: 'overview', label: <button className="menu-link-button" onClick={() => void navigate(roleHomePath(user.role))} type="button">Tổng quan tài khoản</button> },
         { key: 'profile', label: <button className="menu-link-button" onClick={() => void navigate(roleSettingsPath(user.role))} type="button">Hồ sơ</button> },
+        { key: 'shopping', label: <Link to="/catalog">Mua sắm</Link> },
+        ...(user.role === 'CUSTOMER' ? [
+          { key: 'orders', label: <Link to="/buyer/orders">Đơn hàng</Link> },
+          { key: 'licenses', label: <Link to="/buyer/licenses">Bản quyền & thiết bị</Link> },
+        ] : []),
         { type: 'divider' },
         { key: 'logout', label: <button className="menu-link-button" onClick={() => void auth?.logout()} type="button">Đăng xuất</button> },
       ]
@@ -64,20 +66,20 @@ export function SiteHeader() {
 
       <div className="site-header-right">
       <nav aria-label="Điều hướng chính" className="public-nav">
-        <NavLink aria-current={activeFor(location.pathname, '/') ? 'page' : undefined} className={({ isActive }) => (isActive && location.pathname === '/' ? 'active' : '')} end to="/">
+        <NavLink className={({ isActive }) => isActive ? 'active' : ''} end to="/">
           Trang chủ
         </NavLink>
-        <NavLink aria-current={activeFor(location.pathname, '/products', true) ? 'page' : undefined} className={({ isActive }) => (isActive ? 'active' : '')} to="/products">
+        <NavLink aria-current={publicCatalogMatch || customerCatalogMatch ? 'page' : undefined} className={({ isActive }) => (isActive || publicCatalogMatch || customerCatalogMatch ? 'active' : '')} to="/catalog">
           Sản phẩm
         </NavLink>
-        <NavLink aria-current={activeFor(location.pathname, '/verify') ? 'page' : undefined} className={({ isActive }) => (isActive ? 'active' : '')} to="/verify">
+        <NavLink className={({ isActive }) => (isActive ? 'active' : '')} to="/verify">
           Xác minh
         </NavLink>
-        <NavLink aria-current={activeFor(location.pathname, '/help') ? 'page' : undefined} className={({ isActive }) => (isActive ? 'active' : '')} to="/help">
+        <NavLink className={({ isActive }) => (isActive ? 'active' : '')} to="/help">
           Tài liệu
         </NavLink>
         {user ? (
-          <NavLink aria-current={location.pathname === roleHomePath(user.role) ? 'page' : undefined} className={({ isActive }) => (isActive ? 'active' : '')} end to={roleHomePath(user.role)}>
+          <NavLink className={({ isActive }) => (isActive ? 'active' : '')} end to={roleHomePath(user.role)}>
             Tổng quan
           </NavLink>
         ) : null}
@@ -127,10 +129,11 @@ export function SiteHeader() {
           <div className="mobile-menu-panel" id="site-mobile-menu" role="dialog" aria-label="Menu chính">
             <nav aria-label="Điều hướng chính trên thiết bị di động">
               <Link to="/">Trang chủ</Link>
-              <Link to="/products">Sản phẩm</Link>
+              <Link to="/catalog">Mua sắm</Link>
               <Link to="/verify">Xác minh</Link>
               <Link to="/help">Tài liệu</Link>
               {user ? <Link onClick={() => setMenuOpen(false)} to={roleHomePath(user.role)}>Tổng quan</Link> : null}
+              {user?.role === 'CUSTOMER' ? <><Link to="/buyer/orders">Đơn hàng</Link><Link to="/buyer/licenses">Bản quyền & thiết bị</Link></> : null}
             </nav>
             <div className="mobile-menu-actions">
               {user ? (

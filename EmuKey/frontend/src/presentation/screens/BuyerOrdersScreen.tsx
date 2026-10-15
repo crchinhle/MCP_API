@@ -6,7 +6,7 @@ import { describeApiError } from '../../application/auth/authContext';
 import { useCreateConversation } from '../../application/assistance/assistanceQueries';
 import { useNavigate } from 'react-router-dom';
 import { orderStatusLabel, orderStatusTone, type OrderSummary, useOrder, useOrderMutations, useOrders, useOrderTerms } from '../../application/orders/orderQueries';
-import { PageLoading, formatMoney, FactList, StatusChip } from '../components/WorkspacePrimitives';
+import { CopyableId, PageLoading, formatMoney, FactList, StatusChip, useDebouncedValue } from '../components/WorkspacePrimitives';
 import { entitlementLabel } from '../components/OrderSummary';
 
 type OrderTab = 'all' | 'sign' | 'payment' | 'complete';
@@ -39,11 +39,13 @@ function downloadOrdersCsv(orders: readonly OrderSummary[]) {
 export function BuyerOrdersScreen() {
   const [tab, setTab] = useState<OrderTab>('all');
   const [query, setQuery] = useState('');
+  const debouncedQuery = useDebouncedValue(query);
   const [status, setStatus] = useState('all');
   const [selectedId, setSelectedId] = useState<string>();
   const [cancelTarget, setCancelTarget] = useState<OrderSummary>();
   const [accepted, setAccepted] = useState(false);
   const [page, setPage] = useState(1);
+  useEffect(() => setPage(1), [query, status, tab]);
   const navigate = useNavigate();
   const createConversation = useCreateConversation();
   const ordersQuery = useOrders();
@@ -53,12 +55,22 @@ export function BuyerOrdersScreen() {
   useEffect(() => { setAccepted(false); }, [selectedId, terms.data?.version, terms.data?.hash]);
   const orders = ordersQuery.data ?? [];
   const data = useMemo(() => orders.filter((order) => {
-    const normalized = query.trim().toLocaleLowerCase('vi');
+    const normalized = debouncedQuery.trim().toLocaleLowerCase('vi');
     const matchesSearch = !normalized || `${order.orderNumber} ${order.productNameSnapshot} ${order.planNameSnapshot}`.toLocaleLowerCase('vi').includes(normalized);
     const matchesStatus = status === 'all' || order.orderStatus === status;
     return matchesSearch && matchesStatus && matchesTab(order.orderStatus, tab);
-  }), [orders, query, status, tab]);
+  }), [orders, debouncedQuery, status, tab]);
   const currentPage = Math.min(page, Math.max(1, Math.ceil(data.length / 10)));
+  const cancelOrder = () => {
+    if (cancelTarget && !mutations.cancel.isPending) mutations.cancel.mutate(cancelTarget.id, { onSuccess: () => setCancelTarget(undefined) });
+  };
+  const acceptTerms = () => {
+    if (accepted && detailQuery.data && terms.data && !mutations.acceptServiceTerms.isPending) mutations.acceptServiceTerms.mutate({ order: detailQuery.data, terms: terms.data });
+  };
+  const requestSupport = () => {
+    if (!detailQuery.data || createConversation.isPending) return;
+    createConversation.mutate({ contextType: 'ORDER', contextId: detailQuery.data.id, title: `Hỗ trợ đơn ${detailQuery.data.orderNumber}` }, { onSuccess: (conversation) => { setSelectedId(undefined); void navigate(`/buyer/support?conversation=${encodeURIComponent(conversation.id)}`); } });
+  };
 
   if (ordersQuery.isLoading) return <PageLoading />;
   if (ordersQuery.isError) return <Result status="error" title="Không thể tải đơn hàng" subTitle={describeApiError(ordersQuery.error, 'Lịch sử đơn hàng đang tạm thời không khả dụng.')} extra={<Button onClick={() => void ordersQuery.refetch()}>Thử lại</Button>} />;
@@ -85,7 +97,7 @@ export function BuyerOrdersScreen() {
               {data.slice((currentPage - 1) * 10, currentPage * 10).map((order) => {
                 const state = tableStatus(order.orderStatus);
                 return <tr key={order.id}>
-                  <td><button className="buyer-orders-id" onClick={() => setSelectedId(order.id)} type="button">{order.orderNumber}</button></td>
+                  <td><CopyableId value={order.orderNumber} onOpen={() => setSelectedId(order.id)} /></td>
                   <td><span className="buyer-orders-cell-text">{order.productNameSnapshot} · {order.planNameSnapshot}</span></td>
                   <td className="buyer-orders-money">{formatMoney(order.priceVndSnapshot)}</td>
                   <td><StatusChip tone={state.tone}>{state.label}</StatusChip></td>
@@ -109,16 +121,12 @@ export function BuyerOrdersScreen() {
          cancelButtonProps={{ disabled: mutations.cancel.isPending }}
         closable={!mutations.cancel.isPending} keyboard={!mutations.cancel.isPending} mask={{ closable: false }}
         onCancel={() => { if (!mutations.cancel.isPending) setCancelTarget(undefined); }}
-        onOk={() => {
-          if (cancelTarget && !mutations.cancel.isPending) mutations.cancel.mutate(cancelTarget.id, {
-            onSuccess: () => setCancelTarget(undefined),
-          });
-        }}>
+        onOk={cancelOrder}>
         <LoadingOverlay active={Boolean(cancelTarget) && (mutations.cancel.isPending)} />
         <p>Bạn muốn hủy đơn <strong>{cancelTarget?.orderNumber}</strong>?</p>
         <p>Yêu cầu thanh toán đang chờ sẽ ngừng hiệu lực.</p>
         <Alert showIcon type="warning" title="Nếu đã chuyển tiền, hãy giữ đơn và liên hệ hỗ trợ để kiểm tra giao dịch." />
-        {mutations.cancel.isError ? <Alert showIcon type="error" title={describeApiError(mutations.cancel.error, 'Không thể hủy đơn hàng. Vui lòng thử lại.')} /> : null}
+        {mutations.cancel.isError ? <Alert showIcon type="error" title={describeApiError(mutations.cancel.error, 'Không thể hủy đơn hàng. Vui lòng thử lại.')} action={<Button disabled={mutations.cancel.isPending} onClick={cancelOrder}>Thử lại</Button>} /> : null}
       </Modal>
       <Drawer open={Boolean(selectedId)} onClose={() => { setSelectedId(undefined); setAccepted(false); }} motion={{ motionName: '' }} title={`Chi tiết ${detailQuery.data?.orderNumber ?? ''}`}>
         {detailQuery.isLoading ? <LoadingOverlay label="Đang tải chi tiết đơn hàng" /> : detailQuery.isError ? <Alert type="error" message={describeApiError(detailQuery.error, 'Không thể tải chi tiết đơn hàng.')} action={<Button disabled={detailQuery.isFetching} onClick={() => void detailQuery.refetch()}>Thử lại</Button>} /> : detailQuery.data ? <FactList facts={[{ label: 'Sản phẩm', value: detailQuery.data.productNameSnapshot }, { label: 'Gói', value: detailQuery.data.planNameSnapshot }, { label: 'Tổng thanh toán', value: formatMoney(detailQuery.data.priceVndSnapshot) }]} /> : null}
@@ -135,9 +143,9 @@ export function BuyerOrdersScreen() {
           <ul>{Object.entries(detailQuery.data.entitlementsSnapshot ?? {}).map(([key, value]) => <li key={key}>{entitlementLabel(key, value)}</li>)}</ul>
           <p className="muted-copy">Thông tin được lưu tại thời điểm tạo đơn. Đơn chưa thanh toán có thời hạn 30 phút.</p>
         </section> : null}
-        {detailQuery.data?.orderStatus === 'WAITING_SERVICE_TERMS_ACCEPTANCE' ? <section className="checkout-stack">{terms.isPending ? <LoadingOverlay /> : terms.isError ? <Alert type="error" title="Không thể tải điều khoản" action={<Button onClick={() => void terms.refetch()}>Thử lại</Button>} /> : <><details><summary>Xem điều khoản dịch vụ</summary><pre className="terms-document">{terms.data?.content}</pre></details><Checkbox checked={accepted} onChange={(event) => setAccepted(event.target.checked)}>Tôi đã đọc và đồng ý điều khoản</Checkbox><><Button type="primary" disabled={(!accepted || !terms.data || terms.isFetching || terms.isError) || (mutations.acceptServiceTerms.isPending)}  onClick={() => terms.data && mutations.acceptServiceTerms.mutate({ order: detailQuery.data!, terms: terms.data })}>Xác nhận điều khoản</Button><LoadingOverlay active={mutations.acceptServiceTerms.isPending} label="Đang xử lý yêu cầu: Xác nhận điều khoản" /></></>}{mutations.acceptServiceTerms.isError ? <Alert type="error" title="Không thể xác nhận điều khoản. Vui lòng thử lại." /> : null}</section> : null}
-         {createConversation.isError ? <Alert role="alert" type="error" message={describeApiError(createConversation.error, 'Không thể tạo yêu cầu hỗ trợ. Vui lòng thử lại.')} /> : null}
-         {detailQuery.data ? <><Button disabled={createConversation.isPending} onClick={() => createConversation.mutate({ contextType: 'ORDER', contextId: detailQuery.data.id, title: `Hỗ trợ đơn ${detailQuery.data.orderNumber}` }, { onSuccess: (conversation) => { setSelectedId(undefined); void navigate(`/buyer/support?conversation=${encodeURIComponent(conversation.id)}`); } })}>Cần hỗ trợ về đơn này</Button><LoadingOverlay active={createConversation.isPending} label="Đang xử lý yêu cầu: Cần hỗ trợ về đơn này" /></> : null}
+        {detailQuery.data?.orderStatus === 'WAITING_SERVICE_TERMS_ACCEPTANCE' ? <section className="checkout-stack">{terms.isPending ? <LoadingOverlay /> : terms.isError ? <Alert type="error" title="Không thể tải điều khoản" action={<Button onClick={() => void terms.refetch()}>Thử lại</Button>} /> : <><details><summary>Xem điều khoản dịch vụ</summary><pre className="terms-document">{terms.data?.content}</pre></details><Checkbox checked={accepted} onChange={(event) => setAccepted(event.target.checked)}>Tôi đã đọc và đồng ý điều khoản</Checkbox><><Button type="primary" disabled={(!accepted || !terms.data || terms.isFetching || terms.isError) || (mutations.acceptServiceTerms.isPending)}  onClick={acceptTerms}>Xác nhận điều khoản</Button><LoadingOverlay active={mutations.acceptServiceTerms.isPending} label="Đang xử lý yêu cầu: Xác nhận điều khoản" /></></>}{mutations.acceptServiceTerms.isError ? <Alert type="error" title="Không thể xác nhận điều khoản. Vui lòng thử lại." action={<Button disabled={!accepted || !terms.data || terms.isFetching || terms.isError || mutations.acceptServiceTerms.isPending} onClick={acceptTerms}>Thử lại</Button>} /> : null}</section> : null}
+         {createConversation.isError ? <Alert role="alert" type="error" message={describeApiError(createConversation.error, 'Không thể tạo yêu cầu hỗ trợ. Vui lòng thử lại.')} action={<Button disabled={createConversation.isPending} onClick={requestSupport}>Thử lại</Button>} /> : null}
+         {detailQuery.data ? <><Button disabled={createConversation.isPending} onClick={requestSupport}>Cần hỗ trợ về đơn này</Button><LoadingOverlay active={createConversation.isPending} label="Đang xử lý yêu cầu: Cần hỗ trợ về đơn này" /></> : null}
          {detailQuery.data?.orderStatus === 'WAITING_PAYMENT' ? <Button type="primary" href={`/buyer/orders/${encodeURIComponent(detailQuery.data.id)}/payment`}>Tiếp tục thanh toán</Button> : null}
 
       </Drawer>

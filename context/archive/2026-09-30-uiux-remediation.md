@@ -4,13 +4,13 @@
 
 > **Dành cho người triển khai:** dùng skill `executing-plans`, triển khai tuần tự theo từng task và đánh dấu checkbox sau khi có bằng chứng kiểm thử. Không tự tạo commit, push, reset database hoặc gọi subagent.
 
-**Goal:** xử lý đầy đủ **120 ID duy nhất** trong `../current/EmuKey_UIUX_Issues.md`, xuyên suốt backend, frontend web và mobile. Checkpoint 105 đã thiếu AUTH-01–AUTH-15; ma trận mục 2 của báo cáo issue là nguồn trạng thái hiện tại. Giảm thao tác lặp và giữ kiểm soát dữ liệu/tài chính/bảo mật.
+**Goal:** xử lý đầy đủ **120 ID duy nhất** trong `EmuKey_UIUX_Issues.md`, xuyên suốt backend, frontend web và mobile. Checkpoint 105 đã thiếu AUTH-01–AUTH-15; ma trận mục 2 của báo cáo issue là nguồn trạng thái hiện tại. Giảm thao tác lặp và giữ kiểm soát dữ liệu/tài chính/bảo mật.
 
 **Architecture:** mở rộng đúng module NestJS hiện có; PostgreSQL là nguồn dữ liệu nghiệp vụ, Redis/BullMQ phục vụ xử lý phụ trợ. Web và mobile dùng cùng hợp đồng API và bảng hành vi; giữ khả năng build độc lập của từng project, không tạo package dùng chung buộc các project phụ thuộc source của nhau.
 
 **Tech Stack:** TypeScript; React/Vite/Ant Design/TanStack Query; NestJS/pg/PostgreSQL/Redis/BullMQ; React Native/Expo; Vitest/Supertest/Playwright/Jest/Maestro. Phiên bản lấy từ manifest/lockfile hiện có khi triển khai.
 
-**Spec:** [EmuKey_UIUX_Issues.md](../current/EmuKey_UIUX_Issues.md). Đối chiếu [nghiệp vụ](../current/chuc_nang_toan_he_thong_ver2.0.md), [SQL baseline](../../EmuKey/backend/database/schema.sql), [kế hoạch tổng](../current/APP_IMPLEMENTATION_PLAN.md), [HDSD](../current/HDSD.md).
+**Spec:** [EmuKey_UIUX_Issues.md](EmuKey_UIUX_Issues.md). Đối chiếu [nghiệp vụ](../current/chuc_nang_toan_he_thong_ver2.0.md), [SQL baseline](../../EmuKey/backend/database/schema.sql), [kế hoạch tổng](../current/APP_IMPLEMENTATION_PLAN.md), [HDSD](../current/HDSD.md).
 
 **Vị trí chính thức:** file này ở `context/archive/2026-09-30-uiux-remediation.md` trong workspace `D:/TLHT/KLTN/UY/`. Không tạo lại bản kế hoạch trong `docs/emukey/`. Bổ sung lượt 2 tại mục 8–10; T00–T16 và 76 ID gốc được bảo toàn, T16 chạy cuối sau T17–T30; lượt 3 ngày 01/10/2026 nằm tại mục 11–12.
 
@@ -1046,7 +1046,7 @@ Tất cả còn mở. Nghiệm thu toàn bộ cần đủ 120 dòng ở mục 5,
 
 ### Đã triển khai thêm
 
-- Khôi phục ma trận **120 dòng** trong `../current/EmuKey_UIUX_Issues.md`; 15 ID chênh lệch với checkpoint 105 là AUTH-01–15, không gộp ngầm.
+- Khôi phục ma trận **120 dòng** trong `EmuKey_UIUX_Issues.md`; 15 ID chênh lệch với checkpoint 105 là AUTH-01–15, không gộp ngầm.
 - AUTH-04/05/06/08/10/11/12/13/14: email verification context, auth error guidance, system search/state guard, reset-token UX, profile clear/sync, role shell profile, validation onBlur.
 - PAY-02/03/09/10: mobile idempotency key bền qua timeout/retry, payment deep-link return chỉ re-fetch backend order, labels/order detail tiếng Việt.
 - GBL-02, CAT-04: route-specific document title và catalog `q` URL state.
@@ -1075,7 +1075,7 @@ Tất cả còn mở. Nghiệm thu toàn bộ cần đủ 120 dòng ở mục 5,
 
 - Full scope được khôi phục là **120 ID**, không phải 105.
 - Chính xác 15 ID chênh lệch là **AUTH-01–AUTH-15**. Không có ID bị gộp ngầm; mô tả AUTH được khôi phục từ session/tool history và giữ nguyên ID.
-- Ma trận đầy đủ 120 ID, trạng thái `chưa triển khai / đang triển khai / đã sửa kiểm tra cục bộ / chờ integration-E2E` nằm tại `../current/EmuKey_UIUX_Issues.md`.
+- Ma trận đầy đủ 120 ID, trạng thái `chưa triển khai / đang triển khai / đã sửa kiểm tra cục bộ / chờ integration-E2E` nằm tại `EmuKey_UIUX_Issues.md`.
 
 ### Batch đã triển khai thêm
 
@@ -1114,13 +1114,13 @@ Không tự accept terms, không coi payment redirect/IPN callback là proof tha
 - Integration PostgreSQL: 6 files / 24 tests pass, 2 blockchain tests skip. Docker đã hoạt động. Knowledge có regression PostgreSQL và HTTP 409/400/403; không thay thế acceptance đầy đủ cho KNW-03/04.
 - DB hiện tại vẫn chưa apply snapshot migration; không reset DB. Android và external sandbox chưa chạy. Không commit/push/deploy.
 
-Chi tiết gate và trạng thái hiện tại: `../current/EmuKey_UIUX_Issues.md`, mục 2 và 6.
+Chi tiết gate và trạng thái hiện tại: `EmuKey_UIUX_Issues.md`, mục 2 và 6.
 
 ## 18. Review tiếp ngày 02/10/2026
 
 Đã sửa payload chấp nhận điều khoản ở web/mobile để gửi đúng version/hash đã hiển thị, gate tải điều khoản và retry cùng đơn cho gia hạn mobile, giá snapshot gia hạn, HTTP 404 cho knowledge detail và PLAN context không public khi product cha DRAFT/ARCHIVED.
 
-Test: backend 161 unit, PostgreSQL integration 25 pass / 2 blockchain skip, frontend 89, mobile 16. Chi tiết hiện tại xem `../current/EmuKey_UIUX_Issues.md` mục 7. Không coi các test này là nghiệm thu đầy đủ retrieval/AI, Android hoặc external sandbox; DB có dữ liệu chưa apply migration.
+Test: backend 161 unit, PostgreSQL integration 25 pass / 2 blockchain skip, frontend 89, mobile 16. Chi tiết hiện tại xem `EmuKey_UIUX_Issues.md` mục 7. Không coi các test này là nghiệm thu đầy đủ retrieval/AI, Android hoặc external sandbox; DB có dữ liệu chưa apply migration.
 
 ## 19. Review toàn nhóm luồng ngày 02/10/2026
 
@@ -1135,7 +1135,7 @@ Test: backend 161 unit, PostgreSQL integration 25 pass / 2 blockchain skip, fron
 
 Module hiện tại sẽ được mở rộng; không tạo API client hoặc database connection song song. Migration nếu cần chỉ chạy trên PostgreSQL cô lập. Không commit/push/deploy/reset DB. Các ID chưa khôi phục mô tả gốc giữ nguyên ghi chú, không tự đặt yêu cầu để đánh dấu hoàn tất.
 
-Đã sửa 10 nhóm lỗi ở đổi mật khẩu, thông báo, URL search, CTA hỗ trợ đơn, grounded/citation AI, trạng thái hội thoại, retry tin nhắn/câu trả lời, retrieval ORDER/PLAN, email recovery và snapshot quyền lợi. Chi tiết bằng chứng và giới hạn ở `../current/EmuKey_UIUX_Issues.md` mục 8.
+Đã sửa 10 nhóm lỗi ở đổi mật khẩu, thông báo, URL search, CTA hỗ trợ đơn, grounded/citation AI, trạng thái hội thoại, retry tin nhắn/câu trả lời, retrieval ORDER/PLAN, email recovery và snapshot quyền lợi. Chi tiết bằng chứng và giới hạn ở `EmuKey_UIUX_Issues.md` mục 8.
 
 Gates mới: backend 166 unit; integration 27 pass / 2 blockchain skip; security 15; frontend 90; mobile 16; Playwright 16 buyer regressions + 6 workspace tests. Các browser test dùng API mock. Lint/typecheck/build/OpenAPI cả ba pass; build mobile là Expo export, chưa chạy thiết bị. Các ID chưa triển khai/chờ integration không được nâng thành nghiệm thu T16.
 

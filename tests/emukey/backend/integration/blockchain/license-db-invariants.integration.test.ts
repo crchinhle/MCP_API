@@ -223,6 +223,7 @@ describe('customer durable license and device invariants without a local blockch
       licenseId,
       proof: firstProof,
     })).resolves.toMatchObject({ licenseId, status: 'ACTIVE' });
+    await expect(projection.findCustomer(customer.sub, licenseId)).resolves.toMatchObject({ activeDeviceCount: 1 });
     // Replaying the consumed challenge and proof must be rejected.
     await expect(service.activate(null, {
       activationKey: key,
@@ -253,7 +254,7 @@ describe('customer durable license and device invariants without a local blockch
       .toMatchObject({ active_device_count: 1, device_state_version: '1' });
   });
 
-  it('serializes three concurrent activations against quota two', async () => {
+  it('serializes three concurrent activations against the Starter quota of one', async () => {
     const { projection, service } = licensingService();
     const key = await activationKey();
     const concurrent = await Promise.allSettled(
@@ -276,27 +277,27 @@ describe('customer durable license and device invariants without a local blockch
         });
       }),
     );
-    expect(concurrent.filter(({ status }) => status === 'fulfilled')).toHaveLength(2);
-    expect(concurrent.filter(({ status }) => status === 'rejected')).toHaveLength(1);
+    expect(concurrent.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
+    expect(concurrent.filter(({ status }) => status === 'rejected')).toHaveLength(2);
 
     const failure = concurrent.find((result) => result.status === 'rejected') as PromiseRejectedResult;
     expect(failure.reason).toMatchObject({ status: 409 });
     const devices = await projection.listCustomerDevices(customer.sub, licenseId);
-    expect(devices).toHaveLength(2);
+    expect(devices).toHaveLength(1);
     const afterState = await pool.query<{ active_device_count: number; device_state_version: string; latest_requested_device_sync_version: string }>(
       `SELECT active_device_count, device_state_version,
               latest_requested_device_sync_version
        FROM licenses WHERE id=$1`,
       [licenseId],
     );
-    expect(afterState.rows[0]).toMatchObject({ active_device_count: 2 });
-    expect(BigInt(afterState.rows[0]!.device_state_version)).toBe(2n);
+    expect(afterState.rows[0]).toMatchObject({ active_device_count: 1 });
+    expect(BigInt(afterState.rows[0]!.device_state_version)).toBe(1n);
     expect(BigInt(afterState.rows[0]!.latest_requested_device_sync_version)).toBe(BigInt(afterState.rows[0]!.device_state_version));
     const syncCommands = await pool.query<{ count: number }>(
       "SELECT count(*)::int AS count FROM chain_commands WHERE license_id=$1 AND command_type='SYNC_DEVICE_COUNT'",
       [licenseId],
     );
-    expect(syncCommands.rows[0]!.count).toBe(2);
+    expect(syncCommands.rows[0]!.count).toBe(1);
   });
 
   it('keeps owner isolation and device activation independent of chain finality', async () => {
@@ -344,6 +345,7 @@ describe('customer durable license and device invariants without a local blockch
       challenge: revokeChallenge.challenge,
       proof: await account.signMessage({ message: revokeChallenge.challenge }),
     });
+    await expect(projection.findCustomer(customer.sub, licenseId)).resolves.toMatchObject({ activeDeviceCount: 0 });
     await expect(projection.listCustomerDevices(customer.sub, licenseId)).resolves.toEqual(expect.arrayContaining([
       expect.objectContaining({ deviceRef: storedDeviceRef, status: 'REVOKED' }),
     ]));
@@ -353,10 +355,33 @@ describe('customer durable license and device invariants without a local blockch
       devicePublicKey: account.address, challenge: rebind.challenge,
       proof: await account.signMessage({ message: rebind.challenge }),
     })).resolves.toMatchObject({ id: device.id, status: 'ACTIVE', bindingGeneration: 2 });
+    await expect(projection.findCustomer(customer.sub, licenseId)).resolves.toMatchObject({ activeDeviceCount: 1 });
     expect((await pool.query('SELECT active_device_count FROM licenses WHERE id=$1', [licenseId])).rows[0].active_device_count).toBe(1);
     expect((await pool.query("SELECT DISTINCT status FROM chain_commands WHERE license_id=$1 AND command_type='SYNC_DEVICE_COUNT'", [licenseId])).rows)
       .toEqual([{ status: 'PENDING' }]);
 
+  });
+
+  it('rolls back device changes and their projected count together when audit persistence fails', async () => {
+    const projection = new LicenseProjectionRepository(pool);
+    const failAudit = { write: async () => { throw new Error('AUDIT_UNAVAILABLE'); } };
+    const failing = new LicensingRepository(pool, failAudit);
+    const working = new LicensingRepository(pool);
+    const deviceId = randomUUID();
+    const deviceRef = 'rollback-device';
+    const account = privateKeyToAccount(`0x${'55'.repeat(32)}`);
+    await expect(failing.createDeviceCommand(null, licenseId, deviceRef, account.address, deviceId, 1, chainConfig))
+      .rejects.toThrow('AUDIT_UNAVAILABLE');
+    await expect(projection.findCustomer(customer.sub, licenseId)).resolves.toMatchObject({ activeDeviceCount: 0 });
+    await expect(projection.listCustomerDevices(customer.sub, licenseId)).resolves.toEqual([]);
+
+    await working.createDeviceCommand(null, licenseId, deviceRef, account.address, deviceId, 1, chainConfig);
+    await expect(failing.createDeviceRevokeCommand(customer.sub, licenseId, deviceRef, deviceId, 1, chainConfig))
+      .rejects.toThrow('AUDIT_UNAVAILABLE');
+    await expect(projection.findCustomer(customer.sub, licenseId)).resolves.toMatchObject({ activeDeviceCount: 1 });
+    await expect(projection.listCustomerDevices(customer.sub, licenseId)).resolves.toEqual([
+      expect.objectContaining({ id: deviceId, status: 'ACTIVE' }),
+    ]);
   });
 
   it('repairs persisted canonical projection drift without a chain node', async () => {

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../../EmuKey/frontend/src/presentation/app/App';
 import { orderStatusLabel } from '../../../EmuKey/frontend/src/application/orders/orderQueries';
 import { OrderSummary } from '../../../EmuKey/frontend/src/presentation/components/OrderSummary';
+import { writeCheckoutIntent } from '../../../EmuKey/frontend/src/application/orders/checkoutIntent';
 
 afterEach(() => {
   cleanup();
@@ -11,6 +12,50 @@ afterEach(() => {
 });
 
 describe('Customer commerce', () => {
+  it('keeps the current order results until the 300ms search debounce finishes', async () => {
+    render(<App initialEntries={['/buyer/orders']} />);
+    const order = await screen.findByText('ORD-2026-0218');
+    fireEvent.change(screen.getByLabelText('Tìm đơn hàng'), { target: { value: 'no matching order' } });
+    expect(order.isConnected).toBe(true);
+    await waitFor(() => expect(screen.queryByText('ORD-2026-0218')).toBeNull());
+  });
+
+  it('offers a copy control for the full displayed order number', async () => {
+    render(<App initialEntries={['/buyer/orders']} />);
+    await screen.findByText('ORD-2026-0218');
+    expect(screen.getAllByRole('button', { name: 'Copy ID' })).toHaveLength(1);
+  });
+
+  it.each(['/buyer/checkout', '/buyer/checkout?product='])('shows an empty checkout without a product selection at %s', async (path) => {
+    vi.mocked(fetch).mockClear();
+    render(<App initialEntries={[path]} />);
+    expect(await screen.findByText('Chưa có sản phẩm nào được chọn để thanh toán')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Quay về danh mục' }).getAttribute('href')).toBe('/buyer/products');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes('/products/'))).toBe(false);
+    expect(vi.mocked(fetch).mock.calls.some(([input, init]) => String(input).endsWith('/orders') && init?.method === 'POST')).toBe(false);
+  });
+
+  it('resumes the current account checkout intent when the URL has no product', async () => {
+    writeCheckoutIntent('test-user', { productSlug: 'securedesk', planId: 'securedesk-25', orderId: '00000000-0000-4000-8000-000000000501' });
+    render(<App initialEntries={['/buyer/checkout']} />);
+    expect(await screen.findByRole('region', { name: /Điều khoản dịch vụ/ })).toBeTruthy();
+    expect(screen.queryByText('Chưa có sản phẩm nào được chọn để thanh toán')).toBeNull();
+  });
+
+  it('does not use another account checkout intent', async () => {
+    writeCheckoutIntent('other-user', { productSlug: 'securedesk', planId: 'securedesk-25', orderId: '11111111-1111-4111-8111-111111111111' });
+    render(<App initialEntries={['/buyer/checkout']} />);
+    expect(await screen.findByText('Chưa có sản phẩm nào được chọn để thanh toán')).toBeTruthy();
+  });
+
+  it('prioritizes an explicit URL product over the stored checkout intent', async () => {
+    writeCheckoutIntent('test-user', { productSlug: 'missing-product', planId: 'old-plan', orderId: 'old-order' });
+    render(<App initialEntries={['/buyer/checkout?product=securedesk&planId=securedesk-25']} />);
+    expect(await screen.findByRole('button', { name: 'Tiếp tục' })).toBeTruthy();
+    expect(screen.queryByText('Sản phẩm chưa sẵn sàng')).toBeNull();
+  });
+
   it('never falls back to another support conversation when the requested conversation is missing', async () => {
     render(<App initialEntries={['/buyer/support?conversation=missing-conversation']} />);
     expect(await screen.findByText('Không tìm thấy hội thoại được yêu cầu.')).toBeTruthy();

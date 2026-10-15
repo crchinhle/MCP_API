@@ -1,5 +1,5 @@
 import { LoadingOverlay } from '../components/WorkspacePrimitives';
-import { PageLoading } from '../components/WorkspacePrimitives';
+import { CopyableId, PageLoading, useDebouncedValue } from '../components/WorkspacePrimitives';
 import { Alert, Button, Empty, Input, Modal, Table } from 'antd';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -24,7 +24,9 @@ export function BuyerLicenseHubScreen() {
   const [selectedId, setSelectedId] = useState(searchParams.get('licenseId') ?? '');
   const [filter, setFilter] = useState('all');
   const [query, setQuery] = useState('');
+  const debouncedQuery = useDebouncedValue(query);
   const [page, setPage] = useState(1);
+  useEffect(() => setPage(1), [query, filter]);
   const [tab, setTab] = useState<LicenseTab>(searchParams.has('recover') || searchParams.has('activate') || searchParams.has('actionToken') ? 'key' : 'overview');
   const [activationKeys, setActivationKeys] = useState<Record<string, string>>({});
   const [copyStatus, setCopyStatus] = useState('');
@@ -34,7 +36,7 @@ export function BuyerLicenseHubScreen() {
   const resolution = useResolveLicensingAction(actionToken);
   const invalidActionLink = resolution.error instanceof ApiRequestError && [400, 401, 403, 404].includes(resolution.error.status);
   const visibleRows = rows.filter((license) => (filter === 'all' || license.status === filter) &&
-    `${license.productName} ${license.plan.name} ${license.publicLicenseId} ${license.activationKeyLast4 ?? ''}`.toLocaleLowerCase('vi').includes(query.trim().toLocaleLowerCase('vi')));
+    `${license.productName} ${license.plan.name} ${license.publicLicenseId} ${license.activationKeyLast4 ?? ''}`.toLocaleLowerCase('vi').includes(debouncedQuery.trim().toLocaleLowerCase('vi')));
   const selected = rows.find((license) => license.id === selectedId);
   const devices = useLicenseDevices(selected?.id);
   const activationKey = selected ? activationKeys[selected.id] : undefined;
@@ -74,7 +76,7 @@ export function BuyerLicenseHubScreen() {
           <Table<LicenseProjectionDto> rowKey="id" dataSource={visibleRows} scroll={{ x: 1100 }}
             pagination={{ current: Math.min(page, Math.max(1, Math.ceil(visibleRows.length / 10))), pageSize: 10, onChange: setPage, showSizeChanger: false, hideOnSinglePage: true }}
             locale={{ emptyText: 'Không có bản quyền phù hợp bộ lọc.' }} columns={[
-              { title: 'Sản phẩm / Gói', key: 'product', width: 260, render: (_, row) => <><strong>{row.productName}</strong><div>{row.plan.name}</div></> },
+              { title: 'Sản phẩm / Gói', key: 'product', width: 260, render: (_, row) => <><strong>{row.productName}</strong><div>{row.plan.name}</div><CopyableId value={row.publicLicenseId} /></> },
               { title: 'Mã bản quyền', dataIndex: 'activationKeyLast4', width: 180, render: (value: string | null | undefined) => value ? <code>•••• {value}</code> : 'Không có thông tin' },
               { title: 'Trạng thái', dataIndex: 'status', width: 145, render: (value: string) => <span className={`buyer-license-status buyer-license-status--${value.toLowerCase()}`}>{value === 'PENDING_ONCHAIN' ? 'Đang cấp' : statusLabel(value)}</span> },
               { title: 'Thiết bị', key: 'devices', width: 95, render: (_, row) => `${row.activeDeviceCount}/${row.maxActiveDevices}` },
@@ -100,9 +102,10 @@ export function BuyerLicenseHubScreen() {
           </div> : selected ? <section aria-label="Chi tiết bản quyền" className="buyer-license-modal-content">
             <header className="buyer-license-detail-header"><div><h2>{selected.productName} · {selected.plan.name}</h2><p>Mã tra cứu: {selected.publicLicenseId} · Hết hạn {dateLabel(selected.expiresAt)}</p></div><span className={`buyer-license-status buyer-license-status--${selected.status.toLowerCase()}`}>{statusLabel(selected.status)}</span></header>
             {devices.isError ? <Alert type="error" title="Không thể tải thiết bị" action={<Button onClick={() => void devices.refetch()}>Thử lại</Button>} /> : null}
-               {retrieve.isError ? <Alert type="error" message={activationKeyErrorLabel(retrieve.error)} /> : null}
+               {retrieve.isError ? <Alert type="error" message={activationKeyErrorLabel(retrieve.error)} action={<Button disabled={licenses.isFetching} onClick={() => void licenses.refetch()}>Thử lại</Button>} /> : null}
             <nav aria-label="Chi tiết bản quyền" className="buyer-license-detail-tabs"><button className={tab === 'overview' ? 'active' : ''} onClick={() => setTab('overview')} type="button">Tổng quan</button><button className={tab === 'key' ? 'active' : ''} onClick={() => setTab('key')} type="button">Mã bản quyền</button><button className={tab === 'devices' ? 'active' : ''} onClick={() => setTab('devices')} type="button">Thiết bị</button></nav>
             {tab === 'overview' ? <>
+              <p>Đơn hàng gốc: <CopyableId value={selected.originOrderId} /></p>
               {['ACTIVE', 'EXPIRED', 'SUSPENDED'].includes(selected.status) ? <div className="workspace-actions"><Button href={`/buyer/licenses/${encodeURIComponent(selected.id)}/renew`} type="primary">Gia hạn bản quyền</Button></div> : null}
               <div className="buyer-license-summary"><article><span>Phạm vi</span><strong>{selected.maxActiveDevices} thiết bị</strong></article><article><span>Đã kích hoạt</span><strong>{devices.data ? activeDevices : '—'}</strong></article><article><span>Còn lại</span><strong>{devices.data ? remainingDevices : '—'}</strong></article></div>
               <section className="buyer-license-devices"><h3>Thiết bị gần đây</h3>{(devices.data ?? []).slice(0, 2).map((device) => <div className="buyer-license-device-row" key={device.id}><span>{device.deviceRef} · {statusLabel(device.status)}</span><Button onClick={() => setTab('devices')}>Xem thiết bị</Button></div>)}</section>

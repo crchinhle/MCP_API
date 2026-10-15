@@ -21,7 +21,6 @@ export interface RoleShellConfig {
     | 'PROVIDER_ADMIN'
     | 'SUPPORT_STAFF'
     | 'SYSTEM_ADMIN';
-  readonly account?: string;
   readonly items: readonly NavigationItem[];
 }
 
