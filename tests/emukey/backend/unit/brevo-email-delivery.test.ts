@@ -105,6 +105,16 @@ describe('BrevoEmailDelivery', () => {
     expect(request.textContent).toContain('Mã xác nhận: license-action-token');
   });
 
+  it('renders a provider invitation link without disclosing any password', async () => {
+    const sendTransacEmail = vi.fn().mockResolvedValue({ messageId: '<invitation@brevo.test>' });
+    const delivery = new BrevoEmailDelivery({ publicWebUrl: 'https://app.example.test', sender }, { transactionalEmails: { sendTransacEmail } });
+    await delivery.deliver({ data: { token: 'invitation-token', organizationName: '<Provider>' }, eventKey: 'provider-invite:1', template: 'identity-provider-invitation-v1', to: 'provider@example.test' });
+    const email = sendTransacEmail.mock.calls[0]![0];
+    expect(email.textContent).toContain('https://app.example.test/auth?mode=provider-invite&token=invitation-token');
+    expect(email.htmlContent).toContain('&lt;Provider&gt;');
+    expect(email.htmlContent).not.toContain('<Provider>');
+  });
+
   it('rejects unknown templates without calling Brevo', async () => {
     const sendTransacEmail = vi.fn();
     const delivery = new BrevoEmailDelivery(

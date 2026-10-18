@@ -12,9 +12,14 @@ import {
   LoginForm,
   RegisterForm,
   ResetPasswordForm,
+  AcceptProviderInvitationForm,
 } from '../components/AuthForms';
 
 const authCopy: Record<AuthMode, { description: string; title: string }> = {
+  'provider-invite': {
+    description: 'Đặt mật khẩu của riêng bạn để chấp nhận lời mời quản trị nhà cung cấp.',
+    title: 'Kích hoạt tài khoản Provider',
+  },
   forgot: {
     description: 'Nhập email tài khoản để nhận hướng dẫn đặt lại mật khẩu.',
     title: 'Quên mật khẩu',
@@ -42,11 +47,11 @@ const authCopy: Record<AuthMode, { description: string; title: string }> = {
 };
 
 function resolveAuthMode(value: string | null): AuthMode {
-  return value === 'forgot' || value === 'licensing-action' || value === 'register' || value === 'reset' || value === 'verify' ? value : 'login';
+  return value === 'forgot' || value === 'provider-invite' || value === 'licensing-action' || value === 'register' || value === 'reset' || value === 'verify' ? value : 'login';
 }
 
 export function AuthScreen() {
-  const { forgotPassword, login, register, resendVerification, resetPassword, user, verifyEmail } = useAuth();
+  const { forgotPassword, login, logout, register, resendVerification, resetPassword, user, verifyEmail } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const mode = resolveAuthMode(searchParams.get('mode'));
@@ -108,6 +113,7 @@ export function AuthScreen() {
           ) : null}
           <h2>{copy.title}</h2>
           <p>{copy.description}</p>
+          {mode === 'provider-invite' ? <AcceptProviderInvitationForm token={verificationToken ?? ''} onLogin={async () => { await logout(); selectMode('login'); }} onActivated={() => setSearchParams({ mode: 'provider-invite' }, { replace: true })} /> : null}
           {mode === 'login' || mode === 'register' ? (
             <div aria-label="Chế độ xác thực" className="auth-tabs">
               {mode === 'login' ? <span>Đăng nhập</span> : (

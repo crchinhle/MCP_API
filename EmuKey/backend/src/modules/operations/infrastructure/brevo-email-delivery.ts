@@ -84,6 +84,19 @@ export class BrevoEmailDelivery implements EmailDeliveryPort {
     const token = requiredToken(input);
     const url = new URL('/auth', this.options.publicWebUrl);
 
+    if (input.template === 'identity-provider-invitation-v1') {
+      url.searchParams.set('mode', 'provider-invite');
+      url.searchParams.set('token', token);
+      const invitationUrl = url.toString();
+      const organization = typeof input.data.organizationName === 'string' ? input.data.organizationName : '';
+      return {
+        htmlContent: `<p>Bạn được mời quản trị nhà cung cấp ${escapeHtml(organization)} trên EmuKey.</p><p><a href="${escapeHtml(invitationUrl)}">Đặt mật khẩu và kích hoạt tài khoản Provider</a></p><p>Liên kết có hiệu lực trong 24 giờ và chỉ sử dụng một lần. Nếu không mong đợi lời mời này, bạn có thể bỏ qua email.</p>`,
+        subject: 'Lời mời nhà cung cấp EmuKey',
+        textContent: `Bạn được mời quản trị nhà cung cấp ${organization} trên EmuKey.\n\nĐặt mật khẩu và kích hoạt tài khoản:\n${invitationUrl}\n\nLiên kết có hiệu lực trong 24 giờ và chỉ sử dụng một lần. Nếu không mong đợi lời mời này, bạn có thể bỏ qua email.`,
+        token,
+      };
+    }
+
     if (input.template === 'identity-email-verification-v1') {
       url.searchParams.set('mode', 'verify');
       url.searchParams.set('token', token);

@@ -22,6 +22,7 @@ describe('identity security flow', () => {
   let repository: IdentityRepository;
   let service: IdentityService;
   let verificationToken = '';
+  let invitationToken = '';
   const password = 'Identity-test@123';
 
   beforeAll(async () => {
@@ -48,6 +49,7 @@ describe('identity security flow', () => {
           return Promise.resolve();
         },
         sendPasswordReset: () => Promise.resolve(),
+        sendProviderInvitation: (_email, token) => { invitationToken = token; return Promise.resolve(); },
       },
     );
   }, 120_000);
@@ -93,6 +95,54 @@ describe('identity security flow', () => {
     await expect(service.authenticate(rotated.accessToken)).rejects.toBeInstanceOf(
       UnauthorizedException,
     );
+  });
+
+  it('persists invitations, invalidates replaced links, and activates exactly once under concurrent requests', async () => {
+    const admin = { sub: '00000000-0000-4000-8000-000000000001', role: 'SYSTEM_ADMIN' as const, sessionVersion: 1 };
+    const input = { email: 'invited.provider@example.test', displayName: 'Invited Provider', organizationName: 'Invited Ltd', providerChainAddress: `0x${'ab'.repeat(20)}`, providerChainNamespace: 'invited-provider' };
+    await service.inviteProvider(admin, input);
+    const oldToken = invitationToken;
+    expect(await repository.findByEmail(input.email)).toBeNull();
+    await expect(service.register({ email: input.email, displayName: 'Impersonator', customerType: 'INDIVIDUAL', password })).rejects.toBeInstanceOf(ConflictException);
+    await service.inviteProvider(admin, input);
+    await expect(service.acceptProviderInvitation(oldToken, password)).rejects.toMatchObject({ response: { code: 'INVALID_OR_EXPIRED_INVITATION' } });
+    const outcomes = await Promise.allSettled([service.acceptProviderInvitation(invitationToken, password), service.acceptProviderInvitation(invitationToken, password)]);
+    expect(outcomes.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(outcomes.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    const login = await service.login(input.email, password);
+    expect(login.user).toMatchObject({ role: 'PROVIDER_ADMIN', status: 'ACTIVE' });
+    const audit = await pool.query("SELECT action FROM audit_logs WHERE action IN ('PROVIDER_INVITED', 'PROVIDER_INVITATION_ACCEPTED') ORDER BY id");
+    expect(audit.rows.map((row) => row.action)).toEqual(['PROVIDER_INVITED', 'PROVIDER_INVITED', 'PROVIDER_INVITATION_ACCEPTED']);
+    await expect(service.inviteProvider(admin, input)).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('leaves expired invitations inactive and rolls back identity conflicts without consuming the invitation', async () => {
+    const admin = { sub: '00000000-0000-4000-8000-000000000001', role: 'SYSTEM_ADMIN' as const, sessionVersion: 1 };
+    const input = { email: 'expired.provider@example.test', displayName: 'Expired Provider', organizationName: 'Expired Ltd', providerChainAddress: `0x${'cd'.repeat(20)}`, providerChainNamespace: 'expired-provider' };
+    await service.inviteProvider(admin, input);
+    await pool.query("UPDATE provider_invitations SET expires_at = now() - interval '1 second' WHERE email = $1", [input.email]);
+    await expect(service.acceptProviderInvitation(invitationToken, password)).rejects.toMatchObject({ response: { code: 'INVALID_OR_EXPIRED_INVITATION' } });
+    expect(await repository.findByEmail(input.email)).toBeNull();
+    await service.inviteProvider(admin, input);
+    await pool.query("INSERT INTO users (email,password_hash,display_name,role,status) VALUES ($1,'hash','Conflict','SUPPORT_STAFF','ACTIVE')", [input.email]);
+    await expect(service.acceptProviderInvitation(invitationToken, password)).rejects.toBeInstanceOf(ConflictException);
+    const pending = await pool.query('SELECT accepted_at FROM provider_invitations WHERE email = $1', [input.email]);
+    expect(pending.rows[0].accepted_at).toBeNull();
+  });
+
+  it('keeps an undelivered invitation durable and allows an administrator to resend it', async () => {
+    const admin = { sub: '00000000-0000-4000-8000-000000000001', role: 'SYSTEM_ADMIN' as const, sessionVersion: 1 };
+    const input = { email: 'retry.provider@example.test', displayName: 'Retry Provider', organizationName: 'Retry Ltd', providerChainAddress: `0x${'12'.repeat(20)}`, providerChainNamespace: 'retry-provider' };
+    const unavailable = new IdentityService(repository, redis, new TextEncoder().encode('test-secret'), {
+      sendEmailVerification: async () => {}, sendPasswordReset: async () => {},
+      sendProviderInvitation: async () => { throw new Error('Mail provider unavailable'); },
+    });
+    await expect(unavailable.inviteProvider(admin, input)).rejects.toMatchObject({ response: { code: 'INVITATION_EMAIL_FAILED' } });
+    expect((await repository.listProviderInvitations()).find((item) => item.email === input.email)).toMatchObject({ status: 'PENDING', sentAt: null });
+    expect(await repository.findByEmail(input.email)).toBeNull();
+    await service.inviteProvider(admin, input);
+    expect((await repository.listProviderInvitations()).find((item) => item.email === input.email)?.sentAt).not.toBeNull();
+    await expect(service.acceptProviderInvitation(invitationToken, password)).resolves.toMatchObject({ role: 'PROVIDER_ADMIN' });
   });
 
   it('preserves at least one active system administrator', async () => {

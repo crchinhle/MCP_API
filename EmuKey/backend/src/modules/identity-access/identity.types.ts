@@ -13,3 +13,19 @@ export interface IdentityUser {
 }
 
 export interface AuthPrincipal { sub: string; role: Role; sessionVersion: number; }
+
+export interface ProviderInvitationInput {
+  email: string;
+  displayName: string;
+  organizationName: string;
+  providerChainAddress: string;
+  providerChainNamespace: string;
+}
+
+export interface ProviderInvitation extends ProviderInvitationInput {
+  id: string;
+  expiresAt: string;
+  createdAt: string;
+  sentAt: string | null;
+  status: 'PENDING' | 'EXPIRED' | 'ACCEPTED';
+}

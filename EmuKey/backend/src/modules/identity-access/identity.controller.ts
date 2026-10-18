@@ -13,7 +13,7 @@ import {
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags, ApiCreatedResponse, ApiOkResponse } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 
 import {
@@ -25,6 +25,10 @@ import {
   ResetPasswordDto,
   StateDto,
   TokenDto,
+  InviteProviderDto,
+  AcceptProviderInvitationDto,
+  ProviderInvitationDto,
+  ProviderAccountDto,
 } from './identity.dto.js';
 import { IdentityService } from './identity.service.js';
 import { CurrentUser, Roles } from './security.decorators.js';
@@ -43,6 +47,32 @@ export class IdentityController {
   };
 
   constructor(private readonly service: IdentityService) {}
+
+  @Post('provider-invitations')
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles('SYSTEM_ADMIN')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Invite a provider by email; resending replaces the pending invitation token' })
+  @ApiCreatedResponse({ type: ProviderInvitationDto })
+  inviteProvider(@CurrentUser() actor: AuthPrincipal, @Body() dto: InviteProviderDto) {
+    return this.service.inviteProvider(actor, dto);
+  }
+
+  @Get('provider-invitations')
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles('SYSTEM_ADMIN')
+  @ApiBearerAuth()
+  @ApiOkResponse({ type: ProviderInvitationDto, isArray: true })
+  listProviderInvitations(@CurrentUser() actor: AuthPrincipal) {
+    return this.service.listProviderInvitations(actor);
+  }
+
+  @Post('provider-invitations/accept')
+  @ApiOperation({ summary: 'Accept a single-use provider email invitation and choose a password' })
+  @ApiCreatedResponse({ type: ProviderAccountDto })
+  acceptProviderInvitation(@Body() dto: AcceptProviderInvitationDto, @Req() request: Request) {
+    return this.service.acceptProviderInvitation(dto.token, dto.password, request.socket.remoteAddress ?? 'unknown');
+  }
 
   @Post('register')
   @HttpCode(202)

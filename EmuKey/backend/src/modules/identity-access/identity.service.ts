@@ -8,6 +8,7 @@ import {
   HttpStatus,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import * as argon2 from 'argon2';
@@ -17,9 +18,16 @@ import type {
   AuthPrincipal,
   IdentityUser,
   UserState,
+  ProviderInvitation,
+  ProviderInvitationInput,
 } from './identity.types.js';
 
 export interface PasswordRepository {
+  createProviderInvitation(actor: AuthPrincipal, input: ProviderInvitationInput, tokenHash: string): Promise<ProviderInvitation>;
+  listProviderInvitations(): Promise<ProviderInvitation[]>;
+  markProviderInvitationSent(id: string, tokenHash: string): Promise<void>;
+  acceptProviderInvitation(tokenHash: string, passwordHash: string): Promise<IdentityUser | null>;
+  isProviderInvitationPending(tokenHash: string): Promise<boolean>;
   activateCustomer(id: string): Promise<IdentityUser | null>;
   bumpSessionVersion(id: string, action?: string): Promise<void>;
   changeStateByAdmin(
@@ -67,6 +75,7 @@ export interface IdentityRedis {
 }
 
 export interface IdentityTokenDelivery {
+  sendProviderInvitation?(email: string, token: string, organizationName: string): Promise<void>;
   sendLicensingActionVerification?(email: string, token: string, action: string): Promise<void>;
   sendEmailVerification(email: string, token: string): Promise<void>;
   sendPasswordReset(email: string, token: string): Promise<void>;
@@ -136,6 +145,59 @@ export class IdentityService {
         { code: 'RATE_LIMITED', message: 'Too many requests.' },
         HttpStatus.TOO_MANY_REQUESTS,
       );
+    }
+  }
+
+  async inviteProvider(actor: AuthPrincipal, input: ProviderInvitationInput) {
+    this.requireSystemAdmin(actor);
+    if (!this.delivery.sendProviderInvitation) throw new ServiceUnavailableException({ code: 'INVITATION_DELIVERY_UNAVAILABLE' });
+    const token = randomBytes(32).toString('base64url');
+    const tokenHash = this.digest(token);
+    let invitation: ProviderInvitation;
+    try {
+      invitation = await this.repo.createProviderInvitation(actor, {
+        ...input,
+        email: input.email.trim().toLowerCase(),
+        displayName: input.displayName.trim(),
+        organizationName: input.organizationName.trim(),
+        providerChainAddress: input.providerChainAddress.toLowerCase(),
+      }, tokenHash);
+    } catch (error) { this.translateInvitationConflict(error); throw error; }
+    try {
+      await this.delivery.sendProviderInvitation(invitation.email, token, invitation.organizationName);
+      await this.repo.markProviderInvitationSent(invitation.id, tokenHash);
+    } catch {
+      throw new ServiceUnavailableException({ code: 'INVITATION_EMAIL_FAILED', message: 'Lời mời đã được lưu nhưng chưa xác nhận gửi email thành công. Hãy gửi lại lời mời.' });
+    }
+    return { ...invitation, sentAt: new Date().toISOString() };
+  }
+
+  listProviderInvitations(actor: AuthPrincipal) {
+    this.requireSystemAdmin(actor);
+    return this.repo.listProviderInvitations();
+  }
+
+  async acceptProviderInvitation(token: string, password: string, requester = 'internal') {
+    await this.rateLimit('provider-invitation-accept', requester, LOGIN_LIMIT);
+    const tokenHash = this.digest(token);
+    if (!(await this.repo.isProviderInvitationPending(tokenHash))) {
+      throw new BadRequestException({ code: 'INVALID_OR_EXPIRED_INVITATION', message: 'Lời mời không hợp lệ, đã hết hạn hoặc đã được sử dụng.' });
+    }
+    let user: IdentityUser | null;
+    try {
+      user = await this.repo.acceptProviderInvitation(tokenHash, await argon2.hash(password));
+    } catch (error) { this.translateInvitationConflict(error); throw error; }
+    if (!user) throw new BadRequestException({ code: 'INVALID_OR_EXPIRED_INVITATION', message: 'Lời mời không hợp lệ, đã hết hạn hoặc đã được sử dụng.' });
+    return { id: user.id, email: user.email, displayName: user.displayName, role: user.role, status: user.status };
+  }
+
+  private requireSystemAdmin(actor: AuthPrincipal): void {
+    if (actor.role !== 'SYSTEM_ADMIN') throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Chỉ quản trị hệ thống được mời nhà cung cấp.' });
+  }
+
+  private translateInvitationConflict(error: unknown): void {
+    if ((error as { code?: string }).code === '23505' || (error instanceof Error && error.message === 'PROVIDER_IDENTITY_CONFLICT')) {
+      throw new ConflictException({ code: 'PROVIDER_IDENTITY_CONFLICT', message: 'Email, địa chỉ EVM hoặc namespace đã được sử dụng. Vui lòng kiểm tra lại.' });
     }
   }
 

@@ -109,7 +109,7 @@ describe('baseline validator', () => {
       });
 
       expect(result.stdout).toContain('35 capabilities');
-      expect(result.stdout).toContain('18 tables');
+      expect(result.stdout).toContain('19 tables');
     },
     15_000,
   );

@@ -191,6 +191,7 @@ vi.stubGlobal(
 
     if (path === '/auth/refresh') return jsonResponse(undefined, 401);
     if (path === '/auth/users' && method === 'GET') return jsonResponse([]);
+    if (path === '/auth/provider-invitations' && method === 'GET') return jsonResponse([]);
     if (method === 'GET' && path === '/notifications') return jsonResponse([]);
     if (method === 'GET' && path === '/knowledge/documents') return jsonResponse([]);
     if (method === 'GET' && path === '/health/ready') return jsonResponse({ status: 'ok', dependencies: { postgres: 'up', redis: 'up', blockchain: 'up' } });

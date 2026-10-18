@@ -9,6 +9,9 @@ import { vi } from 'vitest';
 describe('IdentityController HTTP boundary', () => {
   let app: INestApplication;
   const service = {
+    inviteProvider: vi.fn().mockResolvedValue({ id: 'invite-1', email: 'provider@example.test' }),
+    listProviderInvitations: vi.fn().mockResolvedValue([]),
+    acceptProviderInvitation: vi.fn().mockResolvedValue({ id: 'provider-1', role: 'PROVIDER_ADMIN', status: 'ACTIVE' }),
     login: vi.fn().mockResolvedValue({ accessToken: 'access', refreshToken: 'refresh', user: { id: 'u1' } }),
     refresh: vi.fn(),
     profile: vi.fn().mockResolvedValue({ id: 'u1' }),
@@ -33,6 +36,25 @@ describe('IdentityController HTTP boundary', () => {
   });
   afterAll(() => app.close());
   const server = () => app.getHttpServer() as unknown as Parameters<typeof request>[0];
+
+  const invitation = { email: 'provider@example.test', displayName: 'Provider Owner', organizationName: 'Provider Ltd', providerChainAddress: `0x${'ab'.repeat(20)}`, providerChainNamespace: 'provider-ltd' };
+  it('accepts a provider invitation request without an administrator-supplied password', async () => {
+    await request(server()).post('/auth/provider-invitations').send(invitation).expect(201);
+  });
+  it.each([
+    { password: 'Provider-test@123' }, { role: 'SYSTEM_ADMIN' },
+    { organizationName: '   ' }, { providerChainAddress: 'not-an-address' },
+    { providerChainNamespace: '   ' }, { email: 'not-email' },
+  ])('rejects an invalid or privilege-injecting invitation %j', async (override) => {
+    await request(server()).post('/auth/provider-invitations').send({ ...invitation, ...override }).expect(400);
+  });
+  it('accepts a one-time invitation with a strong password', async () => {
+    await request(server()).post('/auth/provider-invitations/accept').send({ token: 'a'.repeat(43), password: 'Provider-test@123' }).expect(201);
+  });
+  it('rejects a weak recipient password and a malformed invitation token', async () => {
+    await request(server()).post('/auth/provider-invitations/accept').send({ token: 'a'.repeat(43), password: 'weak' }).expect(400);
+    await request(server()).post('/auth/provider-invitations/accept').send({ token: 'bad', password: 'Provider-test@123' }).expect(400);
+  });
 
   it('sets an HttpOnly refresh cookie on login', async () => {
     const response = await request(server()).post('/auth/login').send({ email: 'admin@example.com', password: 'Password@123' }).expect(201);
@@ -90,5 +112,37 @@ describe('IdentityController HTTP boundary', () => {
   it('revokes the server-side refresh session on logout', async () => {
     await request(server()).post('/auth/logout').set('Cookie', 'emukey_refresh=current').expect(204);
     expect(service.logout).toHaveBeenCalledWith('current');
+  });
+});
+
+describe('Provider invitation authorization', () => {
+  let app: INestApplication;
+  beforeAll(async () => {
+    const module = await Test.createTestingModule({
+      controllers: [IdentityController],
+      providers: [AuthGuard, RolesGuard, { provide: IdentityService, useValue: {
+        authenticate: async (role: string) => ({ sub: 'actor-1', role, sessionVersion: 1 }),
+        inviteProvider: async () => ({ id: 'invitation-1' }),
+        listProviderInvitations: async () => [],
+        acceptProviderInvitation: async () => ({ id: 'provider-1', role: 'PROVIDER_ADMIN' }),
+      } }],
+    }).compile();
+    app = module.createNestApplication();
+    await app.init();
+  });
+  afterAll(() => app.close());
+  const server = () => app.getHttpServer() as unknown as Parameters<typeof request>[0];
+  it('requires a session to send or list invitations', async () => {
+    await request(server()).post('/auth/provider-invitations').send({}).expect(401);
+    await request(server()).get('/auth/provider-invitations').expect(401);
+  });
+  it.each(['CUSTOMER', 'SUPPORT_STAFF', 'PROVIDER_ADMIN'])('denies invitation management to %s', async (role) => {
+    await request(server()).post('/auth/provider-invitations').set('Authorization', `Bearer ${role}`).send({}).expect(403);
+    await request(server()).get('/auth/provider-invitations').set('Authorization', `Bearer ${role}`).expect(403);
+  });
+  it('allows System Admin management and public recipient acceptance', async () => {
+    await request(server()).post('/auth/provider-invitations').set('Authorization', 'Bearer SYSTEM_ADMIN').send({}).expect(201);
+    await request(server()).get('/auth/provider-invitations').set('Authorization', 'Bearer SYSTEM_ADMIN').expect(200);
+    await request(server()).post('/auth/provider-invitations/accept').send({ token: 'a'.repeat(43), password: 'Provider-test@123' }).expect(201);
   });
 });

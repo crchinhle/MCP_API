@@ -681,6 +681,102 @@
         ]
       }
     },
+    "/api/v1/auth/provider-invitations": {
+      "post": {
+        "operationId": "IdentityController_inviteProvider",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteProviderDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderInvitationDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Invite a provider by email; resending replaces the pending invitation token",
+        "tags": [
+          "identity"
+        ]
+      },
+      "get": {
+        "operationId": "IdentityController_listProviderInvitations",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProviderInvitationDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "identity"
+        ]
+      }
+    },
+    "/api/v1/auth/provider-invitations/accept": {
+      "post": {
+        "operationId": "IdentityController_acceptProviderInvitation",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptProviderInvitationDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderAccountDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Accept a single-use provider email invitation and choose a password",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
     "/api/v1/auth/register": {
       "post": {
         "operationId": "IdentityController_register",
@@ -3673,6 +3769,165 @@
           "content"
         ]
       },
+      "InviteProviderDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "organizationName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "providerChainAddress": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{40}$"
+          },
+          "providerChainNamespace": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          }
+        },
+        "required": [
+          "email",
+          "displayName",
+          "organizationName",
+          "providerChainAddress",
+          "providerChainNamespace"
+        ]
+      },
+      "ProviderInvitationDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "organizationName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "providerChainAddress": {
+            "type": "string",
+            "pattern": "^0x[0-9a-fA-F]{40}$"
+          },
+          "providerChainNamespace": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sentAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "EXPIRED",
+              "ACCEPTED"
+            ]
+          }
+        },
+        "required": [
+          "email",
+          "displayName",
+          "organizationName",
+          "providerChainAddress",
+          "providerChainNamespace",
+          "id",
+          "expiresAt",
+          "createdAt",
+          "sentAt",
+          "status"
+        ]
+      },
+      "AcceptProviderInvitationDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "minLength": 43,
+            "maxLength": 43
+          },
+          "password": {
+            "type": "string",
+            "minLength": 12,
+            "maxLength": 128,
+            "pattern": "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^A-Za-z0-9\\s]).+$"
+          }
+        },
+        "required": [
+          "token",
+          "password"
+        ]
+      },
+      "ProviderAccountDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "PROVIDER_ADMIN"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "displayName",
+          "role",
+          "status"
+        ]
+      },
       "RegisterDto": {
         "type": "object",
         "properties": {
@@ -4092,7 +4347,8 @@
           },
           "imageUrl": {
             "type": "string",
-            "example": "https://picsum.photos/seed/emukey-product/1200/800"
+            "example": "https://picsum.photos/seed/emukey-product/1200/800",
+            "nullable": true
           }
         },
         "required": [
@@ -4112,7 +4368,8 @@
           },
           "imageUrl": {
             "type": "string",
-            "example": "https://picsum.photos/seed/emukey-product/1200/800"
+            "example": "https://picsum.photos/seed/emukey-product/1200/800",
+            "nullable": true
           }
         }
       },

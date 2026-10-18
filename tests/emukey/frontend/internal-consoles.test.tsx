@@ -2,10 +2,80 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../../../EmuKey/frontend/src/presentation/app/App';
+import { AuthProvider } from '../../../EmuKey/frontend/src/application/auth/authContext';
+import { AuthScreen } from '../../../EmuKey/frontend/src/presentation/screens/AuthScreen';
+import { MemoryRouter } from 'react-router-dom';
 
 afterEach(cleanup);
 
 describe('W17-W18 Internal consoles', () => {
+  it('can switch from an existing admin session to provider login after activation', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    let signedOut = false;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.endsWith('/auth/provider-invitations/accept')) return Response.json({ id: 'provider-1', role: 'PROVIDER_ADMIN', status: 'ACTIVE' });
+      if (url.endsWith('/auth/logout')) { signedOut = true; return new Response(null, { status: 204 }); }
+      return original(input, init);
+    });
+    try {
+      render(<MemoryRouter initialEntries={[`/auth?mode=provider-invite&token=${'a'.repeat(43)}`]}><AuthProvider skipBootstrap initialUser={{ id: 'admin-1', email: 'admin@example.test', displayName: 'Admin', role: 'SYSTEM_ADMIN', status: 'ACTIVE' }}><AuthScreen /></AuthProvider></MemoryRouter>);
+      fireEvent.change(await screen.findByLabelText('Mật khẩu mới'), { target: { value: 'Provider-test@123' } });
+      fireEvent.change(screen.getByLabelText('Xác nhận mật khẩu'), { target: { value: 'Provider-test@123' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Kích hoạt tài khoản Provider' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Đăng nhập bằng tài khoản Provider' }));
+      expect(await screen.findByRole('heading', { name: 'Chào mừng trở lại' })).toBeTruthy();
+      expect(signedOut).toBe(true);
+    } finally { vi.mocked(fetch).mockImplementation(original); }
+  });
+  it('lets the System Admin email a provider invitation without setting a password', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    let payload: Record<string, unknown> | undefined;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.endsWith('/auth/provider-invitations')) {
+        if (init?.method === 'POST') { payload = JSON.parse(String(init.body)); return Response.json({ id: 'invite-1', email: payload!.email }); }
+        return Response.json([]);
+      }
+      return original(input, init);
+    });
+    try {
+      render(<App initialEntries={['/system/console?view=users']} />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Mời nhà cung cấp' }));
+      const dialog = screen.getByRole('dialog');
+      for (const [label, value] of [
+        ['Email nhà cung cấp', 'provider@example.test'], ['Tên người đại diện', 'Provider Owner'],
+        ['Tên tổ chức', 'Provider Ltd'], ['Địa chỉ EVM công khai', `0x${'ab'.repeat(20)}`], ['Namespace nhà cung cấp', 'provider-ltd'],
+      ]) fireEvent.change(within(dialog).getByLabelText(label), { target: { value } });
+      expect(within(dialog).queryByLabelText('Mật khẩu')).toBeNull();
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Gửi lời mời' }));
+      await waitFor(() => expect(payload?.email).toBe('provider@example.test'));
+      expect(payload).not.toHaveProperty('password');
+      expect(payload).not.toHaveProperty('role');
+      expect(await screen.findByText('Đã gửi email mời nhà cung cấp.')).toBeTruthy();
+    } finally { vi.mocked(fetch).mockImplementation(original); }
+  });
+
+  it('lets an invited provider set a password and activate without an existing session', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    let activation: unknown;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.endsWith('/auth/provider-invitations/accept')) {
+        activation = JSON.parse(String(init?.body));
+        return Response.json({ id: 'provider-1', role: 'PROVIDER_ADMIN', status: 'ACTIVE' });
+      }
+      return original(input, init);
+    });
+    try {
+      render(<App initialEntries={[`/auth?mode=provider-invite&token=${'a'.repeat(43)}`]} />);
+      fireEvent.change(await screen.findByLabelText('Mật khẩu mới'), { target: { value: 'Provider-test@123' } });
+      fireEvent.change(screen.getByLabelText('Xác nhận mật khẩu'), { target: { value: 'Provider-test@123' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Kích hoạt tài khoản Provider' }));
+      await waitFor(() => expect(activation).toEqual({ token: 'a'.repeat(43), password: 'Provider-test@123' }));
+      expect(await screen.findByText('Tài khoản Provider đã được kích hoạt. Bạn có thể đăng nhập.')).toBeTruthy();
+    } finally { vi.mocked(fetch).mockImplementation(original); }
+  });
   it('renders an empty support queue when the real API has no conversations', () => {
     render(<App initialEntries={['/support']} />);
     expect(screen.queryByText('Người mua #B204')).toBeNull();

@@ -9,6 +9,7 @@ import { usePaymentHistory } from '../../application/orders/orderQueries';
 
 import { PaymentReviewPanel } from '../components/PaymentReviewPanel';
 import { AuditLogPanel } from '../components/AuditLogPanel';
+import { ProviderInvitationsPanel } from '../components/ProviderInvitationsPanel';
 import { PageLoading, FactList, PageHeader } from '../components/WorkspacePrimitives';
 
 export function SystemConsoleScreen() {
@@ -66,6 +67,7 @@ export function SystemConsoleScreen() {
       </nav>
       <section className="workspace-card table-card spaced-card">
         {view === 'users' ? <>
+          {permitted ? <ProviderInvitationsPanel /> : null}
           {!permitted ? <Alert message="Bạn không có quyền quản lý tài khoản." type="warning" /> : null}
            {accounts.isError ? <Alert title={describeApiError(accounts.error, 'Không thể tải danh sách tài khoản.')} type="error" action={<Button disabled={accounts.isFetching} onClick={() => void accounts.refetch()}>Thử lại</Button>} /> : null}
            {stateMutation.isError ? <Alert message={describeApiError(stateMutation.error, 'Không thể cập nhật trạng thái tài khoản.')} type="error" description="Kết quả thao tác có thể chưa rõ. Hãy tải lại trạng thái tài khoản trước khi quyết định thao tác tiếp theo." action={<Button disabled={refreshingAccountState} onClick={() => void refreshAccountState()}>Làm mới trạng thái</Button>} /> : null}

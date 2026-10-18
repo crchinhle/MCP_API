@@ -936,7 +936,7 @@ async function run() {
         ) AS has_image_url
     `);
     const target = preflight.rows[0];
-    if (Number(target?.tables) !== 18 || target?.has_image_url !== true) {
+    if (Number(target?.tables) !== 19 || target?.has_image_url !== true) {
       throw new Error(
         "Database does not match the current EmuKey schema; run db:verify first",
       );

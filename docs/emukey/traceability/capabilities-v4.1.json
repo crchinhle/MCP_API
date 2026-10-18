@@ -8,6 +8,7 @@
   },
   "currentTables": [
     "users",
+    "provider_invitations",
     "products",
     "plans",
     "orders",
@@ -64,12 +65,13 @@
       "phase": 3,
       "actor": "USER_OR_SYSTEM_ADMIN",
       "owner": "identity-access/account-lifecycle",
-      "api": "GET/PUT /auth/profile; PUT /auth/password; POST /auth/users/:id/{lock|unlock|disable}",
+      "api": "GET/PUT /auth/profile; PUT /auth/password; POST /auth/users/:id/{lock|unlock|disable}; GET/POST /auth/provider-invitations; POST /auth/provider-invitations/accept",
       "tables": [
         "users",
+        "provider_invitations",
         "audit_logs"
       ],
-      "transaction": "account mutation and audit commit together",
+      "transaction": "account mutation and audit commit together; provider invitation and acceptance are durable, single-use and audited",
       "testOwner": "tests/emukey/backend/integration/identity/identity-flow.integration.test.ts"
     },
     {

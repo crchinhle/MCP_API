@@ -18,6 +18,7 @@ const EXPECTED_TABLES = [
   'payment_transactions',
   'plans',
   'products',
+  'provider_invitations',
   'users',
 ] as const;
 
@@ -82,6 +83,15 @@ const EXPECTED_CRITICAL_INDEXES = {
 } as const;
 
 const EXPECTED_CRITICAL_COLUMNS = {
+  'provider_invitations.token_hash': {
+    dataType: 'bytea', expression: null, isGenerated: 'NEVER', isNullable: 'NO',
+  },
+  'provider_invitations.expires_at': {
+    dataType: 'timestamp with time zone', expression: null, isGenerated: 'NEVER', isNullable: 'NO',
+  },
+  'provider_invitations.accepted_at': {
+    dataType: 'timestamp with time zone', expression: null, isGenerated: 'NEVER', isNullable: 'YES',
+  },
   'orders.service_terms_accepted_at': {
     dataType: 'timestamp with time zone',
     expression: null,
