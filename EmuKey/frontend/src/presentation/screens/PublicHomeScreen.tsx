@@ -592,7 +592,6 @@ export function PublicHomeScreen() {
               Nền tảng bản quyền số minh bạch
             </span>
             <h1 id="public-home-title">Bản quyền phần mềm được xác lập on-chain</h1>
-            <p>Thanh toán off-chain, quyền sử dụng được xác lập và kiểm chứng on-chain.</p>
             <div className="public-home-hero-actions">
               <Button href="/products" type="primary">
                 Xem sản phẩm

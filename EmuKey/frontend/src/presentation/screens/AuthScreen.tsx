@@ -12,36 +12,29 @@ import {
   LoginForm,
   RegisterForm,
   ResetPasswordForm,
-  AcceptProviderInvitationForm,
 } from '../components/AuthForms';
+import { AcceptProviderInvitationForm } from '../components/ProviderOnboardingForm';
 
-const authCopy: Record<AuthMode, { description: string; title: string }> = {
+const authCopy: Record<AuthMode, { title: string }> = {
   'provider-invite': {
-    description: 'Đặt mật khẩu của riêng bạn để chấp nhận lời mời quản trị nhà cung cấp.',
-    title: 'Kích hoạt tài khoản Provider',
+    title: 'Thiết lập tài khoản nhà cung cấp',
   },
   forgot: {
-    description: 'Nhập email tài khoản để nhận hướng dẫn đặt lại mật khẩu.',
     title: 'Quên mật khẩu',
   },
   login: {
-    description: 'Đăng nhập để quản lý đơn hàng, License và thiết bị.',
     title: 'Chào mừng trở lại',
   },
   'licensing-action': {
-    description: 'Đăng nhập bằng tài khoản người mua để tiếp tục thao tác bảo mật từ email.',
     title: 'Xác nhận thao tác License',
   },
   register: {
-    description: 'Tạo tài khoản người mua Emukey. Bạn không cần tạo thêm khóa riêng cho tài khoản.',
     title: 'Đăng ký tài khoản',
   },
   reset: {
-    description: 'Tạo mật khẩu mới bằng mã khôi phục được gửi qua email.',
     title: 'Đặt lại mật khẩu',
   },
   verify: {
-    description: 'Chúng tôi đã gửi liên kết xác minh đến email của bạn.',
     title: 'Xác minh email',
   },
 };
@@ -90,9 +83,6 @@ export function AuthScreen() {
       <section aria-labelledby="auth-story-title" className="auth-story">
         <Brand inverted />
         <h1 id="auth-story-title">Quản lý bản quyền phần mềm đa Provider bằng Blockchain</h1>
-        <p>
-          Thanh toán off-chain, quyền sử dụng được xác lập và kiểm chứng on-chain.
-        </p>
         <ul className="benefit-list">
           <li><span aria-hidden="true">✓</span>Quản lý License và thiết bị</li>
           <li><span aria-hidden="true">✓</span>Theo dõi đơn hàng và thanh toán</li>
@@ -112,7 +102,6 @@ export function AuthScreen() {
             </Button>
           ) : null}
           <h2>{copy.title}</h2>
-          <p>{copy.description}</p>
           {mode === 'provider-invite' ? <AcceptProviderInvitationForm token={verificationToken ?? ''} onLogin={async () => { await logout(); selectMode('login'); }} onActivated={() => setSearchParams({ mode: 'provider-invite' }, { replace: true })} /> : null}
           {mode === 'login' || mode === 'register' ? (
             <div aria-label="Chế độ xác thực" className="auth-tabs">

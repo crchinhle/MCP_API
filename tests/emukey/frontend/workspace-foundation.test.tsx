@@ -62,6 +62,8 @@ describe('workspace foundation', () => {
   it.each([buyerShell, providerShell, supportShell, systemShell])('shows the signed-in account identity for $role', async (config) => {
     render(<QueryClientProvider client={new QueryClient()}><AuthProvider skipBootstrap initialUser={{ id: 'account', email: 'actual@example.test', displayName: 'Actual Account', role: config.role, status: 'ACTIVE' }}><MemoryRouter><RoleShell config={config} /></MemoryRouter></AuthProvider></QueryClientProvider>);
     expect(screen.getByText('Actual Account')).toBeTruthy();
+    expect(document.querySelector('.role-label')).toBeNull();
+    expect(screen.queryByText(/^(SYSTEM|SUPPORT|NGƯỜI MUA|NHÀ CUNG CẤP|Quản trị hệ thống|Nhà cung cấp)$/)).toBeNull();
     if (config.role === 'PROVIDER_ADMIN' || config.role === 'SYSTEM_ADMIN') fireEvent.click(screen.getByRole('button', { name: /Mở menu tài khoản/ }));
     expect(await screen.findByText('actual@example.test')).toBeTruthy();
   });

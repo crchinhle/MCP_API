@@ -133,18 +133,10 @@ export type KnowledgeSourceDto = {
 
 export type InviteProviderDto = {
   email: string;
-  displayName: string;
-  organizationName: string;
-  providerChainAddress: string;
-  providerChainNamespace: string;
 };
 
 export type ProviderInvitationDto = {
   email: string;
-  displayName: string;
-  organizationName: string;
-  providerChainAddress: string;
-  providerChainNamespace: string;
   id: string;
   expiresAt: string;
   createdAt: string;
@@ -152,8 +144,19 @@ export type ProviderInvitationDto = {
   status: 'PENDING' | 'EXPIRED' | 'ACCEPTED';
 };
 
+export type ProviderInvitationTokenDto = {
+  token: string;
+};
+
+export type ProviderInvitationPreviewDto = {
+  email: string;
+  expiresAt: string;
+};
+
 export type AcceptProviderInvitationDto = {
   token: string;
+  displayName: string;
+  organizationName: string;
   password: string;
 };
 
@@ -1117,6 +1120,20 @@ export type IdentityControllerInviteProviderResponses = {
 
 export type IdentityControllerInviteProviderResponse =
   IdentityControllerInviteProviderResponses[keyof IdentityControllerInviteProviderResponses];
+
+export type IdentityControllerInspectProviderInvitationData = {
+  body: ProviderInvitationTokenDto;
+  path?: never;
+  query?: never;
+  url: '/api/v1/auth/provider-invitations/inspect';
+};
+
+export type IdentityControllerInspectProviderInvitationResponses = {
+  200: ProviderInvitationPreviewDto;
+};
+
+export type IdentityControllerInspectProviderInvitationResponse =
+  IdentityControllerInspectProviderInvitationResponses[keyof IdentityControllerInspectProviderInvitationResponses];
 
 export type IdentityControllerAcceptProviderInvitationData = {
   body: AcceptProviderInvitationDto;

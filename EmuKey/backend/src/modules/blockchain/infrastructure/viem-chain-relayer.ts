@@ -53,6 +53,8 @@ export interface ViemChainRelayerOptions {
   rpc?: ViemRelayerRpc;
   rpcUrl: string;
   signer: ChainDigestSigner;
+  namespaceContractAddress?: string;
+  namespaceRegistryAddresses?: () => Promise<readonly string[]>;
 }
 
 function requiredString(
@@ -96,15 +98,22 @@ export function encodeChainCommand(input: ChainCommandInput): Hex {
   const payload = input.payload;
   const commandId = uuidToBytes16(input.commandId);
   const licenseId = uuidToBytes16(requiredString(payload, 'licenseId'));
+  const namespaceIssuance = input.commandType === 'ISSUE_LICENSE' && payload.providerNamespace !== undefined;
+  if (namespaceIssuance && payload.providerAddress !== undefined) throw new Error('CHAIN_PAYLOAD_PROVIDER_IDENTITY_AMBIGUOUS');
+  if (input.commandType === 'ISSUE_LICENSE' && (namespaceIssuance !== (payload.protocolVersion === 3))) throw new Error('CHAIN_PAYLOAD_PROVIDER_PROTOCOL_INVALID');
+  const providerIdentity = namespaceIssuance
+    ? bytes32(requiredString(payload, 'providerNamespace'), 'providerNamespace')
+    : undefined;
+  if (providerIdentity && /^0x0{64}$/.test(providerIdentity)) throw new Error('CHAIN_PAYLOAD_PROVIDERNAMESPACE_INVALID');
   switch (input.commandType) {
     case 'ISSUE_LICENSE':
       return encodeFunctionData({
         abi: licenseRegistryAbi,
-        functionName: 'issueLicense',
+        functionName: namespaceIssuance ? 'issueLicenseForProvider' : 'issueLicense',
         args: [
           commandId,
           licenseId,
-          getAddress(requiredString(payload, 'providerAddress')),
+          providerIdentity ?? getAddress(requiredString(payload, 'providerAddress')),
           uuidToBytes16(requiredString(payload, 'productId')),
           uuidToBytes16(requiredString(payload, 'planId')),
           requiredInteger(payload, 'planVersion'),
@@ -201,7 +210,7 @@ export class ViemChainRelayer implements ChainRelayerPort {
   }
 
   async getSubmissionContext(input: ChainCommandInput) {
-    this.assertInputNetwork(input);
+    await this.assertInputNetwork(input);
     const [signerAddress, rpcChainId] = await Promise.all([
       this.options.signer.publicAddress(),
       this.rpc.getChainId(),
@@ -223,7 +232,7 @@ export class ViemChainRelayer implements ChainRelayerPort {
     input: ChainCommandInput,
     nonce: number,
   ): Promise<PreparedChainTransaction> {
-    this.assertInputNetwork(input);
+    await this.assertInputNetwork(input);
     const relayerAddress = (await this.options.signer.publicAddress()).toLowerCase() as Address;
     const to = getAddress(input.contractAddress);
     const data = encodeChainCommand(input);
@@ -298,12 +307,17 @@ export class ViemChainRelayer implements ChainRelayerPort {
     }
   }
 
-  private assertInputNetwork(input: ChainCommandInput): void {
+  private async assertInputNetwork(input: ChainCommandInput): Promise<void> {
     if (
       input.chainId !== this.options.chainId ||
       input.network !== this.options.network
     ) {
       throw new Error('CHAIN_COMMAND_NETWORK_MISMATCH');
+    }
+    if (input.commandType === 'ISSUE_LICENSE' && input.payload.providerNamespace !== undefined &&
+      (!this.options.namespaceContractAddress || input.contractAddress.toLowerCase() !== this.options.namespaceContractAddress.toLowerCase())) {
+      const historical = await this.options.namespaceRegistryAddresses?.() ?? [];
+      if (!historical.some((address) => address.toLowerCase() === input.contractAddress.toLowerCase())) throw new Error('PROVIDER_NAMESPACE_CAPABILITY_NOT_CONFIGURED');
     }
   }
 }

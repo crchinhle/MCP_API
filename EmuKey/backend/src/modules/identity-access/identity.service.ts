@@ -20,14 +20,16 @@ import type {
   UserState,
   ProviderInvitation,
   ProviderInvitationInput,
+  ProviderInvitationPreview,
+  ProviderOnboardingInput,
 } from './identity.types.js';
 
 export interface PasswordRepository {
   createProviderInvitation(actor: AuthPrincipal, input: ProviderInvitationInput, tokenHash: string): Promise<ProviderInvitation>;
   listProviderInvitations(): Promise<ProviderInvitation[]>;
-  markProviderInvitationSent(id: string, tokenHash: string): Promise<void>;
-  acceptProviderInvitation(tokenHash: string, passwordHash: string): Promise<IdentityUser | null>;
-  isProviderInvitationPending(tokenHash: string): Promise<boolean>;
+  markProviderInvitationSent(id: string, tokenHash: string): Promise<boolean>;
+  acceptProviderInvitation(tokenHash: string, passwordHash: string, profile: ProviderOnboardingInput & { providerChainNamespace: string }): Promise<IdentityUser | null>;
+  findPendingProviderInvitation(tokenHash: string): Promise<ProviderInvitationPreview | null>;
   activateCustomer(id: string): Promise<IdentityUser | null>;
   bumpSessionVersion(id: string): Promise<void>;
   changeStateByAdmin(
@@ -71,7 +73,7 @@ export interface IdentityRedis {
 }
 
 export interface IdentityTokenDelivery {
-  sendProviderInvitation?(email: string, token: string, organizationName: string): Promise<void>;
+  sendProviderInvitation?(email: string, token: string): Promise<void>;
   sendLicensingActionVerification?(email: string, token: string, action: string): Promise<void>;
   sendEmailVerification(email: string, token: string): Promise<void>;
   sendPasswordReset(email: string, token: string): Promise<void>;
@@ -152,18 +154,16 @@ export class IdentityService {
     let invitation: ProviderInvitation;
     try {
       invitation = await this.repo.createProviderInvitation(actor, {
-        ...input,
         email: input.email.trim().toLowerCase(),
-        displayName: input.displayName.trim(),
-        organizationName: input.organizationName.trim(),
-        providerChainAddress: input.providerChainAddress.toLowerCase(),
       }, tokenHash);
     } catch (error) { this.translateInvitationConflict(error); throw error; }
     try {
-      await this.delivery.sendProviderInvitation(invitation.email, token, invitation.organizationName);
-      await this.repo.markProviderInvitationSent(invitation.id, tokenHash);
+      await this.delivery.sendProviderInvitation(invitation.email, token);
     } catch {
       throw new ServiceUnavailableException({ code: 'INVITATION_EMAIL_FAILED', message: 'Lời mời đã được lưu nhưng chưa xác nhận gửi email thành công. Hãy gửi lại lời mời.' });
+    }
+    if (!(await this.repo.markProviderInvitationSent(invitation.id, tokenHash))) {
+      throw new ConflictException({ code: 'INVITATION_REPLACED', message: 'Lời mời đã được gửi lại trong lúc xử lý. Hãy tải lại danh sách.' });
     }
     return { ...invitation, sentAt: new Date().toISOString() };
   }
@@ -173,18 +173,37 @@ export class IdentityService {
     return this.repo.listProviderInvitations();
   }
 
-  async acceptProviderInvitation(token: string, password: string, requester = 'internal') {
+  async inspectProviderInvitation(token: string, requester = 'internal') {
+    await this.rateLimit('provider-invitation-inspect', requester, LOGIN_LIMIT);
+    const preview = await this.repo.findPendingProviderInvitation(this.digest(token));
+    if (!preview) throw this.invalidInvitation();
+    return preview;
+  }
+
+  private invalidInvitation() {
+    return new BadRequestException({ code: 'INVALID_OR_EXPIRED_INVITATION', message: 'Lời mời không hợp lệ, đã hết hạn hoặc đã được sử dụng.' });
+  }
+
+  async acceptProviderInvitation(token: string, password: string, profile: ProviderOnboardingInput, requester = 'internal') {
     await this.rateLimit('provider-invitation-accept', requester, LOGIN_LIMIT);
     const tokenHash = this.digest(token);
-    if (!(await this.repo.isProviderInvitationPending(tokenHash))) {
-      throw new BadRequestException({ code: 'INVALID_OR_EXPIRED_INVITATION', message: 'Lời mời không hợp lệ, đã hết hạn hoặc đã được sử dụng.' });
+    if (!(await this.repo.findPendingProviderInvitation(tokenHash))) throw this.invalidInvitation();
+    const passwordHash = await argon2.hash(password);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const user = await this.repo.acceptProviderInvitation(tokenHash, passwordHash, {
+          displayName: profile.displayName.trim(), organizationName: profile.organizationName.trim(),
+          providerChainNamespace: `provider-${randomUUID()}`,
+        });
+        if (!user) throw this.invalidInvitation();
+        return { id: user.id, email: user.email, displayName: user.displayName, role: user.role, status: user.status };
+      } catch (error) {
+        const conflict = error as { code?: string; constraint?: string };
+        if (conflict.code === '23505' && conflict.constraint === 'uq_users_provider_chain_namespace' && attempt < 2) continue;
+        this.translateInvitationConflict(error); throw error;
+      }
     }
-    let user: IdentityUser | null;
-    try {
-      user = await this.repo.acceptProviderInvitation(tokenHash, await argon2.hash(password));
-    } catch (error) { this.translateInvitationConflict(error); throw error; }
-    if (!user) throw new BadRequestException({ code: 'INVALID_OR_EXPIRED_INVITATION', message: 'Lời mời không hợp lệ, đã hết hạn hoặc đã được sử dụng.' });
-    return { id: user.id, email: user.email, displayName: user.displayName, role: user.role, status: user.status };
+    throw this.invalidInvitation();
   }
 
   private requireSystemAdmin(actor: AuthPrincipal): void {
@@ -193,7 +212,7 @@ export class IdentityService {
 
   private translateInvitationConflict(error: unknown): void {
     if ((error as { code?: string }).code === '23505' || (error instanceof Error && error.message === 'PROVIDER_IDENTITY_CONFLICT')) {
-      throw new ConflictException({ code: 'PROVIDER_IDENTITY_CONFLICT', message: 'Email, địa chỉ EVM hoặc namespace đã được sử dụng. Vui lòng kiểm tra lại.' });
+      throw new ConflictException({ code: 'PROVIDER_IDENTITY_CONFLICT', message: 'Email đã có tài khoản hoặc thông tin định danh bị trùng. Vui lòng kiểm tra lại.' });
     }
   }
 

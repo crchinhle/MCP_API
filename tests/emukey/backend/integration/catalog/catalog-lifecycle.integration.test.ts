@@ -10,6 +10,7 @@ import { CatalogAdminService } from '../../../../../EmuKey/backend/src/modules/c
 import { CatalogAdminRepository } from '../../../../../EmuKey/backend/src/modules/catalog/infrastructure/catalog-admin.repository.js';
 import type { AuthPrincipal } from '../../../../../EmuKey/backend/src/modules/identity-access/identity.types.js';
 import { seedBaseline } from '../../../../../EmuKey/backend/src/platform/database/seed-baseline.js';
+import { planCommitmentForProvider, providerNamespaceDigest } from '../../../../../EmuKey/backend/src/platform/crypto/license-crypto.js';
 
 describe('provider-scoped catalog lifecycle', () => {
   let container: StartedPostgreSqlContainer;
@@ -52,6 +53,23 @@ describe('provider-scoped catalog lifecycle', () => {
   afterAll(async () => {
     if (pool) await pool.end();
     if (container) await container.stop();
+  });
+
+  it('gates namespace plans before publication and binds commitments without a wallet', async () => {
+    const actor = { ...providerA, sub: '00000000-0000-4000-8000-000000000013' };
+    const namespace = 'provider-00000000-0000-4000-8000-000000000013';
+    await pool.query(`INSERT INTO users (id,email,password_hash,display_name,role,status,organization_name,provider_chain_namespace)
+      VALUES ($1,'namespace@example.test','hash','Namespace','PROVIDER_ADMIN','ACTIVE','Namespace Org',$2)`, [actor.sub, namespace]);
+    const product = await service.createProduct(actor, { code: 'NAMESPACE', name: 'Namespace product' });
+    await service.publishProduct(actor, product.id);
+    const input = { productId: product.id, code: 'NAMESPACE', name: 'Namespace plan', billingCycle: 'MONTHLY' as const, durationMonths: 1, maxActiveDevices: 1, priceVnd: 100000, entitlements: { desktop: true } };
+    await expect(service.createPlan(actor, input)).rejects.toMatchObject({ response: { code: 'PROVIDER_NAMESPACE_CAPABILITY_NOT_CONFIGURED' } });
+    const enabled = new CatalogAdminService(new CatalogAdminRepository(pool, true));
+    const plan = await enabled.createPlan(actor, input);
+    expect(plan.planCommitment).toBe(planCommitmentForProvider({ ...input, planId: plan.id, planVersion: plan.version, providerNamespace: providerNamespaceDigest(namespace) }));
+    await expect(service.publishPlan(actor, plan.id)).rejects.toMatchObject({ response: { code: 'PROVIDER_NAMESPACE_CAPABILITY_NOT_CONFIGURED' } });
+    await expect(enabled.publishPlan(actor, plan.id)).resolves.toMatchObject({ status: 'PUBLISHED' });
+    expect((await pool.query('SELECT provider_chain_address FROM users WHERE id=$1', [actor.sub])).rows[0].provider_chain_address).toBeNull();
   });
 
   it('persists internal image paths and clears images explicitly with null', async () => {

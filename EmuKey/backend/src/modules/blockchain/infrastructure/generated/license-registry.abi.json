@@ -178,6 +178,55 @@
         "type": "bytes16"
       },
       {
+        "indexed": true,
+        "internalType": "bytes32",
+        "name": "providerNamespace",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes32",
+        "name": "planCommitment",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "bytes32",
+        "name": "activationCommitment",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "activationKeyVersion",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "expiresAt",
+        "type": "uint256"
+      }
+    ],
+    "name": "LicenseIssuedForProvider",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "internalType": "bytes16",
+        "name": "commandId",
+        "type": "bytes16"
+      },
+      {
+        "indexed": true,
+        "internalType": "bytes16",
+        "name": "licenseId",
+        "type": "bytes16"
+      },
+      {
         "indexed": false,
         "internalType": "uint256",
         "name": "expiresAt",
@@ -315,6 +364,19 @@
   },
   {
     "inputs": [],
+    "name": "DOMAIN_PLAN_V3",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
     "name": "RELAYER_ROLE",
     "outputs": [
       {
@@ -365,6 +427,55 @@
       }
     ],
     "name": "computePlanCommitment",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
+      }
+    ],
+    "stateMutability": "pure",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes32",
+        "name": "providerNamespace",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes16",
+        "name": "productId",
+        "type": "bytes16"
+      },
+      {
+        "internalType": "bytes16",
+        "name": "planId",
+        "type": "bytes16"
+      },
+      {
+        "internalType": "uint256",
+        "name": "planVersion",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "durationMonths",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "maxActiveDevices",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "entitlementsHash",
+        "type": "bytes32"
+      }
+    ],
+    "name": "computePlanCommitmentForProvider",
     "outputs": [
       {
         "internalType": "bytes32",
@@ -605,6 +716,69 @@
         "internalType": "bytes16",
         "name": "commandId",
         "type": "bytes16"
+      },
+      {
+        "internalType": "bytes16",
+        "name": "licenseId",
+        "type": "bytes16"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "providerNamespace",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes16",
+        "name": "productId",
+        "type": "bytes16"
+      },
+      {
+        "internalType": "bytes16",
+        "name": "planId",
+        "type": "bytes16"
+      },
+      {
+        "internalType": "uint256",
+        "name": "planVersion",
+        "type": "uint256"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "planCommitment",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "bytes32",
+        "name": "activationCommitment",
+        "type": "bytes32"
+      },
+      {
+        "internalType": "uint256",
+        "name": "activationKeyVersion",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "maxActiveDevices",
+        "type": "uint256"
+      },
+      {
+        "internalType": "uint256",
+        "name": "expiresAt",
+        "type": "uint256"
+      }
+    ],
+    "name": "issueLicenseForProvider",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes16",
+        "name": "commandId",
+        "type": "bytes16"
       }
     ],
     "name": "processedCommands",
@@ -613,6 +787,25 @@
         "internalType": "bool",
         "name": "",
         "type": "bool"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "bytes16",
+        "name": "licenseId",
+        "type": "bytes16"
+      }
+    ],
+    "name": "providerNamespaceForLicense",
+    "outputs": [
+      {
+        "internalType": "bytes32",
+        "name": "",
+        "type": "bytes32"
       }
     ],
     "stateMutability": "view",

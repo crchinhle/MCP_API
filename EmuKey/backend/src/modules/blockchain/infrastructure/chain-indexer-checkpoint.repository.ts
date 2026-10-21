@@ -28,6 +28,17 @@ export interface CheckpointOwner {
 export class ChainIndexerCheckpointRepository {
   constructor(private readonly pool: Pool) {}
 
+  async namespaceRegistryOrigins(chain: Pick<CheckpointOwner, 'network' | 'chainId'>): Promise<CheckpointOwner[]> {
+    const result = await this.pool.query<{ contract_address: string }>(
+      `SELECT DISTINCT lower(contract_address) AS contract_address FROM chain_commands
+       WHERE network=$1 AND chain_id=$2 AND command_type='ISSUE_LICENSE'
+         AND payload->>'protocolVersion'='3'
+         AND payload->>'providerNamespace' ~ '^0x[0-9a-f]{64}$'`,
+      [chain.network.toLowerCase(), chain.chainId],
+    );
+    return result.rows.map((row) => ({ network: chain.network.toLowerCase(), chainId: chain.chainId, contractAddress: row.contract_address }));
+  }
+
   async claimRange(
     owner: CheckpointOwner,
     workerId: string,

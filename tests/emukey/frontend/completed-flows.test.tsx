@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../../../EmuKey/frontend/src/presentation/app/App';
 
@@ -130,11 +130,16 @@ describe('completed API-backed flows', () => {
     });
     try {
       render(<App initialEntries={['/system/console?view=payments']} />);
-      fireEvent.click(await screen.findByRole('button', { name: 'Kiểm tra giao dịch' }, { timeout: 15000 }));
-      fireEvent.click(await screen.findByRole('button', { name: 'Ghi kết quả kiểm tra' }));
-      expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Lưu kết quả' }).disabled).toBe(true);
-      fireEvent.change(screen.getByLabelText('Lý do xử lý thanh toán'), { target: { value: 'Đã kiểm tra chứng từ' } });
-      fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }));
+      const queue = screen.getByRole('region', { name: 'Xử lý thanh toán cần kiểm tra' });
+      fireEvent.click(await within(queue).findByRole('button', { name: 'Kiểm tra giao dịch' }, { timeout: 15000 }));
+      const detail = await screen.findByRole('dialog');
+      fireEvent.click(await within(detail).findByRole('button', { name: 'Ghi kết quả kiểm tra' }));
+      const reason = await screen.findByLabelText('Lý do xử lý thanh toán');
+      const confirmation = reason.closest('[role="dialog"]')!;
+      const save = within(confirmation).getByRole<HTMLButtonElement>('button', { name: 'Lưu kết quả' });
+      expect(save.disabled).toBe(true);
+      fireEvent.change(reason, { target: { value: 'Đã kiểm tra chứng từ' } });
+      fireEvent.click(save);
       await waitFor(() => expect(submitted).toEqual({ status: 'RESOLVED', reason: 'Đã kiểm tra chứng từ' }));
       expect(await screen.findByText('Đã lưu kết quả kiểm tra.')).toBeTruthy();
     } finally { vi.mocked(fetch).mockImplementation(original); }

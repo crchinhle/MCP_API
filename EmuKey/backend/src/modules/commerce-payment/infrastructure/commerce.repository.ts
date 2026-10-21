@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Pool, type PoolClient } from 'pg';
 import { keccak256, stringToHex, type Hex } from 'viem';
 import { NotificationRepository } from '../../operations/infrastructure/notification.repository.js';
-import { canonicalizeEntitlements } from '../../../platform/crypto/license-crypto.js';
+import { canonicalizeEntitlements, providerNamespaceDigest } from '../../../platform/crypto/license-crypto.js';
 import type { AuthPrincipal } from '../../identity-access/identity.types.js';
 import type { VerifiedPaymentEvent } from '../application/ports/payment-gateway.port.js';
 import { renewalExpiry } from '../domain/renewal-policy.js';
@@ -108,6 +108,7 @@ export interface ChainConfiguration {
   chainId: number;
   contractAddress: string;
   network: string;
+  namespaceContractAddress?: string;
 }
 
 export interface IssuanceMaterial {
@@ -236,6 +237,7 @@ export class CommerceRepository {
     planId: string,
     targetLicenseId: string | undefined,
     terms: ServiceTermsSnapshot,
+    chain?: ChainConfiguration,
   ): Promise<OrderRecord> {
     return this.withTransaction(async (client) => {
       await client.query(
@@ -274,7 +276,7 @@ export class CommerceRepository {
 
       const selected = await client.query<Record<string, unknown>>(
         `SELECT pl.*, p.name AS product_name,
-                u.organization_name AS provider_name
+                u.organization_name AS provider_name, u.provider_chain_address
          FROM plans pl
          JOIN products p
            ON p.id = pl.product_id AND p.provider_user_id = pl.provider_user_id
@@ -286,6 +288,7 @@ export class CommerceRepository {
       );
       const plan = selected.rows[0];
       if (!plan) throw new Error('PLAN_NOT_FOUND');
+      if (plan.provider_chain_address === null && !chain?.namespaceContractAddress) throw new Error('PROVIDER_NAMESPACE_CAPABILITY_NOT_CONFIGURED');
       if (targetLicenseId) {
         const target = await client.query(
           `SELECT id FROM licenses
@@ -507,15 +510,18 @@ export class CommerceRepository {
   async prepareCheckout(
     customerUserId: string,
     id: string,
+    chain?: ChainConfiguration,
   ): Promise<CheckoutPreparation> {
     return this.withTransaction(async (client) => {
       const orderResult = await client.query<Record<string, unknown>>(
-        `SELECT *, payment_due_at <= statement_timestamp() AS payment_expired
-         FROM orders WHERE id = $1 AND customer_user_id = $2 FOR UPDATE`,
+        `SELECT o.*, u.provider_chain_address, o.payment_due_at <= statement_timestamp() AS payment_expired
+         FROM orders o JOIN users u ON u.id=o.provider_user_id
+         WHERE o.id = $1 AND o.customer_user_id = $2 FOR UPDATE OF o`,
         [id, customerUserId],
       );
       const row = orderResult.rows[0];
       if (!row) throw new Error('ORDER_NOT_FOUND');
+      if (row.provider_chain_address === null && !chain?.namespaceContractAddress) throw new Error('PROVIDER_NAMESPACE_CAPABILITY_NOT_CONFIGURED');
       if (row.order_status !== 'WAITING_PAYMENT') {
         throw new Error('ORDER_NOT_WAITING_PAYMENT');
       }
@@ -636,7 +642,7 @@ export class CommerceRepository {
       }
 
       const attemptResult = await client.query<Record<string, unknown>>(
-        `SELECT pa.*, o.*, provider.provider_chain_address, statement_timestamp() AS database_received_at,
+        `SELECT pa.*, o.*, provider.provider_chain_address, provider.provider_chain_namespace, statement_timestamp() AS database_received_at,
                 statement_timestamp() < o.ipn_accept_until AS received_before_cutoff,
                 pa.id AS payment_attempt_id,
                 pa.amount_vnd AS payment_attempt_amount_vnd,
@@ -894,8 +900,9 @@ export class CommerceRepository {
               planId: String(row.plan_id),
               planVersion: Number(row.plan_version_snapshot),
               productId: String(row.product_id),
-              protocolVersion: 1,
-              providerAddress: String(row.provider_chain_address),
+              ...(row.provider_chain_address === null
+                ? { protocolVersion: 3, providerNamespace: providerNamespaceDigest(typeof row.provider_chain_namespace === 'string' ? row.provider_chain_namespace : '') }
+                : { protocolVersion: 1, providerAddress: row.provider_chain_address as string }),
             }
           : {
               commandId: issuance.commandId,
@@ -909,13 +916,21 @@ export class CommerceRepository {
       let commandSequence = 1;
       let predecessorCommandId: string | null = null;
       let basisChainEventId: string | null = null;
+      let commandRegistry = chain;
+      if (row.order_type === 'NEW_PURCHASE' && row.provider_chain_address === null) {
+        if (!chain.namespaceContractAddress) throw new Error('PROVIDER_NAMESPACE_CAPABILITY_NOT_CONFIGURED');
+        commandRegistry = { ...chain, contractAddress: chain.namespaceContractAddress };
+      }
       if (row.order_type === 'RENEWAL') {
         const predecessor = await client.query<{
           basis_chain_event_id: string | null;
           id: string;
           license_command_sequence: string;
+          network: string;
+          chain_id: string;
+          contract_address: string;
         }>(
-          `SELECT latest.id, latest.license_command_sequence,
+          `SELECT latest.id, latest.license_command_sequence, issue.network, issue.chain_id, issue.contract_address,
                   (
                     SELECT confirmed.confirmation_chain_event_id
                     FROM chain_commands confirmed
@@ -926,10 +941,15 @@ export class CommerceRepository {
                     LIMIT 1
                   ) AS basis_chain_event_id
            FROM chain_commands latest
+           JOIN LATERAL (
+             SELECT issuance.network, issuance.chain_id, issuance.contract_address FROM chain_commands issuance
+             WHERE issuance.license_id=latest.license_id AND issuance.command_type='ISSUE_LICENSE'
+             ORDER BY issuance.license_command_sequence LIMIT 1
+           ) issue ON true
            WHERE latest.license_id = $1
            ORDER BY latest.license_command_sequence DESC
            LIMIT 1
-           FOR UPDATE`,
+           FOR UPDATE OF latest`,
           [licenseId],
         );
         const previous = predecessor.rows[0];
@@ -939,6 +959,7 @@ export class CommerceRepository {
         commandSequence = Number(previous.license_command_sequence) + 1;
         predecessorCommandId = previous.id;
         basisChainEventId = previous.basis_chain_event_id;
+        commandRegistry = { network: previous.network, chainId: Number(previous.chain_id), contractAddress: previous.contract_address };
       }
 
       await client.query(
@@ -958,9 +979,9 @@ export class CommerceRepository {
           commandSequence,
           predecessorCommandId,
           basisChainEventId,
-          chain.network.toLowerCase(),
-          chain.chainId,
-          chain.contractAddress.toLowerCase(),
+          commandRegistry.network.toLowerCase(),
+          commandRegistry.chainId,
+          commandRegistry.contractAddress.toLowerCase(),
           JSON.stringify(commandPayload),
           commandPayloadHash.slice(2),
         ],

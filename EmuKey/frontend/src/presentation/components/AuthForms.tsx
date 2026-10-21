@@ -3,7 +3,6 @@ import { Alert, Button, Form, Input, Select } from 'antd';
 import { useState } from 'react';
 
 import type { AuthUser, RegisterInput } from '../../application/auth/authContext';
-import { ApiRequestError, describeApiError, requestJson } from '../../application/auth/authContext';
 
 export type AuthMode = 'forgot' | 'licensing-action' | 'login' | 'register' | 'reset' | 'verify' | 'provider-invite';
 
@@ -11,36 +10,10 @@ const emailRules = [
   { message: 'Vui lòng nhập email.', required: true },
   { message: 'Email chưa đúng định dạng.', type: 'email' as const },
 ];
-const passwordComplexityRule = {
+export const passwordComplexityRule = {
   message: 'Mật khẩu phải có ít nhất 1 chữ hoa, 1 chữ thường, 1 số và 1 ký tự đặc biệt.',
   pattern: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9\s]).+$/,
 };
-
-export function AcceptProviderInvitationForm({ token, onLogin, onActivated }: { readonly token: string; readonly onLogin: () => Promise<void>; readonly onActivated: () => void }) {
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  if (submitted) return <Alert showIcon type="success" title="Tài khoản Provider đã được kích hoạt. Bạn có thể đăng nhập." action={<Button loading={loading} onClick={() => { setLoading(true); void onLogin().finally(() => setLoading(false)); }}>Đăng nhập bằng tài khoản Provider</Button>} />;
-  if (!/^[A-Za-z0-9_-]{43}$/.test(token)) return <Alert showIcon type="error" title="Liên kết mời không hợp lệ." description="Vui lòng liên hệ quản trị hệ thống để được gửi lại lời mời." />;
-  return <Form name="accept-provider-invitation" layout="vertical" disabled={loading} onFinish={(values: { password: string }) => {
-    setLoading(true); setError(null);
-    void requestJson('/auth/provider-invitations/accept', { method: 'POST', body: JSON.stringify({ token, password: values.password }) })
-      .then(() => { setSubmitted(true); onActivated(); })
-      .catch((cause: unknown) => setError(cause instanceof ApiRequestError && cause.code === 'INVALID_OR_EXPIRED_INVITATION'
-        ? 'Lời mời đã hết hạn hoặc đã được sử dụng. Vui lòng liên hệ quản trị hệ thống để nhận lời mời mới.'
-        : describeApiError(cause, 'Không thể kích hoạt tài khoản. Vui lòng thử lại.')))
-      .finally(() => setLoading(false));
-  }}>
-    {error ? <Alert showIcon role="alert" type="error" title={error} /> : null}
-    <Form.Item label="Mật khẩu mới" name="password" extra="Ít nhất 12 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt." rules={[{ required: true, min: 12, max: 128 }, passwordComplexityRule]}>
-      <Input.Password autoComplete="new-password" maxLength={128} />
-    </Form.Item>
-    <Form.Item label="Xác nhận mật khẩu" name="passwordConfirmation" dependencies={['password']} rules={[{ required: true }, ({ getFieldValue }) => ({ validator: (_, value) => !value || value === getFieldValue('password') ? Promise.resolve() : Promise.reject(new Error('Mật khẩu xác nhận không khớp.')) })]}>
-      <Input.Password autoComplete="new-password" maxLength={128} />
-    </Form.Item>
-    <Button block htmlType="submit" type="primary" loading={loading}>Kích hoạt tài khoản Provider</Button>
-  </Form>;
-}
 
 export function LoginForm({
   onForgotPassword,

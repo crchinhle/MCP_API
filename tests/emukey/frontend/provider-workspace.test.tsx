@@ -18,7 +18,7 @@ describe('Provider workspace', () => {
       return original(input, init);
     });
     try {
-      render(<App initialEntries={['/system/console']} />);
+      render(<App initialEntries={['/support']} />);
       fireEvent.click(await screen.findByRole('button', { name: 'Thông báo', exact: true }));
       expect(await screen.findByText('Thông báo mới')).toBeTruthy();
       fireEvent.click(screen.getByRole('button', { name: 'Xem thêm thông báo' }));

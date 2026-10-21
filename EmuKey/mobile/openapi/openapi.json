@@ -745,6 +745,38 @@
         ]
       }
     },
+    "/api/v1/auth/provider-invitations/inspect": {
+      "post": {
+        "operationId": "IdentityController_inspectProviderInvitation",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderInvitationTokenDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderInvitationPreviewDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Validate a provider invitation without consuming it; token is sent in the body",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
     "/api/v1/auth/provider-invitations/accept": {
       "post": {
         "operationId": "IdentityController_acceptProviderInvitation",
@@ -771,7 +803,7 @@
             }
           }
         },
-        "summary": "Accept a single-use provider email invitation and choose a password",
+        "summary": "Complete the recipient profile and accept a single-use provider invitation",
         "tags": [
           "identity"
         ]
@@ -3700,34 +3732,10 @@
             "type": "string",
             "format": "email",
             "maxLength": 254
-          },
-          "displayName": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 255
-          },
-          "organizationName": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 255
-          },
-          "providerChainAddress": {
-            "type": "string",
-            "pattern": "^0x[0-9a-fA-F]{40}$"
-          },
-          "providerChainNamespace": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 100,
-            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
           }
         },
         "required": [
-          "email",
-          "displayName",
-          "organizationName",
-          "providerChainAddress",
-          "providerChainNamespace"
+          "email"
         ]
       },
       "ProviderInvitationDto": {
@@ -3737,26 +3745,6 @@
             "type": "string",
             "format": "email",
             "maxLength": 254
-          },
-          "displayName": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 255
-          },
-          "organizationName": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 255
-          },
-          "providerChainAddress": {
-            "type": "string",
-            "pattern": "^0x[0-9a-fA-F]{40}$"
-          },
-          "providerChainNamespace": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 100,
-            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
           },
           "id": {
             "type": "string",
@@ -3786,15 +3774,41 @@
         },
         "required": [
           "email",
-          "displayName",
-          "organizationName",
-          "providerChainAddress",
-          "providerChainNamespace",
           "id",
           "expiresAt",
           "createdAt",
           "sentAt",
           "status"
+        ]
+      },
+      "ProviderInvitationTokenDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "minLength": 43,
+            "maxLength": 43
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
+      "ProviderInvitationPreviewDto": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "email",
+          "expiresAt"
         ]
       },
       "AcceptProviderInvitationDto": {
@@ -3805,6 +3819,16 @@
             "minLength": 43,
             "maxLength": 43
           },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "organizationName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
           "password": {
             "type": "string",
             "minLength": 12,
@@ -3814,6 +3838,8 @@
         },
         "required": [
           "token",
+          "displayName",
+          "organizationName",
           "password"
         ]
       },

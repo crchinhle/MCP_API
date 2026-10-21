@@ -41,8 +41,7 @@ CREATE TABLE users (
     ),
     CONSTRAINT ck_users_session_version CHECK (session_version > 0),
     CONSTRAINT ck_users_provider_fields CHECK (
-        (role = 'PROVIDER_ADMIN' AND organization_name IS NOT NULL AND
-            provider_chain_address IS NOT NULL AND provider_chain_namespace IS NOT NULL) OR
+        (role = 'PROVIDER_ADMIN' AND organization_name IS NOT NULL AND provider_chain_namespace IS NOT NULL) OR
         (role <> 'PROVIDER_ADMIN' AND provider_chain_address IS NULL AND provider_chain_namespace IS NULL)
     ),
     CONSTRAINT ck_users_customer_fields CHECK (
@@ -70,11 +69,11 @@ CREATE UNIQUE INDEX uq_users_provider_chain_namespace
 CREATE TABLE provider_invitations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email CITEXT NOT NULL UNIQUE,
-    display_name VARCHAR(255) NOT NULL CHECK (btrim(display_name) <> ''),
-    organization_name VARCHAR(255) NOT NULL CHECK (btrim(organization_name) <> ''),
-    provider_chain_address VARCHAR(42) NOT NULL UNIQUE
+    display_name VARCHAR(255) CHECK (btrim(display_name) <> ''),
+    organization_name VARCHAR(255) CHECK (btrim(organization_name) <> ''),
+    provider_chain_address VARCHAR(42) UNIQUE
         CHECK (provider_chain_address ~ '^0x[0-9a-f]{40}$' AND provider_chain_address <> '0x0000000000000000000000000000000000000000'),
-    provider_chain_namespace CITEXT NOT NULL UNIQUE
+    provider_chain_namespace CITEXT UNIQUE
         CHECK (provider_chain_namespace ~ '^[a-z0-9]+(-[a-z0-9]+)*$' AND length(provider_chain_namespace) <= 100),
     token_hash BYTEA NOT NULL UNIQUE CHECK (octet_length(token_hash) = 32),
     invited_by_user_id UUID NOT NULL,

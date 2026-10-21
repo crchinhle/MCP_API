@@ -71,6 +71,8 @@ export interface PlatformEnvironment {
   EVM_CONFIRMATIONS: number;
   EVM_CONTRACT_ADDRESS: string;
   EVM_DEPLOYMENT_BLOCK?: number;
+  EVM_NAMESPACE_CONTRACT_ADDRESS?: string;
+  EVM_NAMESPACE_DEPLOYMENT_BLOCK?: number;
   EVM_INDEXER_BATCH_SIZE?: number;
   EVM_RPC_HTTP_URL?: string;
   EVM_RPC_FALLBACK_HTTP_URL?: string;
@@ -361,6 +363,18 @@ export function validateEnvironment(
     throw new Error('EVM_CONTRACT_ADDRESS must contain a 20-byte address');
   }
   result.EVM_CONTRACT_ADDRESS = result.EVM_CONTRACT_ADDRESS.toLowerCase();
+  const namespaceAddress = typeof environment.EVM_NAMESPACE_CONTRACT_ADDRESS === 'string' ? environment.EVM_NAMESPACE_CONTRACT_ADDRESS.trim() : '';
+  const namespaceBlock = typeof environment.EVM_NAMESPACE_DEPLOYMENT_BLOCK === 'string' ? environment.EVM_NAMESPACE_DEPLOYMENT_BLOCK.trim() : '';
+  if (namespaceAddress || namespaceBlock) {
+    if (!namespaceAddress) throw new Error('EVM_NAMESPACE_CONTRACT_ADDRESS is required');
+    if (!namespaceBlock) throw new Error('EVM_NAMESPACE_DEPLOYMENT_BLOCK is required');
+    if (!/^0x[0-9a-fA-F]{40}$/.test(namespaceAddress) || /^0x0{40}$/.test(namespaceAddress)) {
+      throw new Error('EVM_NAMESPACE_CONTRACT_ADDRESS must contain a nonzero 20-byte address');
+    }
+    result.EVM_NAMESPACE_CONTRACT_ADDRESS = namespaceAddress.toLowerCase();
+    if (result.EVM_NAMESPACE_CONTRACT_ADDRESS === result.EVM_CONTRACT_ADDRESS) throw new Error('Namespace registry must differ from the legacy registry');
+    result.EVM_NAMESPACE_DEPLOYMENT_BLOCK = parseNonNegativeInteger(namespaceBlock, 'EVM_NAMESPACE_DEPLOYMENT_BLOCK');
+  }
   assertSepoliaRuntime(result.EVM_NETWORK, result.EVM_CHAIN_ID);
   if (!/^[0-9a-fA-F]{64}$/.test(result.ACTIVATION_ENVELOPE_KEY)) {
     throw new Error('ACTIVATION_ENVELOPE_KEY must contain exactly 32 bytes');

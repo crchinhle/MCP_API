@@ -12,6 +12,7 @@ describe('IdentityController HTTP boundary', () => {
     inviteProvider: vi.fn().mockResolvedValue({ id: 'invite-1', email: 'provider@example.test' }),
     listProviderInvitations: vi.fn().mockResolvedValue([]),
     acceptProviderInvitation: vi.fn().mockResolvedValue({ id: 'provider-1', role: 'PROVIDER_ADMIN', status: 'ACTIVE' }),
+    inspectProviderInvitation: vi.fn().mockResolvedValue({ email: 'provider@example.test', expiresAt: '2026-10-22T00:00:00Z' }),
     login: vi.fn().mockResolvedValue({ accessToken: 'access', refreshToken: 'refresh', user: { id: 'u1' } }),
     refresh: vi.fn(),
     profile: vi.fn().mockResolvedValue({ id: 'u1' }),
@@ -37,9 +38,11 @@ describe('IdentityController HTTP boundary', () => {
   afterAll(() => app.close());
   const server = () => app.getHttpServer() as unknown as Parameters<typeof request>[0];
 
-  const invitation = { email: 'provider@example.test', displayName: 'Provider Owner', organizationName: 'Provider Ltd', providerChainAddress: `0x${'ab'.repeat(20)}`, providerChainNamespace: 'provider-ltd' };
-  it('accepts a provider invitation request without an administrator-supplied password', async () => {
-    await request(server()).post('/auth/provider-invitations').send(invitation).expect(201);
+  const invitation = { email: 'provider@example.test' };
+  const acceptance = { token: 'a'.repeat(43), password: 'Provider-test@123', displayName: 'Provider Owner', organizationName: 'Provider Ltd' };
+  it('accepts only an email and normalizes it without administrator-supplied profile data', async () => {
+    await request(server()).post('/auth/provider-invitations').send({ email: ' Provider@Example.test ' }).expect(201);
+    expect(service.inviteProvider).toHaveBeenLastCalledWith(expect.anything(), invitation);
   });
   it.each([
     { password: 'Provider-test@123' }, { role: 'SYSTEM_ADMIN' },
@@ -49,11 +52,38 @@ describe('IdentityController HTTP boundary', () => {
     await request(server()).post('/auth/provider-invitations').send({ ...invitation, ...override }).expect(400);
   });
   it('accepts a one-time invitation with a strong password', async () => {
-    await request(server()).post('/auth/provider-invitations/accept').send({ token: 'a'.repeat(43), password: 'Provider-test@123' }).expect(201);
+    await request(server()).post('/auth/provider-invitations/accept').send(acceptance).expect(201);
+  });
+  it('inspects an invitation by body token without consuming it or exposing technical identities', async () => {
+    const response = await request(server()).post('/auth/provider-invitations/inspect').send({ token: acceptance.token }).expect(200);
+    expect(response.body).toEqual({ email: invitation.email, expiresAt: '2026-10-22T00:00:00Z' });
+  });
+  it('keeps clients behind a trusted proxy in distinct invitation rate-limit buckets', async () => {
+    const express = app.getHttpAdapter().getInstance() as { set: (name: string, value: unknown) => void };
+    express.set('trust proxy', 'loopback');
+    try {
+      for (const ip of ['198.51.100.10', '198.51.100.11']) {
+        await request(server()).post('/auth/provider-invitations/inspect').set('X-Forwarded-For', ip).send({ token: acceptance.token }).expect(200);
+        expect(service.inspectProviderInvitation).toHaveBeenLastCalledWith(acceptance.token, ip);
+        await request(server()).post('/auth/provider-invitations/accept').set('X-Forwarded-For', ip).send(acceptance).expect(201);
+        expect(service.acceptProviderInvitation).toHaveBeenLastCalledWith(acceptance.token, acceptance.password, { displayName: acceptance.displayName, organizationName: acceptance.organizationName }, ip);
+      }
+    } finally { express.set('trust proxy', false); }
+  });
+  it('does not use an untrusted forwarded address for invitation limiting', async () => {
+    await request(server()).post('/auth/provider-invitations/inspect').set('X-Forwarded-For', '198.51.100.99').send({ token: acceptance.token }).expect(200);
+    expect(service.inspectProviderInvitation.mock.calls.at(-1)?.[1]).not.toBe('198.51.100.99');
+  });
+  it.each([
+    { displayName: '  ' }, { organizationName: '  ' }, { displayName: 'a'.repeat(256) },
+    { organizationName: 'a'.repeat(256) }, { email: 'other@example.test' }, { role: 'SYSTEM_ADMIN' },
+    { providerChainAddress: `0x${'ab'.repeat(20)}` }, { providerChainNamespace: 'stolen' },
+  ])('rejects invalid recipient profile or identity injection %j', async (override) => {
+    await request(server()).post('/auth/provider-invitations/accept').send({ ...acceptance, ...override }).expect(400);
   });
   it('rejects a weak recipient password and a malformed invitation token', async () => {
-    await request(server()).post('/auth/provider-invitations/accept').send({ token: 'a'.repeat(43), password: 'weak' }).expect(400);
-    await request(server()).post('/auth/provider-invitations/accept').send({ token: 'bad', password: 'Provider-test@123' }).expect(400);
+    await request(server()).post('/auth/provider-invitations/accept').send({ ...acceptance, password: 'weak' }).expect(400);
+    await request(server()).post('/auth/provider-invitations/accept').send({ ...acceptance, token: 'bad' }).expect(400);
   });
 
   it('sets an HttpOnly refresh cookie on login', async () => {

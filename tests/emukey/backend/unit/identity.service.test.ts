@@ -24,10 +24,11 @@ class FakeRedis implements IdentityRedis {
   incr(key: string) { const value = Number(this.data.get(key) ?? 0) + 1; this.data.set(key, String(value)); return Promise.resolve(value); }
   expire() { return Promise.resolve(1); }
 }
-function repo(): PasswordRepository { return { findByEmail: vi.fn(() => Promise.resolve(user)), findById: vi.fn(() => Promise.resolve(user)), listUsers: vi.fn(() => Promise.resolve([user])), activateCustomer: vi.fn(), createCustomer: vi.fn(), createProviderInvitation: vi.fn(), listProviderInvitations: vi.fn(), markProviderInvitationSent: vi.fn(), acceptProviderInvitation: vi.fn(), isProviderInvitationPending: vi.fn().mockResolvedValue(true), updatePassword: vi.fn(), touchLogin: vi.fn(), bumpSessionVersion: vi.fn(), updateProfile: vi.fn(), changeStateByAdmin: vi.fn(), recordFailedLogin: vi.fn(), unlockExpired: vi.fn() }; }
+function repo(): PasswordRepository { return { findByEmail: vi.fn(() => Promise.resolve(user)), findById: vi.fn(() => Promise.resolve(user)), listUsers: vi.fn(() => Promise.resolve([user])), activateCustomer: vi.fn(), createCustomer: vi.fn(), createProviderInvitation: vi.fn(), listProviderInvitations: vi.fn(), markProviderInvitationSent: vi.fn().mockResolvedValue(true), acceptProviderInvitation: vi.fn(), findPendingProviderInvitation: vi.fn().mockResolvedValue({ email: 'provider@example.test', expiresAt: '2026-10-22T00:00:00Z' }), updatePassword: vi.fn(), touchLogin: vi.fn(), bumpSessionVersion: vi.fn(), updateProfile: vi.fn(), changeStateByAdmin: vi.fn(), recordFailedLogin: vi.fn(), unlockExpired: vi.fn() }; }
 
 describe('IdentityService', () => {
-  const providerInput = { email: 'provider@example.test', displayName: 'Provider Owner', organizationName: 'Provider Ltd', providerChainAddress: `0x${'ab'.repeat(20)}`, providerChainNamespace: 'provider-ltd' };
+  const providerInput = { email: 'provider@example.test' };
+  const profile = { displayName: 'Provider Owner', organizationName: 'Provider Ltd' };
   const admin = { sub: 'admin-1', role: 'SYSTEM_ADMIN' as const, sessionVersion: 1 };
 
   it('persists a hashed invitation and sends the secret only by email without creating an active user', async () => {
@@ -55,23 +56,49 @@ describe('IdentityService', () => {
     let passwordHash = '';
     const repository = { ...repo(), acceptProviderInvitation: vi.fn(async (_digest, hash) => { passwordHash = hash; return { ...user, role: 'PROVIDER_ADMIN' as const }; }) };
     const service = new IdentityService(repository, new FakeRedis(), new TextEncoder().encode('test-secret'), { sendEmailVerification: vi.fn(), sendPasswordReset: vi.fn() });
-    const result = await service.acceptProviderInvitation('a'.repeat(43), 'Provider-test@123');
+    const result = await service.acceptProviderInvitation('a'.repeat(43), 'Provider-test@123', profile);
     expect(await verify(passwordHash, 'Provider-test@123')).toBe(true);
     expect(result).toMatchObject({ role: 'PROVIDER_ADMIN', status: 'ACTIVE' });
     expect(result).not.toHaveProperty('passwordHash');
   });
 
-  it('limits acceptance attempts by requester even when every token differs', async () => {
-    const repository = { ...repo(), isProviderInvitationPending: vi.fn().mockResolvedValue(false) };
+  it('inspects only a hashed token and returns the verified recipient without activating it', async () => {
+    const repository = repo();
     const service = new IdentityService(repository, new FakeRedis(), new TextEncoder().encode('test-secret'), { sendEmailVerification: vi.fn(), sendPasswordReset: vi.fn() });
-    for (let i = 0; i < 10; i++) await expect(service.acceptProviderInvitation(String(i).padStart(43, 'a'), 'Provider-test@123', 'requester-1')).rejects.toMatchObject({ status: 400 });
-    await expect(service.acceptProviderInvitation('z'.repeat(43), 'Provider-test@123', 'requester-1')).rejects.toMatchObject({ status: 429 });
+    expect(await service.inspectProviderInvitation('a'.repeat(43))).toEqual({ email: providerInput.email, expiresAt: '2026-10-22T00:00:00Z' });
+    expect(repository.findPendingProviderInvitation).toHaveBeenCalledWith(expect.stringMatching(/^[0-9a-f]{64}$/));
+    expect(repository.acceptProviderInvitation).not.toHaveBeenCalled();
+  });
+
+  it('allocates a new namespace after a database uniqueness collision without changing the recipient profile', async () => {
+    const accept = vi.fn().mockRejectedValueOnce({ code: '23505', constraint: 'uq_users_provider_chain_namespace' }).mockResolvedValue({ ...user, role: 'PROVIDER_ADMIN' });
+    const repository = { ...repo(), acceptProviderInvitation: accept };
+    const service = new IdentityService(repository, new FakeRedis(), new TextEncoder().encode('test-secret'), { sendEmailVerification: vi.fn(), sendPasswordReset: vi.fn() });
+    await service.acceptProviderInvitation('a'.repeat(43), 'Provider-test@123', { displayName: ' Owner ', organizationName: ' Company ' });
+    const first = accept.mock.calls[0]![2] as Record<string, string>;
+    const second = accept.mock.calls[1]![2] as Record<string, string>;
+    expect(first).toMatchObject({ displayName: 'Owner', organizationName: 'Company', providerChainNamespace: expect.stringMatching(/^provider-[0-9a-f-]{36}$/) });
+    expect(second.providerChainNamespace).not.toBe(first.providerChainNamespace);
+    expect(first).not.toHaveProperty('providerChainAddress');
+  });
+
+  it('does not report delivery success for a token replaced by a concurrent resend', async () => {
+    const repository = { ...repo(), createProviderInvitation: vi.fn().mockResolvedValue({ id: 'invite', email: providerInput.email }), markProviderInvitationSent: vi.fn().mockResolvedValue(false) };
+    const service = new IdentityService(repository, new FakeRedis(), new TextEncoder().encode('test-secret'), { sendEmailVerification: vi.fn(), sendPasswordReset: vi.fn(), sendProviderInvitation: vi.fn() });
+    await expect(service.inviteProvider(admin, providerInput)).rejects.toMatchObject({ response: { code: 'INVITATION_REPLACED' } });
+  });
+
+  it('limits acceptance attempts by requester even when every token differs', async () => {
+    const repository = { ...repo(), findPendingProviderInvitation: vi.fn().mockResolvedValue(null) };
+    const service = new IdentityService(repository, new FakeRedis(), new TextEncoder().encode('test-secret'), { sendEmailVerification: vi.fn(), sendPasswordReset: vi.fn() });
+    for (let i = 0; i < 10; i++) await expect(service.acceptProviderInvitation(String(i).padStart(43, 'a'), 'Provider-test@123', profile, 'requester-1')).rejects.toMatchObject({ status: 400 });
+    await expect(service.acceptProviderInvitation('z'.repeat(43), 'Provider-test@123', profile, 'requester-1')).rejects.toMatchObject({ status: 429 });
   });
 
   it('rejects expired or previously accepted invitations', async () => {
     const repository = { ...repo(), acceptProviderInvitation: vi.fn().mockResolvedValue(null) };
     const service = new IdentityService(repository, new FakeRedis(), new TextEncoder().encode('test-secret'), { sendEmailVerification: vi.fn(), sendPasswordReset: vi.fn() });
-    await expect(service.acceptProviderInvitation('a'.repeat(43), 'Provider-test@123')).rejects.toMatchObject({ response: { code: 'INVALID_OR_EXPIRED_INVITATION' } });
+    await expect(service.acceptProviderInvitation('a'.repeat(43), 'Provider-test@123', profile)).rejects.toMatchObject({ response: { code: 'INVALID_OR_EXPIRED_INVITATION' } });
   });
   it('fails immediately when email token delivery is missing', () => {
     expect(() => new IdentityService(repo(), new FakeRedis(), new TextEncoder().encode('test-secret'), undefined as never))

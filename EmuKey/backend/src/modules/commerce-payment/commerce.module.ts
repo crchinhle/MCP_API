@@ -79,6 +79,7 @@ const CHAIN_CONFIGURATION = Symbol('CHAIN_CONFIGURATION');
         chainId: config.getOrThrow<number>('EVM_CHAIN_ID'),
         contractAddress: config.getOrThrow<string>('EVM_CONTRACT_ADDRESS'),
         network: config.getOrThrow<string>('EVM_NETWORK'),
+        ...(config.get<string>('EVM_NAMESPACE_CONTRACT_ADDRESS') ? { namespaceContractAddress: config.getOrThrow<string>('EVM_NAMESPACE_CONTRACT_ADDRESS') } : {}),
       }),
     },
     {

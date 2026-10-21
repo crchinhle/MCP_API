@@ -76,7 +76,6 @@ export function ProviderDashboardScreen() {
     <div className="provider-dashboard-screen">
       <PageHeader
         title="Tổng quan nhà cung cấp"
-        description="Theo dõi hoạt động và các công việc cần xử lý."
       />
       <section
         className="provider-summary-metrics"

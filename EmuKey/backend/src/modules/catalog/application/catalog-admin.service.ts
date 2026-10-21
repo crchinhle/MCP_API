@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 
 import type { AuthPrincipal } from '../../identity-access/identity.types.js';
 import type { CreatePlanDto, CreateProductDto, UpdatePlanDto, UpdateProductDto } from '../presentation/catalog.dto.js';
@@ -139,6 +139,7 @@ export class CatalogAdminService {
   private translateUnique(error: unknown, code: string): void { if ((error as { code?: string }).code === '23505') throw new ConflictException({ code, message: 'A resource with the same code already exists.' }); }
   private translate(error: unknown, notFoundCode: string): void {
     const code = error instanceof Error ? error.message : (error as { code?: string }).code;
+    if (code === 'PROVIDER_NAMESPACE_CAPABILITY_NOT_CONFIGURED') throw new ServiceUnavailableException({ code, message: 'Tính năng phát hành giấy phép cho nhà cung cấp mới chưa được cấu hình. Vui lòng liên hệ quản trị hệ thống.' });
     if (code === notFoundCode || code === 'PRODUCT_NOT_FOUND' || code === 'PLAN_NOT_FOUND') throw new NotFoundException({ code: code === 'PRODUCT_NOT_FOUND' || code === 'PLAN_NOT_FOUND' ? code : notFoundCode, message: 'Catalog resource not found.' });
     if (code === 'PRODUCT_ARCHIVED' || code === 'PLAN_ARCHIVED' || code === 'PRODUCT_NOT_DRAFT' || code === 'PLAN_NOT_DRAFT' || code === 'PRODUCT_HAS_DEPENDENCIES' || code === 'PLAN_HAS_DEPENDENCIES' || code === 'PRODUCT_ALREADY_PUBLISHED' || code === 'PLAN_ALREADY_PUBLISHED' || code === 'PRODUCT_NOT_PUBLISHED' || code === 'PLAN_NOT_PUBLISHED') throw new ConflictException({ code, message: 'The requested catalog state transition is not allowed.' });
   }

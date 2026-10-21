@@ -39,12 +39,13 @@ describe('Emukey public web screens', () => {
     try {
       render(<App initialEntries={['/system/console']} />);
       expect(screen.getByRole('heading', { name: 'Tổng quan hệ thống' })).toBeTruthy();
-      expect(screen.getAllByText('Đang kiểm tra')).toHaveLength(3);
+      expect(screen.getByRole('status', { name: 'Đang tải tổng tài khoản' })).toBeTruthy();
+      expect(screen.queryByRole('region', { name: 'Sức khỏe hệ thống' })).toBeNull();
       const work = screen.getByRole('region', { name: 'Công việc cần xử lý' });
       expect(work.textContent).not.toMatch(/\b0\b/);
       expect(screen.queryByRole('alert')).toBeNull();
       await act(async () => { release(); });
-      expect(await screen.findByText('Hoạt động')).toBeTruthy();
+      expect(await screen.findByText('Không có công việc đang chờ xử lý')).toBeTruthy();
     } finally { cleanup(); release(); vi.mocked(fetch).mockImplementation(original); }
   });
 

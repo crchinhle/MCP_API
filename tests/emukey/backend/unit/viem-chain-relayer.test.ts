@@ -36,6 +36,37 @@ const input: ChainCommandInput = {
 };
 
 describe('ViemChainRelayer', () => {
+  it('reserves a nonce for namespace issuance only on the separately configured registry', async () => {
+    const account = privateKeyToAccount(`0x${'42'.repeat(32)}`);
+    const rpc = { getChainId: vi.fn().mockResolvedValue(input.chainId), getTransactionCount: vi.fn().mockResolvedValue(1) } as unknown as ViemRelayerRpc;
+    const signer = { publicAddress: () => Promise.resolve(account.address), sign: (digest: Hex) => account.sign({ hash: digest }) };
+    const command = { ...input, payload: { providerNamespace: `0x${'44'.repeat(32)}`, protocolVersion: 3 } };
+    const options = { chainId: input.chainId, network: input.network, rpc, rpcUrl: 'http://127.0.0.1:8545', signer };
+    await expect(new ViemChainRelayer(options).getSubmissionContext(command)).rejects.toThrow('PROVIDER_NAMESPACE_CAPABILITY_NOT_CONFIGURED');
+    await expect(new ViemChainRelayer({ ...options, namespaceContractAddress: `0x${'65'.repeat(20)}` }).getSubmissionContext(command)).rejects.toThrow('PROVIDER_NAMESPACE_CAPABILITY_NOT_CONFIGURED');
+    expect(rpc.getTransactionCount).not.toHaveBeenCalled();
+    await expect(new ViemChainRelayer({ ...options, namespaceContractAddress: input.contractAddress }).getSubmissionContext(command)).resolves.toMatchObject({ pendingNonce: 1 });
+  });
+  it('keeps an already-paid namespace ISSUE on its durable origin after registry rotation', async () => {
+    const account = privateKeyToAccount(`0x${'42'.repeat(32)}`);
+    const rpc = { getChainId: vi.fn().mockResolvedValue(input.chainId), getTransactionCount: vi.fn().mockResolvedValue(1) } as unknown as ViemRelayerRpc;
+    const signer = { publicAddress: () => Promise.resolve(account.address), sign: (digest: Hex) => account.sign({ hash: digest }) };
+    const command = { ...input, payload: { providerNamespace: `0x${'44'.repeat(32)}`, protocolVersion: 3 } };
+    const options = { chainId: input.chainId, network: input.network, rpc, rpcUrl: 'http://127.0.0.1:8545', signer, namespaceContractAddress: `0x${'65'.repeat(20)}`, namespaceRegistryAddresses: vi.fn().mockResolvedValue([input.contractAddress.toLowerCase()]) };
+    await expect(new ViemChainRelayer(options).getSubmissionContext(command)).resolves.toMatchObject({ pendingNonce: 1 });
+    await expect(new ViemChainRelayer({ ...options, namespaceContractAddress: undefined }).getSubmissionContext(command)).resolves.toMatchObject({ pendingNonce: 1 });
+    await expect(new ViemChainRelayer({ ...options, namespaceRegistryAddresses: async () => [] }).getSubmissionContext(command)).rejects.toThrow('PROVIDER_NAMESPACE_CAPABILITY_NOT_CONFIGURED');
+  });
+  it('encodes namespace issuance without an address and rejects ambiguous identities', () => {
+    const { providerAddress: _address, ...payload } = input.payload;
+    const providerNamespace = `0x${'44'.repeat(32)}`;
+    const encoded = encodeChainCommand({ ...input, payload: { ...payload, providerNamespace, protocolVersion: 3 } });
+    const decoded = decodeFunctionData({ abi: licenseRegistryAbi, data: encoded });
+    expect(decoded.functionName).toBe('issueLicenseForProvider');
+    expect(decoded.args?.[2]).toBe(providerNamespace);
+    expect(() => encodeChainCommand({ ...input, payload: { ...input.payload, providerNamespace, protocolVersion: 3 } })).toThrow('CHAIN_PAYLOAD_PROVIDER_IDENTITY_AMBIGUOUS');
+    expect(() => encodeChainCommand({ ...input, payload: { ...payload, providerNamespace: `0x${'00'.repeat(32)}`, protocolVersion: 3 } })).toThrow('CHAIN_PAYLOAD_PROVIDERNAMESPACE_INVALID');
+  });
   it('encodes an empty aggregate after the last device is revoked', () => {
     const encoded = encodeChainCommand({ ...input, commandType: 'SYNC_DEVICE_COUNT',
       payload: { licenseId: input.payload.licenseId, activeDeviceCount: 0, deviceStateVersion: 2 },

@@ -23,6 +23,11 @@ function repository() {
 }
 
 describe('CatalogAdminService', () => {
+  it('explains the disabled namespace issuance capability', async () => {
+    const repo = repository();
+    vi.mocked(repo.createPlan).mockRejectedValue(new Error('PROVIDER_NAMESPACE_CAPABILITY_NOT_CONFIGURED'));
+    await expect(new CatalogAdminService(repo).createPlan(actor, { billingCycle: 'MONTHLY', code: 'ONE', durationMonths: 1, maxActiveDevices: 1, name: 'One', priceVnd: 100000, productId: product.id })).rejects.toMatchObject({ response: { code: 'PROVIDER_NAMESPACE_CAPABILITY_NOT_CONFIGURED' } });
+  });
   afterEach(() => vi.unstubAllEnvs());
 
   it.each(['javascript:alert(1)', 'data:image/png;base64,abc', 'not-a-url', '', 'https://', 'https:/example.com/a.png', 'https:///example.com/a.png', '//example.com/a.png', '/\\example.com/a.png', 'https://example.com/\na.png', '/images/\u0000a.png'])('rejects unsafe or malformed image URL %s on create and update', async (imageUrl) => {

@@ -46,7 +46,7 @@ export function ProviderOperationsScreen() {
 
   return (
     <>
-      <PageHeader title="Thanh toán & đối soát" {...(isSystem ? { description: 'Tra cứu giao dịch và kiểm tra các trường hợp đối soát bất thường.' } : {})} />
+      <PageHeader title="Thanh toán & đối soát" />
       {isSystem ? <PaymentReviewPanel /> : null}
       {isSystem ? <h2>Lịch sử thanh toán</h2> : null}
       <div className="inline-filter">

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
 
 import { CatalogController } from './presentation/catalog.controller.js';
@@ -17,7 +18,7 @@ import { ComparePlansQuery } from './application/compare-plans.query.js';
     { provide: CatalogRepository, inject: [Pool], useFactory: (pool: Pool) => new CatalogRepository(pool) },
     { provide: CatalogService, inject: [CatalogRepository], useFactory: (repo: CatalogRepository) => new CatalogService(repo) },
     { provide: ComparePlansQuery, inject: [CatalogRepository], useFactory: (repo: CatalogRepository) => new ComparePlansQuery(repo) },
-    { provide: CatalogAdminRepository, inject: [Pool], useFactory: (pool: Pool) => new CatalogAdminRepository(pool) },
+    { provide: CatalogAdminRepository, inject: [Pool, ConfigService], useFactory: (pool: Pool, config: ConfigService) => new CatalogAdminRepository(pool, !!config.get<string>('EVM_NAMESPACE_CONTRACT_ADDRESS') && config.get<number>('EVM_NAMESPACE_DEPLOYMENT_BLOCK') !== undefined) },
     { provide: CatalogAdminService, inject: [CatalogAdminRepository], useFactory: (repo: CatalogAdminRepository) => new CatalogAdminService(repo) },
   ],
 })

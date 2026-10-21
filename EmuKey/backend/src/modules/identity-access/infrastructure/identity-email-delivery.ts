@@ -4,9 +4,9 @@ import type { IdentityTokenDelivery } from '../identity.service.js';
 export class IdentityEmailDelivery implements IdentityTokenDelivery {
   constructor(private readonly email: EmailDeliveryPort) {}
 
-  async sendProviderInvitation(address: string, token: string, organizationName: string): Promise<void> {
+  async sendProviderInvitation(address: string, token: string): Promise<void> {
     await this.email.deliver({
-      data: { organizationName, token }, eventKey: `provider-invitation:${address}`,
+      data: { token }, eventKey: `provider-invitation:${address}`,
       template: 'identity-provider-invitation-v1', to: address,
     });
   }

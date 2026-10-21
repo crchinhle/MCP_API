@@ -1,12 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import type { Address, Hex } from 'viem';
+import { keccak256, stringToHex, type Address, type Hex } from 'viem';
 
 import {
   activationCommitment,
   canonicalizeEntitlements,
   planCommitment,
+  planCommitmentForProvider,
+  providerNamespaceDigest,
   uuidToBytes16,
 } from '../../../../../EmuKey/backend/src/platform/crypto/license-crypto.js';
 
@@ -47,5 +49,17 @@ describe('license cryptographic protocol V2', () => {
 
   it('keeps activation commitment deterministic', () => {
     expect(activationCommitment(vector.activation.secret)).toBe(vector.activation.commitment);
+  });
+
+  it('separates opaque provider namespaces and preserves the V2 domain', () => {
+    const namespace = 'provider-00000000-0000-4000-8000-000000000001';
+    expect(providerNamespaceDigest(namespace)).toBe(keccak256(stringToHex(`EMUKEY_PROVIDER_NAMESPACE_V1:${namespace}`)));
+    expect(providerNamespaceDigest(namespace.toUpperCase())).toBe(providerNamespaceDigest(namespace));
+    expect(providerNamespaceDigest(namespace)).not.toBe(providerNamespaceDigest(`${namespace}2`));
+    const input = { ...vector.plan, entitlements: vector.entitlements.value, providerNamespace: providerNamespaceDigest(namespace) };
+    expect(planCommitmentForProvider(input)).not.toBe(vector.plan.commitment);
+    expect(planCommitmentForProvider(input)).not.toBe(planCommitmentForProvider({ ...input, providerNamespace: providerNamespaceDigest(`${namespace}2`) }));
+    expect(() => providerNamespaceDigest('')).toThrow('Invalid provider namespace');
+    expect(() => planCommitmentForProvider({ ...input, providerNamespace: `0x${'00'.repeat(32)}` })).toThrow('Invalid provider namespace digest');
   });
 });

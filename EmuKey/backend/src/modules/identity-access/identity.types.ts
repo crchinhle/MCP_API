@@ -16,11 +16,14 @@ export interface AuthPrincipal { sub: string; role: Role; sessionVersion: number
 
 export interface ProviderInvitationInput {
   email: string;
+}
+
+export interface ProviderOnboardingInput {
   displayName: string;
   organizationName: string;
-  providerChainAddress: string;
-  providerChainNamespace: string;
 }
+
+export interface ProviderInvitationPreview { email: string; expiresAt: string; }
 
 export interface ProviderInvitation extends ProviderInvitationInput {
   id: string;

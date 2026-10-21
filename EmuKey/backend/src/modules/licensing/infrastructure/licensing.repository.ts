@@ -398,8 +398,11 @@ export class LicensingRepository {
       basis_chain_event_id: string | null;
       id: string;
       license_command_sequence: string;
+      network: string;
+      chain_id: string;
+      contract_address: string;
     }>(
-      `SELECT latest.id, latest.license_command_sequence,
+      `SELECT latest.id, latest.license_command_sequence, issue.network, issue.chain_id, issue.contract_address,
               (
                 SELECT confirmed.confirmation_chain_event_id
                 FROM chain_commands confirmed
@@ -410,15 +413,23 @@ export class LicensingRepository {
                 LIMIT 1
               ) AS basis_chain_event_id
        FROM chain_commands latest
+       JOIN LATERAL (
+         SELECT issuance.network, issuance.chain_id, issuance.contract_address FROM chain_commands issuance
+         WHERE issuance.license_id=latest.license_id AND issuance.command_type='ISSUE_LICENSE'
+         ORDER BY issuance.license_command_sequence LIMIT 1
+       ) issue ON true
        WHERE latest.license_id=$1
        ORDER BY latest.license_command_sequence DESC
        LIMIT 1
-       FOR UPDATE`,
+       FOR UPDATE OF latest`,
       [license.id],
     );
     const previous = predecessor.rows[0];
     if (!previous || !previous.basis_chain_event_id) {
       throw new Error('LICENSE_CANONICAL_BASIS_NOT_FOUND');
+    }
+    if (Number(previous.chain_id) !== config.chainId || previous.network.toLowerCase() !== config.network.toLowerCase()) {
+      throw new Error('LICENSE_ORIGINAL_CHAIN_NOT_CONFIGURED');
     }
     const commandSequence = Number(previous.license_command_sequence) + 1;
     const result = await client.query<Record<string, unknown>>(
@@ -437,9 +448,9 @@ export class LicensingRepository {
         commandSequence,
         previous.id,
         previous.basis_chain_event_id,
-        config.network.toLowerCase(),
-        config.chainId,
-        config.contractAddress.toLowerCase(),
+        previous.network.toLowerCase(),
+        Number(previous.chain_id),
+        previous.contract_address.toLowerCase(),
         JSON.stringify(payload),
         hashPayload(payload).slice(2),
       ],

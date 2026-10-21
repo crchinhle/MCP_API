@@ -10,8 +10,10 @@ import { BlockchainReconciliationService } from './application/blockchain-reconc
 import { ChainIndexerService } from './application/chain-indexer.service.js';
 import {
   CHAIN_RPC_INDEXER,
+  CompositeChainRpcIndexer,
   RpcChainIndexerService,
   type ChainRpcIndexerPort,
+  type RegistryIndexerRegistration,
 } from './application/rpc-chain-indexer.service.js';
 import { LicenseQueryService } from './application/license-query.service.js';
 import {
@@ -63,8 +65,8 @@ import {
     },
     {
       provide: CHAIN_RELAYER,
-      inject: [ConfigService],
-      useFactory: async (config: ConfigService): Promise<ChainRelayerPort> => {
+      inject: [ConfigService, ChainIndexerCheckpointRepository],
+      useFactory: async (config: ConfigService, checkpoints: ChainIndexerCheckpointRepository): Promise<ChainRelayerPort> => {
         const adapter = config.getOrThrow<string>('EVM_ADAPTER');
         if (adapter !== 'viem') {
           throw new Error(`EVM adapter ${adapter} is not configured`);
@@ -83,6 +85,10 @@ import {
           ...(fallbackRpcUrl ? { fallbackRpcUrl } : {}),
           network: config.getOrThrow<string>('EVM_NETWORK'),
           rpcUrl: config.getOrThrow<string>('EVM_RPC_HTTP_URL'),
+          ...(config.get<string>('EVM_NAMESPACE_CONTRACT_ADDRESS') ? { namespaceContractAddress: config.getOrThrow<string>('EVM_NAMESPACE_CONTRACT_ADDRESS') } : {}),
+          namespaceRegistryAddresses: async () => (await checkpoints.namespaceRegistryOrigins({
+            network: config.getOrThrow<string>('EVM_NETWORK'), chainId: config.getOrThrow<number>('EVM_CHAIN_ID'),
+          })).map((owner) => owner.contractAddress),
           signer,
         });
       },
@@ -166,18 +172,24 @@ import {
           network: config.getOrThrow<string>('EVM_NETWORK'),
           requiredConfirmations: config.getOrThrow<number>('EVM_CONFIRMATIONS'),
         };
-        return new RpcChainIndexerService(
-          checkpoints,
-          indexer,
-          new ViemChainEventSource({
-            chainId: options.chainId,
-            contractAddress: options.contractAddress as `0x${string}`,
-            ...(fallbackRpcUrl ? { fallbackRpcUrl } : {}),
-            network: options.network,
-            rpcUrl: config.getOrThrow<string>('EVM_RPC_HTTP_URL'),
-          }),
-          options,
-        );
+        const createIndexer = (owner: typeof options) => new RpcChainIndexerService(checkpoints, indexer, new ViemChainEventSource({
+          chainId: owner.chainId, contractAddress: owner.contractAddress as `0x${string}`,
+          ...(fallbackRpcUrl ? { fallbackRpcUrl } : {}), network: owner.network,
+          rpcUrl: config.getOrThrow<string>('EVM_RPC_HTTP_URL'),
+        }), owner);
+        const legacy = createIndexer(options);
+        const namespaceAddress = config.get<string>('EVM_NAMESPACE_CONTRACT_ADDRESS');
+        const configured: [RegistryIndexerRegistration, ...RegistryIndexerRegistration[]] = [{ owner: options, indexer: legacy }];
+        if (namespaceAddress) {
+          const namespaceOptions = { ...options, contractAddress: namespaceAddress, deploymentBlock: config.getOrThrow<number>('EVM_NAMESPACE_DEPLOYMENT_BLOCK') };
+          configured.push({ owner: namespaceOptions, indexer: createIndexer(namespaceOptions) });
+        }
+        return new CompositeChainRpcIndexer(configured, {
+          knownRegistries: () => checkpoints.namespaceRegistryOrigins(options),
+          // Existing cursors resume with their normal overlap. If an origin has
+          // no cursor, replay from genesis rather than invent a deployment bound.
+          createIndexer: (owner) => createIndexer({ ...options, ...owner, deploymentBlock: 0 }),
+        });
       },
     },
     {

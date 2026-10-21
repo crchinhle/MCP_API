@@ -30,7 +30,6 @@ export function PublicHelpScreen() {
       <main className="public-help-content">
         <section aria-labelledby="public-help-title" className="public-help-card">
           <h1 id="public-help-title">Hướng dẫn sử dụng EmuKey</h1>
-          <p>Từ chọn phần mềm đến quản lý bản quyền, bạn có thể theo dõi từng bước trong tài khoản của mình.</p>
           <Input.Search
             allowClear
             aria-label="Tìm trong hướng dẫn"

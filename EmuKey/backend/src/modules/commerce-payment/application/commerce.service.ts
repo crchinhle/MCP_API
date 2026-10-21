@@ -7,6 +7,7 @@ import {
   Injectable,
   NotFoundException,
   UnauthorizedException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { keccak256, stringToHex, type Hex } from 'viem';
 
@@ -63,6 +64,7 @@ export class CommerceService {
         dto.planId,
         dto.targetLicenseId,
         await this.serviceTerms.loadServiceTermsArtifact(),
+        this.chain,
       );
     } catch (error) {
       this.translate(error);
@@ -167,7 +169,7 @@ export class CommerceService {
     if (!order) this.notFound();
     let preparation;
     try {
-      preparation = await this.repository.prepareCheckout(actor.sub, id);
+      preparation = await this.repository.prepareCheckout(actor.sub, id, this.chain);
     } catch (error) {
       this.translate(error);
       throw error;
@@ -373,6 +375,7 @@ export class CommerceService {
 
   private translate(error: unknown): void {
     const code = error instanceof Error ? error.message : '';
+    if (code === 'PROVIDER_NAMESPACE_CAPABILITY_NOT_CONFIGURED') throw new ServiceUnavailableException({ code, message: 'Nhà cung cấp chưa được bật tính năng phát hành giấy phép. Vui lòng thử lại sau hoặc liên hệ quản trị hệ thống.' });
     if (
       code === 'PLAN_NOT_FOUND' ||
       code === 'RENEWAL_LICENSE_NOT_FOUND' ||

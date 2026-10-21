@@ -5,6 +5,7 @@ import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 contract LicenseRegistry is AccessControl {
     bytes32 public constant RELAYER_ROLE = keccak256("RELAYER_ROLE");
     bytes32 public constant DOMAIN_PLAN_V2 = keccak256("LICENSE_PLAN_COMMITMENT_V2");
+    bytes32 public constant DOMAIN_PLAN_V3 = keccak256("LICENSE_PLAN_COMMITMENT_V3");
 
     enum LicenseStatus { NONE, ACTIVE, SUSPENDED, REVOKED, EXPIRED }
 
@@ -24,8 +25,10 @@ contract LicenseRegistry is AccessControl {
     }
 
     mapping(bytes16 licenseId => LicenseData) private licenses;
+    mapping(bytes16 licenseId => bytes32) public providerNamespaceForLicense;
     mapping(bytes16 commandId => bool) public processedCommands;
     event LicenseIssued(bytes16 indexed commandId, bytes16 indexed licenseId, address indexed provider, bytes32 planCommitment, bytes32 activationCommitment, uint256 activationKeyVersion, uint256 expiresAt);
+    event LicenseIssuedForProvider(bytes16 indexed commandId, bytes16 indexed licenseId, bytes32 indexed providerNamespace, bytes32 planCommitment, bytes32 activationCommitment, uint256 activationKeyVersion, uint256 expiresAt);
     event LicenseRenewed(bytes16 indexed commandId, bytes16 indexed licenseId, uint256 expiresAt);
     event LicenseStatusChanged(bytes16 indexed commandId, bytes16 indexed licenseId, LicenseStatus status);
     event ActivationKeyRotated(bytes16 indexed commandId, bytes16 indexed licenseId, bytes32 activationCommitment, uint256 activationKeyVersion);
@@ -97,6 +100,50 @@ contract LicenseRegistry is AccessControl {
             status: LicenseStatus.ACTIVE
         });
         emit LicenseIssued(commandId, licenseId, provider, planCommitment, activationCommitment, activationKeyVersion, expiresAt);
+    }
+
+    function computePlanCommitmentForProvider(
+        bytes32 providerNamespace,
+        bytes16 productId,
+        bytes16 planId,
+        uint256 planVersion,
+        uint256 durationMonths,
+        uint256 maxActiveDevices,
+        bytes32 entitlementsHash
+    ) public pure returns (bytes32) {
+        return keccak256(abi.encode(DOMAIN_PLAN_V3, providerNamespace, productId, planId, planVersion, durationMonths, maxActiveDevices, entitlementsHash));
+    }
+
+    function issueLicenseForProvider(
+        bytes16 commandId,
+        bytes16 licenseId,
+        bytes32 providerNamespace,
+        bytes16 productId,
+        bytes16 planId,
+        uint256 planVersion,
+        bytes32 planCommitment,
+        bytes32 activationCommitment,
+        uint256 activationKeyVersion,
+        uint256 maxActiveDevices,
+        uint256 expiresAt
+    ) external onlyRole(RELAYER_ROLE) {
+        _consume(commandId);
+        if (
+            licenseId == bytes16(0) || providerNamespace == bytes32(0) ||
+            planVersion == 0 || planCommitment == bytes32(0) || activationCommitment == bytes32(0) ||
+            activationKeyVersion == 0 || maxActiveDevices == 0 || expiresAt <= block.timestamp
+        ) revert InvalidInput();
+        if (licenses[licenseId].status != LicenseStatus.NONE) revert InvalidState();
+        // Namespace-native records have no Provider wallet; preserve the legacy read tuple.
+        licenses[licenseId] = LicenseData({
+            provider: address(0), productId: productId, planId: planId,
+            planVersion: planVersion, planCommitment: planCommitment,
+            activationCommitment: activationCommitment, activationKeyVersion: activationKeyVersion,
+            maxActiveDevices: maxActiveDevices, activeDevices: 0, deviceStateVersion: 0,
+            expiresAt: expiresAt, status: LicenseStatus.ACTIVE
+        });
+        providerNamespaceForLicense[licenseId] = providerNamespace;
+        emit LicenseIssuedForProvider(commandId, licenseId, providerNamespace, planCommitment, activationCommitment, activationKeyVersion, expiresAt);
     }
 
     function renewLicense(bytes16 commandId, bytes16 licenseId, uint256 expiresAt)

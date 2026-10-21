@@ -62,7 +62,7 @@ test('provider mobile navigation traps focus and restores it on Escape', async (
   await page.goto('/provider');
   const trigger = page.getByRole('button', { name: 'Mở menu vai trò', exact: true });
   await trigger.click();
-  const menu = page.getByRole('dialog', { name: 'Menu NHÀ CUNG CẤP' });
+  const menu = page.getByRole('dialog', { name: 'Menu điều hướng' });
   await expect(menu.getByRole('button', { name: 'Đóng menu', exact: true })).toBeFocused();
   await page.keyboard.press('Shift+Tab');
   await expect(menu.getByRole('button', { name: 'Đăng xuất', exact: true })).toBeFocused();
@@ -74,6 +74,21 @@ test('provider mobile navigation traps focus and restores it on Escape', async (
 });
 
 // Navigation/empty-state checks with an isolated API; these are not live integration evidence.
+for (const width of [390, 1280]) {
+  test(`public and auth pages keep titles without introductions at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.route('**/api/v1/**', (route) => route.fulfill(route.request().url().endsWith('/auth/refresh')
+      ? { status: 401, json: { message: 'Unauthorized' } }
+      : { json: [] }));
+    for (const path of ['/', '/catalog', '/compare', '/verify', '/help', '/auth', '/auth?mode=register', '/auth?mode=forgot', '/auth?mode=verify']) {
+      await page.goto(path);
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+      await expect(page.locator('h1 + p, .auth-card > p')).toHaveCount(0);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    }
+  });
+}
+
 const workspaces = [
   { role: 'PROVIDER_ADMIN', routes: [
     ['/provider', 'Tổng quan nhà cung cấp'],
@@ -120,10 +135,12 @@ for (const workspace of workspaces) {
       for (const [path, heading] of workspace.routes) {
         await page.goto(path);
         await expect(page.getByRole('heading', { name: heading, exact: true }).first()).toBeVisible();
+        await expect(page.locator('.role-label')).toHaveCount(0);
+        await expect(page.locator('.workspace-page-header p, .catalog-help')).toHaveCount(0);
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
       }
       if (width <= 760) await page.getByRole('button', { name: 'Mở menu vai trò' }).click();
-      if (workspace.role === 'PROVIDER_ADMIN') {
+      if (workspace.role === 'PROVIDER_ADMIN' || workspace.role === 'SYSTEM_ADMIN') {
         await expect(page.getByRole('button', { name: 'Thông báo', exact: true })).toHaveCount(0);
       } else {
         await page.getByRole('button', { name: 'Thông báo', exact: true }).click();

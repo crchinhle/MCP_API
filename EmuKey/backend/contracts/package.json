@@ -6,6 +6,7 @@
     "build": "hardhat compile",
     "abi:export": "node scripts/export-abi.mjs",
     "deploy:sepolia": "node --env-file-if-exists=../.env scripts/deploy-sepolia.mjs",
+    "deploy:namespace:sepolia": "node --env-file-if-exists=../.env scripts/deploy-sepolia.mjs --namespace",
     "deployment:show": "node scripts/print-deployment.mjs"
   },
   "devDependencies": {

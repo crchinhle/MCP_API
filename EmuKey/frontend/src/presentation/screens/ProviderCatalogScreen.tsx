@@ -194,7 +194,6 @@ export function ProviderCatalogScreen() {
       {contextHolder}
       {modalContextHolder}
       <PageHeader title="Sản phẩm và gói bán" action={<Button type="primary" onClick={() => openProduct()}>Thêm sản phẩm</Button>} />
-      <p className="catalog-help">Quản lý sản phẩm và các gói giá bán. Chọn một sản phẩm để xem và chỉnh sửa gói của sản phẩm đó.</p>
       <div className="inline-filter"><Input.Search aria-label="Tìm sản phẩm hoặc gói" placeholder="Tìm theo tên hoặc mã" value={query} onChange={(event) => setQuery(event.target.value)} /><Select aria-label="Lọc trạng thái sản phẩm" value={statusFilter} onChange={setStatusFilter} options={[{value:'',label:'Tất cả trạng thái'},{value:'DRAFT',label:'Bản nháp'},{value:'PUBLISHED',label:'Đã công bố'},{value:'ARCHIVED',label:'Đã lưu trữ'}]} /><Select aria-label="Sắp xếp sản phẩm" value={sortBy} onChange={setSortBy} options={[{value:'name',label:'Tên A–Z'},{value:'name-desc',label:'Tên Z–A'},{value:'status',label:'Trạng thái'}]} /></div>
       {catalogError ? <Alert showIcon type="error" message="Không thể tải danh mục quản trị." description={describeApiError(catalogError, 'Kiểm tra quyền PROVIDER_ADMIN hoặc thử lại.')} action={<Button onClick={() => { void products.refetch(); void plans.refetch(); }}>Thử lại</Button>} /> : null}
         {plans.isError ? <Alert type="error" title="Không thể tải danh sách gói." action={<Button disabled={plans.isFetching} onClick={() => void plans.refetch()}>Thử lại</Button>} /> : null}

@@ -62,7 +62,6 @@ export function ComparePlansScreen() {
         <section className="catalog-hero comparison-hero">
           <div>
             <h1>So sánh gói bản quyền</h1>
-            <p>Chọn từ hai đến bốn gói để đối chiếu giá, thời hạn, số thiết bị và quyền lợi.</p>
             <Input aria-label="Tìm gói so sánh" placeholder="Tìm sản phẩm hoặc tên gói" value={query} onChange={(event) => setQuery(event.target.value)} />
             <p>Đã chọn {selectedIds.length}/4 gói</p>
             {selectedIds.length ? <Button onClick={() => setSelectedIds([])}>Bỏ chọn tất cả</Button> : null}

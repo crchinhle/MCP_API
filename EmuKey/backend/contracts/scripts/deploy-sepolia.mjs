@@ -5,7 +5,8 @@ import { createPublicClient, encodeDeployData, http } from 'viem';
 import { mnemonicToAccount, privateKeyToAccount } from 'viem/accounts';
 
 const root = resolve(import.meta.dirname, '..');
-const deploymentId = 'sepolia-v3';
+const namespaceDeployment = process.argv.includes('--namespace');
+const deploymentId = namespaceDeployment ? 'sepolia-namespace-v1' : 'sepolia-v3';
 const json = async (path) => JSON.parse(await readFile(resolve(root, path), 'utf8'));
 
 try {
@@ -20,6 +21,7 @@ try {
   if (await client.getChainId() !== 11155111) throw new Error('SEPOLIA_CHAIN_ID_REQUIRED');
   const artifact = await json('artifacts/solidity/LicenseRegistry.sol/LicenseRegistry.json');
   if (!artifact.abi.some((entry) => entry.name === 'syncActiveDeviceCount')) throw new Error('CURRENT_ABI_REQUIRED');
+  if (namespaceDeployment && !artifact.abi.some((entry) => entry.name === 'issueLicenseForProvider')) throw new Error('NAMESPACE_ABI_REQUIRED');
   const data = encodeDeployData({ abi: artifact.abi, bytecode: artifact.bytecode, args: [account.address, account.address] });
   const [balance, gas, fees] = await Promise.all([
     client.getBalance({ address: account.address }),
@@ -52,10 +54,12 @@ try {
     deploymentTransaction: receipt.transactionHash, deploymentBlock: Number(receipt.blockNumber),
     deployerAddress: account.address, deployedAt: new Date(Number(block.timestamp) * 1000).toISOString(),
     abiPath: '../../src/modules/blockchain/infrastructure/generated/license-registry.abi.json',
-    deploymentVersion: 3, protocolVersion: 2, domain: 'DOMAIN_PLAN_V2', deviceAggregateSync: true,
+    deploymentVersion: namespaceDeployment ? 1 : 3, protocolVersion: namespaceDeployment ? 3 : 2,
+    domain: namespaceDeployment ? 'DOMAIN_PLAN_V3' : 'DOMAIN_PLAN_V2', deviceAggregateSync: true,
+    ...(namespaceDeployment ? { providerNamespaces: true } : {}),
     ignitionDeploymentId: deploymentId, bytecodeVerified: true,
   };
-  await writeFile(resolve(root, 'deployments/sepolia-v3.json'), `${JSON.stringify(metadata, null, 2)}\n`);
+  await writeFile(resolve(root, `deployments/${deploymentId}.json`), `${JSON.stringify(metadata, null, 2)}\n`);
   console.log(JSON.stringify(metadata));
 } catch (error) {
   const safe = error instanceof Error && /^[A-Z_]+$/.test(error.message) ? error.message : 'SEPOLIA_DEPLOYMENT_UNAVAILABLE';

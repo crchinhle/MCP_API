@@ -8,7 +8,7 @@ export function SystemBlockchainPanel() {
   const [confirming, setConfirming] = useState(false);
   const result = reconciliation.data;
   return <div className="system-screen">
-    <PageHeader title="Đối soát blockchain" description="Kiểm tra và đồng bộ trạng thái giữa dữ liệu hệ thống và các sự kiện blockchain." />
+    <PageHeader title="Đối soát blockchain" />
     <section className="workspace-card system-section" aria-label="Chạy đối soát blockchain">
       <div className="section-heading"><h2>Kiểm tra và đồng bộ</h2><Button type="primary" loading={reconciliation.isPending} onClick={() => setConfirming(true)}>Chạy đối soát</Button></div>
       <p className="muted-copy">Tác vụ kiểm tra biên nhận, tiếp nhận sự kiện và cập nhật dữ liệu hệ thống theo chuỗi đã xác nhận. Các sai lệch còn lại sẽ được báo cáo trong kết quả.</p>

@@ -5,6 +5,7 @@ import { App } from '../../../EmuKey/frontend/src/presentation/app/App';
 import { AuthProvider } from '../../../EmuKey/frontend/src/application/auth/authContext';
 import { AuthScreen } from '../../../EmuKey/frontend/src/presentation/screens/AuthScreen';
 import { MemoryRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 afterEach(cleanup);
 
@@ -28,6 +29,8 @@ describe('W17-W18 Internal consoles', () => {
 
   it('offers the system account actions in one accessible menu', async () => {
     render(<App initialEntries={['/system/console']} />);
+    expect(screen.queryByRole('link', { name: 'Hồ sơ', exact: true })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Thông báo', exact: true })).toBeNull();
     fireEvent.click(await screen.findByRole('button', { name: 'Mở menu tài khoản Test User' }));
     expect(await screen.findByRole('menuitem', { name: /Hồ sơ tài khoản/ })).toBeTruthy();
     fireEvent.click(screen.getByRole('menuitem', { name: /Đổi mật khẩu/ }));
@@ -59,11 +62,13 @@ describe('W17-W18 Internal consoles', () => {
       return original(input, init);
     });
     try {
-      render(<MemoryRouter initialEntries={[`/auth?mode=provider-invite&token=${'a'.repeat(43)}`]}><AuthProvider skipBootstrap initialUser={{ id: 'admin-1', email: 'admin@example.test', displayName: 'Admin', role: 'SYSTEM_ADMIN', status: 'ACTIVE' }}><AuthScreen /></AuthProvider></MemoryRouter>);
-      fireEvent.change(await screen.findByLabelText('Mật khẩu mới'), { target: { value: 'Provider-test@123' } });
+      render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><MemoryRouter initialEntries={[`/auth?mode=provider-invite&token=${'a'.repeat(43)}`]}><AuthProvider skipBootstrap initialUser={{ id: 'admin-1', email: 'admin@example.test', displayName: 'Admin', role: 'SYSTEM_ADMIN', status: 'ACTIVE' }}><AuthScreen /></AuthProvider></MemoryRouter></QueryClientProvider>);
+      fireEvent.change(await screen.findByLabelText('Tên người đại diện'), { target: { value: 'Provider Owner' } });
+      fireEvent.change(screen.getByLabelText('Tên tổ chức'), { target: { value: 'Provider Ltd' } });
+      fireEvent.change(screen.getByLabelText('Mật khẩu'), { target: { value: 'Provider-test@123' } });
       fireEvent.change(screen.getByLabelText('Xác nhận mật khẩu'), { target: { value: 'Provider-test@123' } });
-      fireEvent.click(screen.getByRole('button', { name: 'Kích hoạt tài khoản Provider' }));
-      fireEvent.click(await screen.findByRole('button', { name: 'Đăng nhập bằng tài khoản Provider' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Hoàn tất đăng ký' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Đăng nhập', exact: true }));
       expect(await screen.findByRole('heading', { name: 'Chào mừng trở lại' })).toBeTruthy();
       expect(signedOut).toBe(true);
     } finally { vi.mocked(fetch).mockImplementation(original); }
@@ -74,7 +79,7 @@ describe('W17-W18 Internal consoles', () => {
     vi.mocked(fetch).mockImplementation(async (input, init) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
       if (url.endsWith('/auth/provider-invitations')) {
-        if (init?.method === 'POST') { payload = JSON.parse(String(init.body)); return Response.json({ id: 'invite-1', email: payload!.email }); }
+        if (init?.method === 'POST') { payload = JSON.parse(String(init.body)); return Response.json({ id: 'invite-1', email: payload!.email, sentAt: '2026-10-21T00:00:00Z' }); }
         return Response.json([]);
       }
       return original(input, init);
@@ -83,13 +88,14 @@ describe('W17-W18 Internal consoles', () => {
       render(<App initialEntries={['/system/console?view=users']} />);
       fireEvent.click(await screen.findByRole('button', { name: 'Mời nhà cung cấp' }));
       const dialog = screen.getByRole('dialog');
-      for (const [label, value] of [
-        ['Email nhà cung cấp', 'provider@example.test'], ['Tên người đại diện', 'Provider Owner'],
-        ['Tên tổ chức', 'Provider Ltd'], ['Địa chỉ EVM công khai', `0x${'ab'.repeat(20)}`], ['Namespace nhà cung cấp', 'provider-ltd'],
-      ]) fireEvent.change(within(dialog).getByLabelText(label), { target: { value } });
+      fireEvent.change(within(dialog).getByLabelText('Email nhà cung cấp'), { target: { value: ' Provider@Example.test ' } });
+      expect(within(dialog).getAllByRole('textbox')).toHaveLength(1);
+      expect(within(dialog).queryByLabelText('Tên người đại diện')).toBeNull();
+      expect(within(dialog).queryByLabelText('Địa chỉ EVM công khai')).toBeNull();
       expect(within(dialog).queryByLabelText('Mật khẩu')).toBeNull();
       fireEvent.click(within(dialog).getByRole('button', { name: 'Gửi lời mời' }));
       await waitFor(() => expect(payload?.email).toBe('provider@example.test'));
+      expect(payload).toEqual({ email: 'provider@example.test' });
       expect(payload).not.toHaveProperty('password');
       expect(payload).not.toHaveProperty('role');
       expect(await screen.findByText('Đã gửi email mời nhà cung cấp.')).toBeTruthy();
@@ -109,11 +115,41 @@ describe('W17-W18 Internal consoles', () => {
     });
     try {
       render(<App initialEntries={[`/auth?mode=provider-invite&token=${'a'.repeat(43)}`]} />);
-      fireEvent.change(await screen.findByLabelText('Mật khẩu mới'), { target: { value: 'Provider-test@123' } });
+      fireEvent.change(await screen.findByLabelText('Tên người đại diện'), { target: { value: 'Provider Owner' } });
+      fireEvent.change(screen.getByLabelText('Tên tổ chức'), { target: { value: 'Provider Ltd' } });
+      fireEvent.change(screen.getByLabelText('Mật khẩu'), { target: { value: 'Provider-test@123' } });
       fireEvent.change(screen.getByLabelText('Xác nhận mật khẩu'), { target: { value: 'Provider-test@123' } });
-      fireEvent.click(screen.getByRole('button', { name: 'Kích hoạt tài khoản Provider' }));
-      await waitFor(() => expect(activation).toEqual({ token: 'a'.repeat(43), password: 'Provider-test@123' }));
-      expect(await screen.findByText('Tài khoản Provider đã được kích hoạt. Bạn có thể đăng nhập.')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Hoàn tất đăng ký' }));
+      await waitFor(() => expect(activation).toEqual({ token: 'a'.repeat(43), password: 'Provider-test@123', displayName: 'Provider Owner', organizationName: 'Provider Ltd' }));
+      expect(await screen.findByText('Tài khoản nhà cung cấp đã được tạo. Bạn có thể đăng nhập.')).toBeTruthy();
+    } finally { vi.mocked(fetch).mockImplementation(original); }
+  });
+
+  it('does not show onboarding fields when the server rejects an expired or consumed invitation', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation((input, init) => String(input).endsWith('/auth/provider-invitations/inspect')
+      ? Promise.resolve(Response.json({ code: 'INVALID_OR_EXPIRED_INVITATION' }, { status: 400 })) : original(input, init));
+    try {
+      render(<App initialEntries={[`/auth?mode=provider-invite&token=${'b'.repeat(43)}`]} />);
+      expect(await screen.findByText('Lời mời không hợp lệ, đã hết hạn hoặc đã được sử dụng.')).toBeTruthy();
+      expect(screen.queryByLabelText('Tên người đại diện')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Hoàn tất đăng ký' })).toBeNull();
+    } finally { vi.mocked(fetch).mockImplementation(original); }
+  });
+
+  it('keeps a delivery failure visible and retains the email for retry without reporting sent mail', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation((input, init) => String(input).endsWith('/auth/provider-invitations') && init?.method === 'POST'
+      ? Promise.resolve(Response.json({ code: 'INVITATION_EMAIL_FAILED' }, { status: 503 })) : original(input, init));
+    try {
+      render(<App initialEntries={['/system/console?view=users']} />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Mời nhà cung cấp' }));
+      const modal = await screen.findByRole('dialog');
+      fireEvent.change(within(modal).getByLabelText('Email nhà cung cấp'), { target: { value: 'provider@example.test' } });
+      fireEvent.click(within(modal).getByRole('button', { name: 'Gửi lời mời' }));
+      expect(await within(modal).findByText('Lời mời đã lưu nhưng chưa xác nhận gửi email thành công. Hãy kiểm tra danh sách và gửi lại.')).toBeTruthy();
+      expect(within(modal).getByLabelText<HTMLInputElement>('Email nhà cung cấp').value).toBe('provider@example.test');
+      expect(screen.queryByText('Đã gửi email mời nhà cung cấp.')).toBeNull();
     } finally { vi.mocked(fetch).mockImplementation(original); }
   });
   it('renders an empty support queue when the real API has no conversations', () => {
@@ -245,27 +281,6 @@ describe('W17-W18 Internal consoles', () => {
     }
   });
 
-  it('retries System readiness checks after a temporary failure', async () => {
-    const original = vi.mocked(fetch).getMockImplementation()!;
-    let fail = true;
-    vi.mocked(fetch).mockImplementation(async (input, init) => {
-      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-      if (fail && url.endsWith('/health/ready') && (!init?.method || init.method === 'GET')) {
-        fail = false;
-        return Response.json({ message: 'Unavailable' }, { status: 500 });
-      }
-      return original(input, init);
-    });
-    try {
-      render(<App initialEntries={['/system/console']} />);
-      expect(await screen.findByText('Không thể truy vấn tình trạng dịch vụ.')).toBeTruthy();
-      fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
-      expect(await screen.findByText('Tình trạng dịch vụ')).toBeTruthy();
-    } finally {
-      vi.mocked(fetch).mockImplementation(original);
-    }
-  });
-
   it('retries a failed System blockchain reconciliation on explicit request', async () => {
     const original = vi.mocked(fetch).getMockImplementation()!;
     let attempts = 0;
@@ -311,12 +326,12 @@ describe('W17-W18 Internal consoles', () => {
     }
   });
 
-  it('retries loading System assistance health after a temporary failure', async () => {
+  it('retries loading the System invitation summary after a temporary failure', async () => {
     const original = vi.mocked(fetch).getMockImplementation()!;
     let fail = true;
     vi.mocked(fetch).mockImplementation(async (input, init) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-      if (fail && url.endsWith('/operations/health/assistance') && (!init?.method || init.method === 'GET')) {
+      if (fail && url.endsWith('/auth/provider-invitations') && (!init?.method || init.method === 'GET')) {
         fail = false;
         return Response.json({ message: 'Unavailable' }, { status: 500 });
       }
@@ -324,10 +339,10 @@ describe('W17-W18 Internal consoles', () => {
     });
     try {
       render(<App initialEntries={['/system/console']} />);
-      expect(await screen.findByText('Không thể tải tình trạng thông báo và hỗ trợ.')).toBeTruthy();
+      expect(await screen.findByText('Không thể tải lời mời nhà cung cấp.')).toBeTruthy();
       fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
-      expect(await screen.findByText('Tình trạng dịch vụ')).toBeTruthy();
-      await waitFor(() => expect(screen.queryByText('Không thể tải tình trạng thông báo và hỗ trợ.')).toBeNull());
+      expect(await screen.findByText('Chưa có lời mời đang chờ.')).toBeTruthy();
+      await waitFor(() => expect(screen.queryByText('Không thể tải lời mời nhà cung cấp.')).toBeNull());
     } finally {
       vi.mocked(fetch).mockImplementation(original);
     }

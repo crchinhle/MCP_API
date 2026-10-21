@@ -94,16 +94,14 @@ export const paymentReviewLabels: Record<string, string> = { OPEN: 'Chờ kiểm
 
 interface PageHeaderProps {
   readonly title: string;
-  readonly description?: string;
   readonly action?: ReactNode;
 }
 
-export function PageHeader({ title, description, action }: PageHeaderProps) {
+export function PageHeader({ title, action }: PageHeaderProps) {
   return (
     <header className="workspace-page-header">
       <div>
         <h1>{title}</h1>
-        {description ? <p>{description}</p> : null}
       </div>
       {action}
     </header>

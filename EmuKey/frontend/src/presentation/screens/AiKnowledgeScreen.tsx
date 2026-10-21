@@ -3,6 +3,7 @@ import { LoadingOverlay } from '../components/WorkspacePrimitives';
 import { Alert, Button, Drawer, Empty, Input, Modal, Select, Table, Upload, message } from 'antd';
 import type { UploadProps } from 'antd';
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { useAdminProducts } from '../../application/catalog/catalogQueries';
 import { knowledgeDocumentState, useCreateKnowledgeDocument, useKnowledgeDocument, useKnowledgeDocuments, usePublishKnowledgeDocument } from '../../application/assistance/knowledgeQueries';
@@ -15,7 +16,13 @@ export function AiKnowledgeScreen() {
   const canApprove = user?.role === 'SYSTEM_ADMIN';
   const publish = usePublishKnowledgeDocument();
   const [query, setQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState(canApprove ? 'READY' : '');
+  const [params, setParams] = useSearchParams();
+  const statusFilter = params.get('status') ?? (canApprove ? 'READY' : '');
+  const setStatusFilter = (value: string) => {
+    const next = new URLSearchParams(params);
+    next.set('status', value);
+    setParams(next);
+  };
   const [productFilter, setProductFilter] = useState('');
   const [file, setFile] = useState<File>();
   const [productId, setProductId] = useState('');
@@ -57,7 +64,7 @@ export function AiKnowledgeScreen() {
   return (
     <div className="knowledge-screen">
       {contextHolder}
-      <PageHeader title={canApprove ? 'Duyệt tài liệu' : 'Tài liệu sản phẩm'} {...(canApprove ? { description: 'Xem xét tài liệu do nhà cung cấp gửi và quản lý phiên bản công bố.' } : {})} action={!canApprove ? <Button onClick={() => { create.reset(); setUploadOpen(true); }} type="primary">Tải tài liệu lên</Button> : undefined} />
+      <PageHeader title={canApprove ? 'Duyệt tài liệu' : 'Tài liệu sản phẩm'} action={!canApprove ? <Button onClick={() => { create.reset(); setUploadOpen(true); }} type="primary">Tải tài liệu lên</Button> : undefined} />
       <Modal
         className="knowledge-upload-modal"
         destroyOnHidden

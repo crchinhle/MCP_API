@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { describe, it } from 'node:test';
 
 import { network } from 'hardhat';
-import { keccak256, stringToHex } from 'viem';
+import { encodeAbiParameters, keccak256, parseAbiParameters, stringToHex } from 'viem';
 
 type Vector = {
   entitlements: { hash: `0x${string}` };
@@ -37,6 +37,40 @@ describe('LicenseRegistry', async () => {
       wallets[0].account.address,
     ]);
   }
+
+  it('issues namespace licenses with the shared relayer and preserves lifecycle and legacy reads', async () => {
+    const registry = await deploy();
+    const namespace = keccak256(stringToHex('EMUKEY_PROVIDER_NAMESPACE_V1:provider-one'));
+    const otherNamespace = keccak256(stringToHex('EMUKEY_PROVIDER_NAMESPACE_V1:provider-two'));
+    const commitmentArgs = [namespace, bytes16(vector.plan.productId), bytes16(vector.plan.planId), 1n, 12n, 3n, vector.entitlements.hash] as const;
+    const commitment = await registry.read.computePlanCommitmentForProvider(commitmentArgs);
+    assert.equal(commitment, keccak256(encodeAbiParameters(parseAbiParameters('bytes32, bytes32, bytes16, bytes16, uint256, uint256, uint256, bytes32'), [keccak256(stringToHex('LICENSE_PLAN_COMMITMENT_V3')), ...commitmentArgs])));
+    const otherCommitment = await registry.read.computePlanCommitmentForProvider([otherNamespace, ...commitmentArgs.slice(1)]);
+    assert.notEqual(commitment, otherCommitment);
+    const licenseId = bytes16('00000000-0000-4000-8000-000000000701');
+    const commandId = bytes16('00000000-0000-4000-8000-000000000702');
+    const args = [commandId, licenseId, namespace, bytes16(vector.plan.productId), bytes16(vector.plan.planId), 1n, commitment, vector.activation.commitment, 1n, 3n, BigInt(Math.floor(Date.now() / 1000)) + 86_400n] as const;
+    await assert.rejects(registry.write.issueLicenseForProvider(args, { account: wallets[1].account }));
+    await assert.rejects(registry.write.issueLicenseForProvider([args[0], args[1], `0x${'00'.repeat(32)}`, ...args.slice(3)]));
+    await registry.write.issueLicenseForProvider(args);
+    await assert.rejects(registry.write.issueLicenseForProvider(args));
+    const otherLicenseId = bytes16('00000000-0000-4000-8000-000000000711');
+    await registry.write.issueLicenseForProvider([bytes16('00000000-0000-4000-8000-000000000712'), otherLicenseId, otherNamespace, args[3], args[4], args[5], otherCommitment, ...args.slice(7)]);
+    assert.equal(await registry.read.providerNamespaceForLicense([otherLicenseId]), otherNamespace);
+    assert.equal(await registry.read.providerNamespaceForLicense([licenseId]), namespace);
+    assert.equal((await registry.read.getLicense([otherLicenseId])).status, 1);
+    const license = await registry.read.getLicense([licenseId]);
+    assert.equal(license.provider, `0x${'00'.repeat(20)}`);
+    assert.equal(license.status, 1);
+    await registry.write.suspendLicense([bytes16('00000000-0000-4000-8000-000000000703'), licenseId]);
+    await registry.write.resumeLicense([bytes16('00000000-0000-4000-8000-000000000704'), licenseId]);
+    await registry.write.renewLicense([bytes16('00000000-0000-4000-8000-000000000705'), licenseId, args[10] + 86_400n]);
+    await registry.write.syncActiveDeviceCount([bytes16('00000000-0000-4000-8000-000000000706'), licenseId, 1n, 1n]);
+    await registry.write.rotateActivationKey([bytes16('00000000-0000-4000-8000-000000000707'), licenseId, keccak256(stringToHex('new-key')), 2n]);
+    await registry.write.revokeLicense([bytes16('00000000-0000-4000-8000-000000000708'), licenseId]);
+    assert.equal((await registry.read.getLicense([licenseId])).status, 3);
+    assert.equal(await registry.read.providerNamespaceForLicense([licenseId]), namespace);
+  });
 
   it('matches the frozen TypeScript commitment vector byte-for-byte', async () => {
     const registry = await deploy();
@@ -83,6 +117,7 @@ describe('LicenseRegistry', async () => {
     );
 
     const license = await registry.read.getLicense([args[1]]);
+    assert.equal(await registry.read.providerNamespaceForLicense([args[1]]), `0x${'00'.repeat(32)}`);
     assert.equal(
       license.provider.toLowerCase(),
       vector.plan.providerChainAddress.toLowerCase(),

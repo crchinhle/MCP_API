@@ -18,10 +18,6 @@ export function PublicVerificationScreen() {
       <main className="verification-content">
         <section className="verification-query" aria-labelledby="verify-title">
           <h1 id="verify-title">Xác minh Blockchain</h1>
-          <p>
-            Nhập mã tra cứu công khai để kiểm tra trạng thái xác nhận trên blockchain.
-            Không nhập mã bản quyền dùng trong phần mềm. Kết quả không hiển thị dữ liệu người mua.
-          </p>
           <label>
             Mã xác thực
             <Input

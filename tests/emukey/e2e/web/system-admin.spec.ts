@@ -6,7 +6,8 @@ import { join } from 'node:path';
 async function systemFixture(page: Page) {
   const user = { id: 'admin', email: 'admin@example.test', displayName: 'System Administrator', role: 'SYSTEM_ADMIN', status: 'ACTIVE', phone: null, address: null };
   const buyer = { id: 'buyer', email: 'buyer@example.test', displayName: 'Buyer Account', role: 'CUSTOMER', status: 'ACTIVE', phone: '0901234567', address: null };
-  const state = { lockRequests: 0, reconciliationRequests: 0, profileRequests: 0, failUsers: false, failHealth: false, failProfile: false, failReconciliation: false, reviewStatus: 'OPEN', published: false, passwordRequests: 0, logoutRequests: 0, requests: [] as string[] };
+  const state = { lockRequests: 0, reconciliationRequests: 0, profileRequests: 0, failUsers: false, failProfile: false, failReconciliation: false, reviewStatus: 'OPEN', published: false, passwordRequests: 0, logoutRequests: 0, requests: [] as string[] };
+  const invitations: { id: string; email: string; status: string; createdAt: string; sentAt: string; expiresAt: string }[] = [];
   const payments = () => Array.from({ length: 12 }, (_, index) => ({
     transactionId: `transaction-${index}`, providerEventId: `event-${index}`, providerTransactionReference: `SEPAY-${index}`,
     classification: index === 0 ? 'AMOUNT_MISMATCH' : 'MATCHED', reviewStatus: index === 0 ? state.reviewStatus : null,
@@ -23,7 +24,24 @@ async function systemFixture(page: Page) {
     if (path === '/auth/users/buyer') return route.fulfill({ json: buyer });
     if (path === '/auth/users/buyer/lock') { state.lockRequests++; buyer.status = 'LOCKED'; return route.fulfill({ json: buyer }); }
     if (path === '/auth/users/buyer/unlock') { buyer.status = 'ACTIVE'; return route.fulfill({ json: buyer }); }
-    if (path === '/auth/provider-invitations') return route.fulfill({ json: [] });
+    if (path === '/auth/provider-invitations') {
+      if (method === 'POST') {
+        const payload = route.request().postDataJSON() as { email: string };
+        expect(Object.keys(payload)).toEqual(['email']);
+        const invitation = { id: 'invitation-1', email: payload.email, status: 'PENDING', createdAt: '2026-10-21T00:00:00Z', sentAt: '2026-10-21T00:00:00Z', expiresAt: '2026-10-22T00:00:00Z' };
+        invitations.splice(0, invitations.length, invitation);
+        return route.fulfill({ json: invitation });
+      }
+      return route.fulfill({ json: invitations });
+    }
+    if (path === '/auth/provider-invitations/inspect') return route.fulfill({ json: { email: 'invited@example.test', expiresAt: '2026-10-22T00:00:00Z' } });
+    if (path === '/auth/provider-invitations/accept') {
+      const payload = route.request().postDataJSON() as Record<string, string>;
+      expect(Object.keys(payload).sort()).toEqual(['displayName', 'organizationName', 'password', 'token']);
+      expect(payload.displayName).toBe('Provider Owner');
+      expect(payload.organizationName).toBe('Provider Organization');
+      return route.fulfill({ json: { id: 'new-provider', email: 'invited@example.test', role: 'PROVIDER_ADMIN', status: 'ACTIVE' } });
+    }
     if (path === '/auth/profile' && method === 'PUT') {
       state.profileRequests++;
       if (state.failProfile) return route.fulfill({ status: 500, json: {} });
@@ -32,7 +50,6 @@ async function systemFixture(page: Page) {
     }
     if (path === '/auth/password') { state.passwordRequests++; return route.fulfill({ status: 204 }); }
     if (path === '/auth/logout') { state.logoutRequests++; return route.fulfill({ status: 204 }); }
-    if (path === '/health/ready') return route.fulfill(state.failHealth ? { status: 503, json: {} } : { json: { status: 'ok', dependencies: { postgres: 'up', redis: 'up' } } });
     if (path === '/operations/health/assistance') return route.fulfill({ json: { conversations: { supportActive: 1, waitingSupport: 2 }, notifications: { deadLetter: 0, pending: 0, retryableFailed: 0 } } });
     if (path === '/payments/history') return route.fulfill({ json: payments() });
     if (path === '/payments/review') return route.fulfill({ json: [{ ...payments()[0], id: 'review', reviewReason: state.reviewStatus === 'OPEN' ? null : 'Đã kiểm tra chứng từ ngân hàng' }] });
@@ -79,11 +96,14 @@ for (const [width, height] of [[320, 800], [768, 1024], [1024, 768], [1440, 1024
       state.requests.length = 0;
       await page.goto(path!);
       await expect(page.getByRole('heading', { name: title!, level: 1 })).toBeVisible();
-      await expect(page.locator('.role-desktop-nav a.active')).toHaveCount(1);
+      await expect(page.locator('.role-desktop-nav a.active')).toHaveCount(path === '/system/console/profile' ? 0 : 1);
+      await expect(page.locator('.role-desktop-nav').getByRole('link', { name: 'Hồ sơ', exact: true })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Thông báo', exact: true })).toHaveCount(0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await expect(page.locator('.system-tabs')).toHaveCount(0);
+      await expect(page.getByRole('region', { name: 'Sức khỏe hệ thống' })).toHaveCount(0);
+      expect(state.requests.some((request) => request.includes('/health/ready'))).toBe(false);
       if (path !== '/system/console') {
-        await expect(page.getByRole('region', { name: 'Sức khỏe hệ thống' })).toHaveCount(0);
         expect(state.requests.some((request) => request.includes('/health/'))).toBe(false);
       }
       if (width === 320 && path?.includes('view=users')) {
@@ -119,6 +139,64 @@ test('sidebar supports history, deep links, refresh and extra filters', async ({
   await page.goto('/system/console?view=payments&classification=AMOUNT_MISMATCH');
   await expect(nav.locator('a.active')).toHaveText('Thanh toán');
 });
+
+test('email-only invitations validate, confirm delivery and refresh the targeted invitation section', async ({ page }) => {
+  const state = await systemFixture(page);
+  await page.goto('/system/console');
+  await page.getByRole('link', { name: 'Quản lý lời mời', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Lời mời nhà cung cấp' })).toBeFocused();
+  await page.getByRole('button', { name: 'Mời nhà cung cấp', exact: true }).click();
+  const modal = page.getByRole('dialog', { name: 'Mời nhà cung cấp' });
+  await expect(modal.getByRole('textbox')).toHaveCount(1);
+  await expect(modal.getByRole('button', { name: 'Hủy', exact: true })).toBeVisible();
+  for (const [width, height] of [[320, 800], [768, 1024], [1024, 768], [1440, 1024]]) {
+    await page.setViewportSize({ width: width!, height: height! });
+    await expect(modal.getByRole('button', { name: 'Gửi lời mời', exact: true })).toBeVisible();
+    expect((await modal.boundingBox())!.width).toBeLessThanOrEqual(width!);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: join(tmpdir(), `emukey-provider-invitation-${width}x${height}.png`), fullPage: true });
+  }
+  await modal.getByLabel('Email nhà cung cấp', { exact: true }).fill('invalid-email');
+  await modal.getByRole('button', { name: 'Gửi lời mời', exact: true }).click();
+  await expect(modal.getByText('Email chưa đúng định dạng.')).toBeVisible();
+  expect(state.requests.filter((request) => request === 'POST /auth/provider-invitations')).toHaveLength(0);
+  await modal.getByLabel('Email nhà cung cấp', { exact: true }).fill(' Invited@Example.test ');
+  await modal.getByRole('button', { name: 'Gửi lời mời', exact: true }).click();
+  await expect(modal).toBeHidden();
+  await expect(page.getByText('Đã gửi email mời nhà cung cấp.')).toBeVisible();
+  const row = page.getByRole('row', { name: /invited@example.test/ });
+  await expect(row.getByText('Đang chờ chấp nhận')).toBeVisible();
+  await row.getByRole('button', { name: 'Xem chi tiết' }).click();
+  await expect(page.getByRole('dialog', { name: 'Chi tiết lời mời' }).getByText('invited@example.test')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await row.getByRole('button', { name: 'Gửi lại lời mời' }).click();
+  await expect.poll(() => state.requests.filter((request) => request === 'POST /auth/provider-invitations').length).toBe(2);
+});
+
+for (const [width, height] of [[320, 800], [768, 1024], [1024, 768], [1440, 1024]]) {
+  test(`recipient onboarding verifies email and completes the profile at ${width}x${height}`, async ({ page }) => {
+    await page.setViewportSize({ width: width!, height: height! });
+    await systemFixture(page);
+    await page.goto(`/auth?mode=provider-invite&token=${'a'.repeat(43)}`);
+    await expect(page.getByRole('heading', { name: 'Thiết lập tài khoản nhà cung cấp', exact: true })).toBeVisible();
+    const form = page.locator('form');
+    await expect(form.getByLabel('Email', { exact: true })).toHaveValue('invited@example.test');
+    await expect(form.getByLabel('Email', { exact: true })).toHaveAttribute('readonly', '');
+    await expect(form.getByText(/EVM|MetaMask|Namespace/)).toHaveCount(0);
+    await form.getByLabel('Tên người đại diện', { exact: true }).fill('Provider Owner');
+    await form.getByLabel('Tên tổ chức', { exact: true }).fill('Provider Organization');
+    await form.getByLabel('Mật khẩu', { exact: true }).fill('Provider-test@123');
+    await form.getByLabel('Xác nhận mật khẩu', { exact: true }).fill('Different-test@123');
+    await form.getByRole('button', { name: 'Hoàn tất đăng ký' }).click();
+    await expect(form.getByText('Mật khẩu xác nhận không khớp.')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: join(tmpdir(), `emukey-provider-onboarding-${width}x${height}.png`), fullPage: true });
+    await form.getByLabel('Xác nhận mật khẩu', { exact: true }).fill('Provider-test@123');
+    await form.getByRole('button', { name: 'Hoàn tất đăng ký' }).click();
+    await expect(page.getByText('Tài khoản nhà cung cấp đã được tạo. Bạn có thể đăng nhập.')).toBeVisible();
+    await expect(page).not.toHaveURL(/token=/);
+  });
+}
 
 test('user actions require confirmation, preserve details and allow unlock', async ({ page }) => {
   const state = await systemFixture(page);
@@ -225,6 +303,8 @@ test('account menu keyboard, Escape and outside click; mobile focus trap', async
   await systemFixture(page);
   await page.goto('/system/console');
   const account = page.getByRole('button', { name: 'Mở menu tài khoản System Administrator' });
+  await expect(account.locator('[data-icon="down"]')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: /[←→↑↓↗↘]/ })).toHaveCount(0);
   await account.focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('menuitem', { name: /Hồ sơ tài khoản/ })).toBeVisible();
@@ -238,7 +318,7 @@ test('account menu keyboard, Escape and outside click; mobile focus trap', async
   await page.setViewportSize({ width: 320, height: 800 });
   const trigger = page.getByRole('button', { name: 'Mở menu vai trò' });
   await trigger.click();
-  const mobile = page.getByRole('dialog', { name: 'Menu SYSTEM' });
+  const mobile = page.getByRole('dialog', { name: 'Menu điều hướng' });
   await expect(mobile.getByRole('button', { name: 'Đóng menu', exact: true })).toBeFocused();
   await page.keyboard.press('Shift+Tab');
   await expect(mobile.getByRole('button', { name: 'Đăng xuất', exact: true })).toBeFocused();
@@ -246,17 +326,16 @@ test('account menu keyboard, Escape and outside click; mobile focus trap', async
   await expect(trigger).toBeFocused();
 });
 
-test('loading and request failure remain distinct from confirmed service outage', async ({ page }) => {
+test('overview focuses on work and account request failures remain retryable', async ({ page }) => {
   const state = await systemFixture(page);
-  let finishReadiness: () => void = () => {};
-  const gate = new Promise<void>((resolve) => { finishReadiness = resolve; });
-  await page.route('**/api/v1/health/ready', async (route) => { await gate; await route.fulfill({ status: 503, json: {} }); });
   await page.goto('/system/console');
-  const health = page.getByRole('region', { name: 'Sức khỏe hệ thống' });
-  await expect(health.getByText('Đang kiểm tra', { exact: true })).toHaveCount(3);
-  finishReadiness();
-  await expect(health.getByText('Chưa xác định', { exact: true })).toHaveCount(3);
-  await expect(health.getByText('Không khả dụng', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('Tài liệu chờ duyệt: 1', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Thanh toán cần kiểm tra: 1', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Tổng tài khoản: 2', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Tài liệu đã công bố: 1', { exact: true })).toBeVisible();
+  await expect(page.getByText('Yêu cầu hỗ trợ', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Sức khỏe hệ thống' })).toHaveCount(0);
+  expect(state.requests.some((request) => request.includes('/health/ready'))).toBe(false);
   state.failUsers = true;
   await page.goto('/system/console?view=users');
   await expect(page.getByText('Không thể tải danh sách người dùng.')).toBeVisible();

@@ -316,7 +316,6 @@ export function ProviderLicensesScreen() {
       {licenses.isSuccess && detailId && !detail ? <Alert showIcon type="warning" title="Không tìm thấy bản quyền trong danh sách của bạn." action={<Button onClick={() => setDetailId(null)}>Đóng</Button>} /> : null}
       <PageHeader
         title="Bản quyền"
-        description="Theo dõi bản quyền đã phát hành và quản lý trạng thái sử dụng."
       />
       <div className="provider-license-toolbar">
         <Input

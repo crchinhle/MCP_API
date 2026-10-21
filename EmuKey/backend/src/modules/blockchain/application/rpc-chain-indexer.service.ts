@@ -17,6 +17,49 @@ export interface ChainRpcIndexerPort {
   poll(workerId: string): Promise<number | null>;
 }
 
+export interface RegistryIndexerRegistration {
+  owner: CheckpointOwner;
+  indexer: ChainRpcIndexerPort;
+}
+
+export class CompositeChainRpcIndexer implements ChainRpcIndexerPort {
+  private readonly indexers = new Map<string, ChainRpcIndexerPort>();
+
+  constructor(
+    private readonly configured: readonly [RegistryIndexerRegistration, ...RegistryIndexerRegistration[]],
+    private readonly discovery?: {
+      knownRegistries(): Promise<CheckpointOwner[]>;
+      createIndexer(owner: CheckpointOwner): ChainRpcIndexerPort;
+    },
+  ) {
+    for (const entry of configured) this.indexers.set(this.key(entry.owner), entry.indexer);
+  }
+
+  canonicalTime(): Promise<Date> { return this.configured[0].indexer.canonicalTime(); }
+
+  async poll(workerId: string): Promise<number | null> {
+    if (this.discovery) {
+      for (const owner of await this.discovery.knownRegistries()) {
+        const key = this.key(owner);
+        if (!this.indexers.has(key)) this.indexers.set(key, this.discovery.createIndexer(owner));
+      }
+    }
+    // Give every registry a chance to progress even when another RPC scan fails.
+    const results = await Promise.allSettled([...this.indexers.values()].map((indexer) => indexer.poll(workerId)));
+    const failure = results.find((result) => result.status === 'rejected');
+    if (failure?.status === 'rejected') throw failure.reason;
+    let count: number | null = null;
+    for (const result of results) {
+      if (result.status === 'fulfilled' && result.value !== null) count = (count ?? 0) + result.value;
+    }
+    return count;
+  }
+
+  private key(owner: CheckpointOwner): string {
+    return `${owner.network.toLowerCase()}:${owner.chainId}:${owner.contractAddress.toLowerCase()}`;
+  }
+}
+
 export interface RpcChainIndexerOptions extends CheckpointOwner {
   batchSize: number;
   deploymentBlock: number;
@@ -34,6 +77,7 @@ function bytes16ToUuid(value: unknown, name: string): string {
 function eventType(log: RpcContractEvent): ChainEventType {
   switch (log.eventName) {
     case 'LicenseIssued':
+    case 'LicenseIssuedForProvider':
       return 'LICENSE_ISSUED';
     case 'LicenseRenewed':
       return 'LICENSE_RENEWED';
@@ -54,13 +98,13 @@ function eventType(log: RpcContractEvent): ChainEventType {
 }
 
 function eventPayload(log: RpcContractEvent): Record<string, unknown> {
-  if (log.eventName === 'LicenseIssued') {
+  if (log.eventName === 'LicenseIssued' || log.eventName === 'LicenseIssuedForProvider') {
     return {
       activationCommitment: log.args.activationCommitment,
       expiresAt: new Date(Number(log.args.expiresAt) * 1_000).toISOString(),
       keyVersion: Number(log.args.activationKeyVersion),
       planCommitment: log.args.planCommitment,
-      provider: log.args.provider,
+      ...(log.eventName === 'LicenseIssuedForProvider' ? { providerNamespace: log.args.providerNamespace } : { provider: log.args.provider }),
     };
   }
   if (log.eventName === 'LicenseRenewed') {

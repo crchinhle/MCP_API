@@ -18,6 +18,12 @@ import { CommerceRepository } from '../../../../../EmuKey/backend/src/modules/co
 import { FakePaymentGateway } from '../../../../../EmuKey/backend/src/modules/commerce-payment/infrastructure/fake-payment.gateway.js';
 import { SePayPaymentGateway } from '../../../../../EmuKey/backend/src/modules/commerce-payment/infrastructure/sepay-payment.gateway.js';
 import { seedBaseline } from '../../../../../EmuKey/backend/src/platform/database/seed-baseline.js';
+import { CatalogAdminService } from '../../../../../EmuKey/backend/src/modules/catalog/application/catalog-admin.service.js';
+import { CatalogAdminRepository } from '../../../../../EmuKey/backend/src/modules/catalog/infrastructure/catalog-admin.repository.js';
+import { ChainEventRepository } from '../../../../../EmuKey/backend/src/modules/blockchain/infrastructure/chain-event.repository.js';
+import { ChainIndexerCheckpointRepository } from '../../../../../EmuKey/backend/src/modules/blockchain/infrastructure/chain-indexer-checkpoint.repository.js';
+import { providerNamespaceDigest } from '../../../../../EmuKey/backend/src/platform/crypto/license-crypto.js';
+import { randomUUID } from 'node:crypto';
 
 describe('customer commerce and payment flow', () => {
   let postgres: StartedPostgreSqlContainer;
@@ -84,6 +90,63 @@ describe('customer commerce and payment flow', () => {
       },
     );
   }, 120_000);
+
+  it('blocks unavailable namespace sales and keeps issuance and renewals on their own registry', async () => {
+    const provider = { role: 'PROVIDER_ADMIN' as const, sessionVersion: 1, sub: randomUUID() };
+    const namespace = `provider-${randomUUID()}`;
+    await pool.query(`INSERT INTO users (id,email,password_hash,display_name,role,status,organization_name,provider_chain_namespace)
+      VALUES ($1,'namespace.commerce@example.test','hash','Namespace','PROVIDER_ADMIN','ACTIVE','Namespace Ltd',$2)`, [provider.sub, namespace]);
+    const catalog = new CatalogAdminService(new CatalogAdminRepository(pool, true));
+    const product = await catalog.createProduct(provider, { code: 'NAMESPACE', name: 'Namespace product' });
+    const plan = await catalog.createPlan(provider, { productId: product.id, code: 'MONTHLY', name: 'Namespace monthly', billingCycle: 'MONTHLY', durationMonths: 1, priceVnd: 100000, maxActiveDevices: 1 });
+    await catalog.publishProduct(provider, product.id);
+    await catalog.publishPlan(provider, plan.id);
+    await expect(service.createOrder(customer, randomUUID(), undefined, { planId: plan.id })).rejects.toMatchObject({ response: { code: 'PROVIDER_NAMESPACE_CAPABILITY_NOT_CONFIGURED' } });
+    const chain = { chainId: 11155111, network: 'sepolia', contractAddress: `0x${'12'.repeat(20)}`, namespaceContractAddress: `0x${'34'.repeat(20)}` };
+    const envelopes = new RedisActivationEnvelope(redis, '00'.repeat(32));
+    const commands = new ChainCommandRepository(pool);
+    const enabled = (namespaceContractAddress = chain.namespaceContractAddress) => new CommerceService(new CommerceRepository(pool), new FakePaymentGateway(webhookSecret), envelopes, new ActivationEnvelopeRecoveryService(commands, envelopes), { ...chain, namespaceContractAddress });
+    const namespaceService = enabled();
+    const order = await namespaceService.createOrder(customer, randomUUID(), undefined, { planId: plan.id });
+    const terms = await namespaceService.getServiceTerms(customer, order.id);
+    await namespaceService.acceptServiceTerms(customer, order.id, { accepted: true, hash: terms.hash, version: terms.version });
+    await expect(service.checkout(customer, order.id)).rejects.toMatchObject({ response: { code: 'PROVIDER_NAMESPACE_CAPABILITY_NOT_CONFIGURED' } });
+    const checkout = await namespaceService.checkout(customer, order.id);
+    const payment = await namespaceService.ingestIpn({ amountVnd: order.priceVndSnapshot, eventId: randomUUID(), occurredAt: new Date().toISOString(), providerReference: checkout.checkoutReference }, webhookSecret);
+    const command = (await pool.query('SELECT * FROM chain_commands WHERE id=$1', [payment.commandId])).rows[0];
+    expect(command.contract_address).toBe(chain.namespaceContractAddress);
+    expect(command.payload).toMatchObject({ providerNamespace: providerNamespaceDigest(namespace), protocolVersion: 3 });
+    expect(command.payload).not.toHaveProperty('providerAddress');
+    const txHash = `0x${'51'.repeat(32)}`;
+    const blockHash = `0x${'52'.repeat(32)}`;
+    const relayerAddress = `0x${'53'.repeat(20)}`;
+    const nonce = await commands.reserveNonce(command.id, relayerAddress, 0);
+    await commands.markPrepared(command.id, { network: chain.network, nonce, relayerAddress, rawTransaction: '0x01', transactionHash: txHash });
+    await commands.markSubmitted(command.id);
+    const events = new ChainEventRepository(pool);
+    const event = await events.ingest({ blockHash, blockNumber: 100, chainCommandId: command.id, chainId: chain.chainId, confirmationCount: 2, contractAddress: chain.namespaceContractAddress, eventType: 'LICENSE_ISSUED', licenseId: payment.licenseId!, logIndex: 0, network: chain.network, payload: { activationCommitment: command.payload.activationCommitment, keyVersion: 1, planCommitment: command.payload.planCommitment, providerNamespace: command.payload.providerNamespace }, providerUserId: provider.sub, transactionHash: txHash });
+    await events.confirm(event.id, 2, blockHash);
+    await expect(service.createOrder(customer, randomUUID(), undefined, { planId: plan.id, targetLicenseId: payment.licenseId! })).rejects.toMatchObject({ response: { code: 'PROVIDER_NAMESPACE_CAPABILITY_NOT_CONFIGURED' } });
+    const moved = enabled(`0x${'56'.repeat(20)}`);
+    const renewal = await moved.createOrder(customer, randomUUID(), undefined, { planId: plan.id, targetLicenseId: payment.licenseId! });
+    const renewalTerms = await moved.getServiceTerms(customer, renewal.id);
+    await moved.acceptServiceTerms(customer, renewal.id, { accepted: true, hash: renewalTerms.hash, version: renewalTerms.version });
+    await expect(service.checkout(customer, renewal.id)).rejects.toMatchObject({ response: { code: 'PROVIDER_NAMESPACE_CAPABILITY_NOT_CONFIGURED' } });
+    expect((await pool.query('SELECT count(*)::int AS count FROM payment_attempts WHERE order_id=$1', [renewal.id])).rows[0].count).toBe(0);
+    const renewalCheckout = await moved.checkout(customer, renewal.id);
+    const renewed = await moved.ingestIpn({ amountVnd: renewal.priceVndSnapshot, eventId: randomUUID(), occurredAt: new Date().toISOString(), providerReference: renewalCheckout.checkoutReference }, webhookSecret);
+    expect((await pool.query('SELECT contract_address FROM chain_commands WHERE id=$1', [renewed.commandId])).rows[0].contract_address).toBe(chain.namespaceContractAddress);
+    const checkpoints = new ChainIndexerCheckpointRepository(pool);
+    const checkpointOnlyAddress = `0x${'79'.repeat(20)}`;
+    await pool.query('INSERT INTO chain_indexer_checkpoints (network, chain_id, contract_address, next_block) VALUES ($1,$2,$3,99), ($1,$2,$4,99)', [chain.network, chain.chainId, checkpointOnlyAddress, chain.namespaceContractAddress]);
+    expect(await checkpoints.namespaceRegistryOrigins(chain)).toEqual([
+      { network: chain.network, chainId: chain.chainId, contractAddress: chain.namespaceContractAddress },
+    ]);
+    expect(await checkpoints.namespaceRegistryOrigins({ network: 'different-network', chainId: chain.chainId })).toEqual([]);
+    const owner = { network: chain.network, chainId: chain.chainId, contractAddress: chain.namespaceContractAddress };
+    await expect(checkpoints.claimRange(owner, 'retired-registry-worker', 0, 120, 10, 3)).resolves.toEqual({ fromBlock: 96, toBlock: 105 });
+    await checkpoints.release(owner, 'retired-registry-worker');
+  });
 
   afterAll(async () => {
     if (redis) await redis.quit();

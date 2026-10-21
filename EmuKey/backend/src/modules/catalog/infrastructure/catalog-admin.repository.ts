@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { Pool, type PoolClient } from 'pg';
 import type { Hex } from 'viem';
-import { planCommitment } from '../../../platform/crypto/license-crypto.js';
+import { planCommitment, planCommitmentForProvider, providerNamespaceDigest } from '../../../platform/crypto/license-crypto.js';
 import type { AuthPrincipal } from '../../identity-access/identity.types.js';
 import type { BillingCycle } from '../presentation/catalog.dto.js';
 
@@ -110,6 +110,7 @@ function mapPlan(row: Record<string, unknown>): PlanRecord {
 export class CatalogAdminRepository {
   constructor(
     private readonly pool: Pool,
+    private readonly namespaceIssuanceEnabled = false,
   ) {}
 
   async listProducts(actor: AuthPrincipal): Promise<ProductRecord[]> {
@@ -252,7 +253,7 @@ export class CatalogAdminRepository {
   ): Promise<PlanRecord> {
     return this.withTransaction(async (client) => {
       const productResult = await client.query<Record<string, unknown>>(
-        `SELECT p.id, p.status, u.provider_chain_address
+        `SELECT p.id, p.status, u.provider_chain_address, u.provider_chain_namespace
          FROM products p
          JOIN users u ON u.id = p.provider_user_id
          WHERE p.id = $1 AND p.provider_user_id = $2
@@ -262,6 +263,7 @@ export class CatalogAdminRepository {
       const product = productResult.rows[0];
       if (!product) throw new Error('PRODUCT_NOT_FOUND');
       if (product.status === 'ARCHIVED') throw new Error('PRODUCT_ARCHIVED');
+      this.assertIssuanceCapability(product);
 
       const versionResult = await client.query<{ version: number }>(
         `SELECT COALESCE(MAX(version), 0)::int + 1 AS version
@@ -270,14 +272,13 @@ export class CatalogAdminRepository {
       );
       const version = versionResult.rows[0]?.version ?? 1;
       const id = randomUUID();
-      const commitment = planCommitment({
+      const commitment = this.providerPlanCommitment(product, {
         durationMonths: input.durationMonths,
         entitlements: input.entitlements,
         maxActiveDevices: input.maxActiveDevices,
         planId: id,
         planVersion: version,
         productId: input.productId,
-        providerChainAddress: String(product.provider_chain_address) as `0x${string}`,
       });
       const result = await client.query<Record<string, unknown>>(
         `INSERT INTO plans
@@ -315,26 +316,26 @@ export class CatalogAdminRepository {
     return this.withTransaction(async (client) => {
       const current = await this.lockPlan(client, actor, id);
       if (current.status !== 'DRAFT') throw new Error('PLAN_NOT_DRAFT');
-      const providerResult = await client.query<{ provider_chain_address: string }>(
-        `SELECT provider_chain_address
+      const providerResult = await client.query<Record<string, unknown>>(
+        `SELECT provider_chain_address, provider_chain_namespace
          FROM users
          WHERE id = $1 AND role = 'PROVIDER_ADMIN'`,
         [actor.sub],
       );
-      const providerChainAddress = providerResult.rows[0]?.provider_chain_address;
-      if (!providerChainAddress) throw new Error('PROVIDER_CHAIN_IDENTITY_MISSING');
+      const provider = providerResult.rows[0];
+      if (!provider) throw new Error('PROVIDER_CHAIN_IDENTITY_MISSING');
+      this.assertIssuanceCapability(provider);
       const nextDurationMonths = input.durationMonths ?? current.durationMonths;
       const nextEntitlements = input.entitlements ?? current.entitlements;
       const nextMaxActiveDevices =
         input.maxActiveDevices ?? current.maxActiveDevices;
-      const commitment = planCommitment({
+      const commitment = this.providerPlanCommitment(provider, {
         durationMonths: nextDurationMonths,
         entitlements: nextEntitlements,
         maxActiveDevices: nextMaxActiveDevices,
         planId: current.id,
         planVersion: current.version,
         productId: current.productId,
-         providerChainAddress: providerChainAddress as `0x${string}`,
       });
       const result = await client.query<Record<string, unknown>>(
         `UPDATE plans
@@ -386,16 +387,18 @@ export class CatalogAdminRepository {
   ): Promise<PlanRecord> {
     return this.withTransaction(async (client) => {
       const currentResult = await client.query<Record<string, unknown>>(
-        `SELECT pl.*, p.status AS product_status
+        `SELECT pl.*, p.status AS product_status, u.provider_chain_address, u.provider_chain_namespace
          FROM plans pl
          JOIN products p
            ON p.id = pl.product_id AND p.provider_user_id = pl.provider_user_id
+         JOIN users u ON u.id = pl.provider_user_id
          WHERE pl.id = $1 AND pl.provider_user_id = $2
          FOR UPDATE OF pl`,
         [id, actor.sub],
       );
       const row = currentResult.rows[0];
       if (!row) throw new Error('PLAN_NOT_FOUND');
+      if (status === 'PUBLISHED') this.assertIssuanceCapability(row);
       const current = mapPlan(row);
       if (status === 'PUBLISHED' && current.status !== 'DRAFT') {
         throw new Error('PLAN_NOT_DRAFT');
@@ -418,6 +421,20 @@ export class CatalogAdminRepository {
       const plan = mapPlan(result.rows[0] ?? {});
       return plan;
     });
+  }
+
+  private assertIssuanceCapability(provider: Record<string, unknown>): void {
+    if (provider.provider_chain_address === null && !this.namespaceIssuanceEnabled) {
+      throw new Error('PROVIDER_NAMESPACE_CAPABILITY_NOT_CONFIGURED');
+    }
+  }
+
+  private providerPlanCommitment(provider: Record<string, unknown>, input: Omit<Parameters<typeof planCommitment>[0], 'providerChainAddress'>): Hex {
+    if (typeof provider.provider_chain_address === 'string') {
+      return planCommitment({ ...input, providerChainAddress: provider.provider_chain_address as `0x${string}` });
+    }
+    if (provider.provider_chain_address !== null || typeof provider.provider_chain_namespace !== 'string') throw new Error('PROVIDER_CHAIN_IDENTITY_MISSING');
+    return planCommitmentForProvider({ ...input, providerNamespace: providerNamespaceDigest(provider.provider_chain_namespace) });
   }
 
   private async lockProduct(

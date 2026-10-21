@@ -88,11 +88,10 @@ export class BrevoEmailDelivery implements EmailDeliveryPort {
       url.searchParams.set('mode', 'provider-invite');
       url.searchParams.set('token', token);
       const invitationUrl = url.toString();
-      const organization = typeof input.data.organizationName === 'string' ? input.data.organizationName : '';
       return {
-        htmlContent: `<p>Bạn được mời quản trị nhà cung cấp ${escapeHtml(organization)} trên EmuKey.</p><p><a href="${escapeHtml(invitationUrl)}">Đặt mật khẩu và kích hoạt tài khoản Provider</a></p><p>Liên kết có hiệu lực trong 24 giờ và chỉ sử dụng một lần. Nếu không mong đợi lời mời này, bạn có thể bỏ qua email.</p>`,
+        htmlContent: `<p>Bạn được mời trở thành nhà cung cấp trên EmuKey.</p><p><a href="${escapeHtml(invitationUrl)}">Thiết lập tài khoản và thông tin tổ chức</a></p><p>Liên kết có hiệu lực trong 24 giờ và chỉ sử dụng một lần. Nếu không mong đợi lời mời này, bạn có thể bỏ qua email.</p>`,
         subject: 'Lời mời nhà cung cấp EmuKey',
-        textContent: `Bạn được mời quản trị nhà cung cấp ${organization} trên EmuKey.\n\nĐặt mật khẩu và kích hoạt tài khoản:\n${invitationUrl}\n\nLiên kết có hiệu lực trong 24 giờ và chỉ sử dụng một lần. Nếu không mong đợi lời mời này, bạn có thể bỏ qua email.`,
+        textContent: `Bạn được mời trở thành nhà cung cấp trên EmuKey.\n\nThiết lập tài khoản và thông tin tổ chức:\n${invitationUrl}\n\nLiên kết có hiệu lực trong 24 giờ và chỉ sử dụng một lần. Nếu không mong đợi lời mời này, bạn có thể bỏ qua email.`,
         token,
       };
     }

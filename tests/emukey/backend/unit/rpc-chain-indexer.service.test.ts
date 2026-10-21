@@ -1,7 +1,7 @@
 import type { Hex } from 'viem';
 import type { Pool } from 'pg';
 
-import { RpcChainIndexerService } from '../../../../EmuKey/backend/src/modules/blockchain/application/rpc-chain-indexer.service.js';
+import { CompositeChainRpcIndexer, RpcChainIndexerService } from '../../../../EmuKey/backend/src/modules/blockchain/application/rpc-chain-indexer.service.js';
 import { ChainIndexerCheckpointRepository } from '../../../../EmuKey/backend/src/modules/blockchain/infrastructure/chain-indexer-checkpoint.repository.js';
 import type { ObservedChainEvent } from '../../../../EmuKey/backend/src/modules/blockchain/infrastructure/chain-event.repository.js';
 
@@ -10,6 +10,47 @@ function bytes16(value: string): Hex {
 }
 
 describe('RpcChainIndexerService', () => {
+  it('polls both registries independently and preserves legacy chain time', async () => {
+    const time = new Date('2026-10-21T00:00:00Z');
+    const legacy = { canonicalTime: vi.fn().mockResolvedValue(time), poll: vi.fn().mockResolvedValueOnce(2).mockResolvedValueOnce(null) };
+    const namespace = { canonicalTime: vi.fn(), poll: vi.fn().mockResolvedValueOnce(3).mockResolvedValueOnce(null) };
+    const owner = { chainId: 11155111, network: 'sepolia', contractAddress: `0x${'12'.repeat(20)}` };
+    const indexer = new CompositeChainRpcIndexer([{ owner, indexer: legacy }, { owner: { ...owner, contractAddress: `0x${'34'.repeat(20)}` }, indexer: namespace }]);
+    await expect(indexer.poll('worker')).resolves.toBe(5);
+    await expect(indexer.poll('worker')).resolves.toBeNull();
+    await expect(indexer.canonicalTime()).resolves.toEqual(time);
+    legacy.poll.mockRejectedValueOnce(new Error('RPC_UNAVAILABLE'));
+    namespace.poll.mockResolvedValueOnce(0);
+    await expect(indexer.poll('worker')).rejects.toThrow('RPC_UNAVAILABLE');
+    expect(namespace.poll).toHaveBeenCalledTimes(3);
+  });
+  it('discovers retired registry origins after configuration changes and retains them across polls', async () => {
+    const legacyOwner = { chainId: 11155111, network: 'sepolia', contractAddress: `0x${'12'.repeat(20)}` };
+    const retiredOwner = { ...legacyOwner, contractAddress: `0x${'34'.repeat(20)}` };
+    const currentOwner = { ...legacyOwner, contractAddress: `0x${'56'.repeat(20)}` };
+    const legacy = { canonicalTime: vi.fn(), poll: vi.fn().mockResolvedValue(1) };
+    const current = { canonicalTime: vi.fn(), poll: vi.fn().mockResolvedValue(2) };
+    const retired = { canonicalTime: vi.fn(), poll: vi.fn().mockResolvedValue(3) };
+    const discover = { knownRegistries: vi.fn().mockResolvedValue([legacyOwner, retiredOwner, currentOwner]), createIndexer: vi.fn().mockReturnValue(retired) };
+    const indexer = new CompositeChainRpcIndexer([{ owner: legacyOwner, indexer: legacy }, { owner: currentOwner, indexer: current }], discover);
+    await expect(indexer.poll('worker')).resolves.toBe(6);
+    expect(discover.createIndexer).toHaveBeenCalledExactlyOnceWith(retiredOwner);
+    discover.knownRegistries.mockResolvedValue([]);
+    await expect(indexer.poll('worker')).resolves.toBe(6);
+    expect(retired.poll).toHaveBeenCalledTimes(2);
+    expect(discover.createIndexer).toHaveBeenCalledTimes(1);
+  });
+  it('continues discovering namespace history when namespace configuration is removed', async () => {
+    const owner = { chainId: 11155111, network: 'sepolia', contractAddress: `0x${'12'.repeat(20)}` };
+    const retiredOwner = { ...owner, contractAddress: `0x${'34'.repeat(20)}` };
+    const legacy = { canonicalTime: vi.fn(), poll: vi.fn().mockResolvedValue(null) };
+    const retired = { canonicalTime: vi.fn(), poll: vi.fn().mockResolvedValue(1) };
+    const discovery = { knownRegistries: vi.fn().mockResolvedValue([retiredOwner]), createIndexer: vi.fn().mockReturnValue(retired) };
+    const indexer = new CompositeChainRpcIndexer([{ owner, indexer: legacy }], discovery);
+    await expect(indexer.poll('worker')).resolves.toBe(1);
+    expect(discovery.createIndexer).toHaveBeenCalledExactlyOnceWith(retiredOwner);
+    expect(legacy.poll).toHaveBeenCalledOnce();
+  });
   it('keeps overlap inside the configured RPC batch limit', async () => {
     const query = vi
       .fn()
@@ -35,7 +76,7 @@ describe('RpcChainIndexerService', () => {
     ).resolves.toEqual({ fromBlock: 97, toBlock: 106 });
   });
 
-  it('resumes from PostgreSQL, ingests canonical RPC logs and advances only after success', async () => {
+  it.each(['LicenseIssued', 'LicenseIssuedForProvider'])('resumes PostgreSQL and indexes %s with its original identity', async (eventName) => {
     const commandId = '00000000-0000-4000-8000-000000000901';
     const licenseId = '00000000-0000-4000-8000-000000000401';
     const checkpoints = {
@@ -75,10 +116,11 @@ describe('RpcChainIndexerService', () => {
             licenseId: bytes16(licenseId),
             planCommitment: `0x${'22'.repeat(32)}`,
             provider: '0x0000000000000000000000000000000000000002',
+            providerNamespace: `0x${'44'.repeat(32)}`,
           },
           blockHash: `0x${'15'.repeat(32)}`,
           blockNumber: 15n,
-          eventName: 'LicenseIssued',
+          eventName,
           logIndex: 0,
           transactionHash: `0x${'77'.repeat(32)}`,
         },
@@ -113,6 +155,7 @@ describe('RpcChainIndexerService', () => {
       activationCommitment: `0x${'11'.repeat(32)}`,
       keyVersion: 1,
     });
+    expect(indexer.ingest.mock.calls[0]?.[0].payload).toMatchObject(eventName === 'LicenseIssuedForProvider' ? { providerNamespace: `0x${'44'.repeat(32)}` } : { provider: '0x0000000000000000000000000000000000000002' });
     expect(checkpoints.completeRange).toHaveBeenCalledWith(
       expect.any(Object),
       'worker-1',

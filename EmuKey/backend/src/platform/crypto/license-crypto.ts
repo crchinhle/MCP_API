@@ -12,6 +12,15 @@ import {
 export const DOMAIN_PLAN_V2 = keccak256(
   stringToHex('LICENSE_PLAN_COMMITMENT_V2'),
 );
+export const DOMAIN_PLAN_V3 = keccak256(stringToHex('LICENSE_PLAN_COMMITMENT_V3'));
+
+export function providerNamespaceDigest(namespace: string): Hex {
+  const canonical = namespace.toLowerCase();
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(canonical) || canonical.length > 100) {
+    throw new Error('Invalid provider namespace');
+  }
+  return keccak256(stringToHex(`EMUKEY_PROVIDER_NAMESPACE_V1:${canonical}`));
+}
 
 function assertCanonicalJson(value: unknown, seen = new Set<object>()): void {
   if (
@@ -104,6 +113,25 @@ export function planCommitment(input: PlanCommitmentInput): Hex {
       ],
     ),
   );
+}
+
+export function planCommitmentForProvider(input: Omit<PlanCommitmentInput, 'providerChainAddress'> & { providerNamespace: Hex }): Hex {
+  if (!/^0x[0-9a-fA-F]{64}$/.test(input.providerNamespace) || /^0x0{64}$/.test(input.providerNamespace)) {
+    throw new Error('Invalid provider namespace digest');
+  }
+  return keccak256(encodeAbiParameters(
+    parseAbiParameters('bytes32, bytes32, bytes16, bytes16, uint256, uint256, uint256, bytes32'),
+    [
+      DOMAIN_PLAN_V3,
+      input.providerNamespace,
+      uuidToBytes16(input.productId),
+      uuidToBytes16(input.planId),
+      positiveUint(input.planVersion, 'planVersion'),
+      positiveUint(input.durationMonths, 'durationMonths'),
+      positiveUint(input.maxActiveDevices, 'maxActiveDevices'),
+      entitlementsHash(input.entitlements),
+    ],
+  ));
 }
 
 export function activationCommitment(secret32: Hex): Hex {

@@ -192,6 +192,7 @@ vi.stubGlobal(
     if (path === '/auth/refresh') return jsonResponse(undefined, 401);
     if (path === '/auth/users' && method === 'GET') return jsonResponse([]);
     if (path === '/auth/provider-invitations' && method === 'GET') return jsonResponse([]);
+    if (path === '/auth/provider-invitations/inspect' && method === 'POST') return jsonResponse({ email: 'provider@example.test', expiresAt: '2026-10-22T00:00:00Z' });
     if (method === 'GET' && path === '/notifications') return jsonResponse([]);
     if (method === 'GET' && path === '/knowledge/documents') return jsonResponse([]);
     if (method === 'GET' && path === '/payments/review') return jsonResponse([]);

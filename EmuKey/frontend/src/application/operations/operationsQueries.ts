@@ -1,19 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { ReadinessDto } from '../../infrastructure/api/generated';
 import { requestJson } from '../auth/authContext';
 
 export interface AssistanceHealth {
   readonly conversations: { readonly supportActive: number; readonly waitingSupport: number };
   readonly notifications: { readonly deadLetter: number; readonly pending: number; readonly retryableFailed: number };
-}
-
-export function usePlatformReadiness() {
-  return useQuery({
-    queryKey: ['operations', 'readiness'],
-    queryFn: () => requestJson<ReadinessDto>('/health/ready'),
-    retry: false,
-  });
 }
 
 export function useAssistanceHealth(enabled = true) {

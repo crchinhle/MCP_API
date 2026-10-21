@@ -203,6 +203,11 @@ describe('customer durable license and device invariants without a local blockch
     await expect(queries.find(customer, licenseId)).resolves.toMatchObject({ id: licenseId, status: 'ACTIVE' });
   });
 
+  it('keeps lifecycle commands on the original issuance registry after configuration changes', async () => {
+    const command = await new LicensingRepository(pool).createLifecycleCommand(provider.sub, licenseId, 'SUSPEND_LICENSE', { ...chainConfig, contractAddress: `0x${'78'.repeat(20)}` });
+    expect((await pool.query('SELECT contract_address, network, chain_id FROM chain_commands WHERE id=$1', [command.commandId])).rows[0]).toMatchObject({ contract_address: CONTRACT_ADDRESS, network: NETWORK, chain_id: String(CHAIN_ID) });
+  });
+
   it('rejects replay and keeps same-device activation idempotent', async () => {
     const { projection, service } = licensingService();
     const key = await activationKey();

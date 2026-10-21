@@ -13,6 +13,7 @@ const INDEXED_EVENT_NAMES = new Set([
   'ActivationKeyRotated',
   'ActiveDeviceCountSynced',
   'LicenseIssued',
+  'LicenseIssuedForProvider',
   'LicenseRenewed',
   'LicenseStatusChanged',
 ]);

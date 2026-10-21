@@ -28,6 +28,8 @@ import {
   AcceptProviderInvitationDto,
   ProviderInvitationDto,
   ProviderAccountDto,
+  ProviderInvitationTokenDto,
+  ProviderInvitationPreviewDto,
 } from './identity.dto.js';
 import { IdentityService } from './identity.service.js';
 import { CurrentUser, Roles } from './security.decorators.js';
@@ -66,11 +68,19 @@ export class IdentityController {
     return this.service.listProviderInvitations(actor);
   }
 
+  @Post('provider-invitations/inspect')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Validate a provider invitation without consuming it; token is sent in the body' })
+  @ApiOkResponse({ type: ProviderInvitationPreviewDto })
+  inspectProviderInvitation(@Body() dto: ProviderInvitationTokenDto, @Req() request: Request) {
+    return this.service.inspectProviderInvitation(dto.token, request.ip ?? request.socket.remoteAddress ?? 'unknown');
+  }
+
   @Post('provider-invitations/accept')
-  @ApiOperation({ summary: 'Accept a single-use provider email invitation and choose a password' })
+  @ApiOperation({ summary: 'Complete the recipient profile and accept a single-use provider invitation' })
   @ApiCreatedResponse({ type: ProviderAccountDto })
   acceptProviderInvitation(@Body() dto: AcceptProviderInvitationDto, @Req() request: Request) {
-    return this.service.acceptProviderInvitation(dto.token, dto.password, request.socket.remoteAddress ?? 'unknown');
+    return this.service.acceptProviderInvitation(dto.token, dto.password, { displayName: dto.displayName, organizationName: dto.organizationName }, request.ip ?? request.socket.remoteAddress ?? 'unknown');
   }
 
   @Post('register')

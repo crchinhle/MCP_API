@@ -56,7 +56,6 @@ export function CatalogScreen({ authenticated = false }: { readonly authenticate
         <section className="catalog-hero">
           <div>
             <h1>Sản phẩm</h1>
-            <p>Chọn gói phù hợp với số thiết bị, thời hạn và nhu cầu sử dụng.</p>
           </div>
         </section>
 

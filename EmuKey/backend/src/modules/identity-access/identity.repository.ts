@@ -1,5 +1,5 @@
 import { Pool, type PoolClient } from 'pg';
-import type { AuthPrincipal, IdentityUser, UserState, ProviderInvitation, ProviderInvitationInput } from './identity.types.js';
+import type { AuthPrincipal, IdentityUser, UserState, ProviderInvitation, ProviderInvitationInput, ProviderInvitationPreview, ProviderOnboardingInput } from './identity.types.js';
 
 function mapUser(value: unknown): IdentityUser {
   const row = value as Record<string, unknown>;
@@ -40,22 +40,20 @@ export class IdentityRepository {
     return this.withTransaction(async (client) => {
       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`identity-email:${input.email.trim().toLowerCase()}`]);
       const existing = await client.query(
-        `SELECT id FROM users WHERE email = $1 OR provider_chain_address = $2 OR provider_chain_namespace = $3`,
-        [input.email, input.providerChainAddress, input.providerChainNamespace],
+        'SELECT id FROM users WHERE email = $1',
+        [input.email],
       );
       if (existing.rows.length) throw new Error('PROVIDER_IDENTITY_CONFLICT');
       const result = await client.query<Record<string, unknown>>(
         `INSERT INTO provider_invitations
-          (email, display_name, organization_name, provider_chain_address, provider_chain_namespace, token_hash, invited_by_user_id, expires_at)
-         VALUES ($1, $2, $3, $4, $5, decode($6, 'hex'), $7, now() + interval '24 hours')
+          (email, token_hash, invited_by_user_id, expires_at)
+         VALUES ($1, decode($2, 'hex'), $3, now() + interval '24 hours')
          ON CONFLICT (email) DO UPDATE SET
-           display_name = EXCLUDED.display_name, organization_name = EXCLUDED.organization_name,
-           provider_chain_address = EXCLUDED.provider_chain_address, provider_chain_namespace = EXCLUDED.provider_chain_namespace,
            token_hash = EXCLUDED.token_hash, invited_by_user_id = EXCLUDED.invited_by_user_id,
            expires_at = EXCLUDED.expires_at, sent_at = NULL, updated_at = now()
          WHERE provider_invitations.accepted_at IS NULL
          RETURNING *`,
-        [input.email, input.displayName, input.organizationName, input.providerChainAddress, input.providerChainNamespace, tokenHash, actor.sub],
+        [input.email, tokenHash, actor.sub],
       );
       if (!result.rows[0]) throw new Error('PROVIDER_IDENTITY_CONFLICT');
       const invitation = this.mapInvitation(result.rows[0]);
@@ -68,11 +66,12 @@ export class IdentityRepository {
     return result.rows.map((row) => this.mapInvitation(row));
   }
 
-  async markProviderInvitationSent(id: string, tokenHash: string): Promise<void> {
-    await this.pool.query("UPDATE provider_invitations SET sent_at = now() WHERE id = $1 AND token_hash = decode($2, 'hex')", [id, tokenHash]);
+  async markProviderInvitationSent(id: string, tokenHash: string): Promise<boolean> {
+    const result = await this.pool.query("UPDATE provider_invitations SET sent_at = now() WHERE id = $1 AND token_hash = decode($2, 'hex')", [id, tokenHash]);
+    return result.rowCount === 1;
   }
 
-  async acceptProviderInvitation(tokenHash: string, passwordHash: string): Promise<IdentityUser | null> {
+  async acceptProviderInvitation(tokenHash: string, passwordHash: string, profile: ProviderOnboardingInput & { providerChainNamespace: string }): Promise<IdentityUser | null> {
     return this.withTransaction(async (client) => {
       const target = await client.query<{ email: string }>("SELECT email FROM provider_invitations WHERE token_hash = decode($1, 'hex')", [tokenHash]);
       if (!target.rows[0]) return null;
@@ -90,7 +89,7 @@ export class IdentityRepository {
         `INSERT INTO users (email, password_hash, display_name, role, status, organization_name,
                             provider_chain_address, provider_chain_namespace, email_verified_at)
          VALUES ($1, $2, $3, 'PROVIDER_ADMIN', 'ACTIVE', $4, $5, $6, now()) RETURNING *`,
-        [invitation.email, passwordHash, invitation.display_name, invitation.organization_name, invitation.provider_chain_address, invitation.provider_chain_namespace],
+        [invitation.email, passwordHash, profile.displayName, profile.organizationName, invitation.provider_chain_address, invitation.provider_chain_namespace ?? profile.providerChainNamespace],
       );
       const user = mapUser(result.rows[0]);
       await client.query('UPDATE provider_invitations SET accepted_at = now(), accepted_user_id = $2, updated_at = now() WHERE id = $1', [invitation.id, user.id]);
@@ -98,20 +97,19 @@ export class IdentityRepository {
     });
   }
 
-  async isProviderInvitationPending(tokenHash: string): Promise<boolean> {
-    const result = await this.pool.query(
-      `SELECT i.id FROM provider_invitations i JOIN users inviter ON inviter.id = i.invited_by_user_id
+  async findPendingProviderInvitation(tokenHash: string): Promise<ProviderInvitationPreview | null> {
+    const result = await this.pool.query<{ email: string; expires_at: Date }>(
+      `SELECT i.email, i.expires_at FROM provider_invitations i JOIN users inviter ON inviter.id = i.invited_by_user_id
        WHERE token_hash = decode($1, 'hex') AND accepted_at IS NULL AND expires_at > clock_timestamp()
          AND inviter.role = 'SYSTEM_ADMIN' AND inviter.status = 'ACTIVE'`, [tokenHash],
     );
-    return result.rows.length > 0;
+    const row = result.rows[0];
+    return row ? { email: row.email, expiresAt: dateValue(row.expires_at).toISOString() } : null;
   }
 
   private mapInvitation(row: Record<string, unknown>): ProviderInvitation {
     return {
-      id: String(row.id), email: String(row.email), displayName: String(row.display_name),
-      organizationName: String(row.organization_name), providerChainAddress: String(row.provider_chain_address),
-      providerChainNamespace: String(row.provider_chain_namespace), createdAt: dateValue(row.created_at).toISOString(),
+      id: String(row.id), email: String(row.email), createdAt: dateValue(row.created_at).toISOString(),
       expiresAt: dateValue(row.expires_at).toISOString(), sentAt: row.sent_at ? dateValue(row.sent_at).toISOString() : null,
       status: row.accepted_at ? 'ACCEPTED' : dateValue(row.expires_at).getTime() <= Date.now() ? 'EXPIRED' : 'PENDING',
     };

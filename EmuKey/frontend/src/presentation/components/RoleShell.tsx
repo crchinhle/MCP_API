@@ -1,4 +1,4 @@
-import { SettingOutlined, LockOutlined, DownOutlined } from '@ant-design/icons';
+import { SettingOutlined, LockOutlined } from '@ant-design/icons';
 import { Button, Dropdown } from 'antd';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
@@ -48,15 +48,7 @@ export const systemShell: RoleShellConfig = {
     { label: 'Thanh toán', to: '/system/console?view=payments' },
     { label: 'Blockchain', to: '/system/console?view=blockchain' },
     { label: 'Duyệt tài liệu', to: '/system/console/knowledge' },
-     { label: 'Hồ sơ', to: '/system/console/profile' },
   ],
-};
-
-const roleLabels: Record<RoleShellConfig['role'], string> = {
-  CUSTOMER: 'NGƯỜI MUA',
-  PROVIDER_ADMIN: 'NHÀ CUNG CẤP',
-  SUPPORT_STAFF: 'SUPPORT',
-  SYSTEM_ADMIN: 'SYSTEM',
 };
 
 export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
@@ -136,7 +128,6 @@ export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
     <div className={`role-shell${config.role === 'PROVIDER_ADMIN' ? ' role-shell--provider' : isSystem ? ' role-shell--system' : ''}`}>
       <aside className="role-sidebar">
         <div className="role-brand"><Brand /></div>
-        <span className="role-label">{roleLabels[config.role]}</span>
         <button
           ref={menuButtonRef}
           aria-controls="role-mobile-menu"
@@ -151,7 +142,6 @@ export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
         </button>
         <div className="role-desktop-nav">{navigation}</div>
         {auth?.user && isSystem ? <div className="role-account-footer">
-          <NotificationCenter />
           <Dropdown placement="topLeft" trigger={['click']} autoFocus open={accountMenuOpen} onOpenChange={setAccountMenuOpen} menu={{ 'aria-label': 'Tài khoản quản trị', items: [
             { key: 'email', label: auth.user.email, disabled: true },
             { type: 'divider' },
@@ -166,8 +156,7 @@ export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
           } }}>
             <button type="button" className="system-account-trigger" aria-label={`Mở menu tài khoản ${auth.user.displayName}`} aria-haspopup="menu" aria-expanded={accountMenuOpen} onKeyDown={(event) => { if (event.key === ' ') { event.preventDefault(); setAccountMenuOpen((open) => !open); } }}>
               <span className="system-account-avatar" aria-hidden="true">{auth.user.displayName.trim().split(/\s+/).slice(-2).map((part) => part[0]).join('').toLocaleUpperCase('vi')}</span>
-              <span className="role-account-identity"><strong>{auth.user.displayName}</strong><small>Quản trị hệ thống</small></span>
-              <DownOutlined aria-hidden="true" />
+              <span className="role-account-identity"><strong>{auth.user.displayName}</strong></span>
             </button>
           </Dropdown>
         </div> : auth?.user && config.role === 'PROVIDER_ADMIN' ? <div className="role-account-footer">
@@ -184,7 +173,7 @@ export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
           } }}>
             <button type="button" className="provider-account-trigger" aria-label={`Mở menu tài khoản ${auth.user.displayName}`}>
               <span className="provider-account-avatar" aria-hidden="true">{auth.user.displayName.trim().split(/\s+/).slice(-2).map((part) => part[0]).join('').toLocaleUpperCase('vi')}</span>
-              <span className="role-account-identity"><strong title={auth.user.displayName}>{auth.user.displayName}</strong><small>Nhà cung cấp</small></span>
+              <span className="role-account-identity"><strong title={auth.user.displayName}>{auth.user.displayName}</strong></span>
             </button>
           </Dropdown>
         </div> : auth?.user ? <div className="role-account-footer">
@@ -204,10 +193,10 @@ export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
             onClick={() => setMenuOpen(false)}
             type="button"
           />
-          <div ref={mobileMenuRef} className="mobile-menu-panel role-mobile-menu" id="role-mobile-menu" role="dialog" aria-modal="true" aria-label={`Menu ${roleLabels[config.role]}`}>
+          <div ref={mobileMenuRef} className="mobile-menu-panel role-mobile-menu" id="role-mobile-menu" role="dialog" aria-modal="true" aria-label="Menu điều hướng">
             <Button onClick={() => { setMenuOpen(false); menuButtonRef.current?.focus(); }}>Đóng menu</Button>
             {navigation}
-            {auth?.user ? <div className="mobile-menu-actions">{config.role !== 'PROVIDER_ADMIN' ? <NotificationCenter /> : null}<Button onClick={() => { setMenuOpen(false); void navigate(roleSettingsPath(auth.user!.role)); }}>Hồ sơ tài khoản</Button><Button onClick={() => { setMenuOpen(false); void auth.logout(); }}>Đăng xuất</Button></div> : null}
+            {auth?.user ? <div className="mobile-menu-actions">{!isSystem && config.role !== 'PROVIDER_ADMIN' ? <NotificationCenter /> : null}<Button onClick={() => { setMenuOpen(false); void navigate(roleSettingsPath(auth.user!.role)); }}>Hồ sơ tài khoản</Button><Button onClick={() => { setMenuOpen(false); void auth.logout(); }}>Đăng xuất</Button></div> : null}
           </div>
         </>
       ) : null}

@@ -29,6 +29,15 @@ const validEnvironment = {
 };
 
 describe('validateEnvironment', () => {
+  it('keeps namespace issuance disabled by default and requires a distinct complete deployment', () => {
+    expect(validateEnvironment(validEnvironment).EVM_NAMESPACE_CONTRACT_ADDRESS).toBeUndefined();
+    expect(() => validateEnvironment({ ...validEnvironment, EVM_NAMESPACE_CONTRACT_ADDRESS: `0x${'12'.repeat(20)}` })).toThrow('EVM_NAMESPACE_DEPLOYMENT_BLOCK is required');
+    expect(() => validateEnvironment({ ...validEnvironment, EVM_NAMESPACE_DEPLOYMENT_BLOCK: '123' })).toThrow('EVM_NAMESPACE_CONTRACT_ADDRESS is required');
+    expect(() => validateEnvironment({ ...validEnvironment, EVM_NAMESPACE_CONTRACT_ADDRESS: validEnvironment.EVM_CONTRACT_ADDRESS, EVM_NAMESPACE_DEPLOYMENT_BLOCK: '123' })).toThrow('Namespace registry must differ from the legacy registry');
+    expect(() => validateEnvironment({ ...validEnvironment, EVM_NAMESPACE_CONTRACT_ADDRESS: `0x${'00'.repeat(20)}`, EVM_NAMESPACE_DEPLOYMENT_BLOCK: '123' })).toThrow('nonzero 20-byte address');
+    expect(() => validateEnvironment({ ...validEnvironment, EVM_NAMESPACE_CONTRACT_ADDRESS: `0x${'12'.repeat(20)}`, EVM_NAMESPACE_DEPLOYMENT_BLOCK: '-1' })).toThrow('non-negative safe integer');
+    expect(validateEnvironment({ ...validEnvironment, EVM_NAMESPACE_CONTRACT_ADDRESS: `0x${'AB'.repeat(20)}`, EVM_NAMESPACE_DEPLOYMENT_BLOCK: '123' })).toMatchObject({ EVM_NAMESPACE_CONTRACT_ADDRESS: `0x${'ab'.repeat(20)}`, EVM_NAMESPACE_DEPLOYMENT_BLOCK: 123 });
+  });
   it('keeps activation and public verification rate limits independent', () => {
     const result = validateEnvironment({
       ...validEnvironment,
