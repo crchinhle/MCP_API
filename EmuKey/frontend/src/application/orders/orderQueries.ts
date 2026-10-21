@@ -21,6 +21,12 @@ export type OrderSummary = OrderDto;
 export type OrderDetail = OrderDto;
 export type PaymentAttempt = CheckoutSessionDto;
 
+export function paymentNeedsReview(payment: Pick<PaymentHistoryDto, 'classification' | 'reviewStatus'>) {
+  // Matches the backend review queue. DUPLICATE/null is already handled;
+  // MATCHED can still require review when the backend explicitly marks it OPEN.
+  return payment.reviewStatus === 'OPEN';
+}
+
 export function useRenewalPreview(licenseId: string) {
   return useQuery({
     queryKey: ['orders', 'renewal-preview', licenseId],

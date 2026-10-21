@@ -215,7 +215,6 @@ describe('ChainCommandService durable submission handling', () => {
       'RECONCILE_SAME_RAW',
       'RPC timeout requires same-raw reconciliation',
       undefined,
-      undefined,
     ]]);
   });
 });

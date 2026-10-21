@@ -1,6 +1,7 @@
 import { LoadingOverlay } from '../components/WorkspacePrimitives';
 import { Alert, Button, Form, Input, Modal, Tag } from 'antd';
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import {
   describeApiError,
@@ -12,7 +13,7 @@ import { PageHeader } from '../components/WorkspacePrimitives';
 
 const roleLabels: Record<string, string> = {
   CUSTOMER: 'Người mua',
-  PROVIDER_ADMIN: 'Provider',
+  PROVIDER_ADMIN: 'Nhà cung cấp',
   SUPPORT_STAFF: 'Hỗ trợ',
   SYSTEM_ADMIN: 'Quản trị hệ thống',
 };
@@ -24,6 +25,7 @@ const strongPasswordRules = [
 ];
 
 export function AccountProfileScreen() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { logout, updateProfile, user } = useAuth();
   const [form] = Form.useForm<ProfileInput>();
   const [passwordForm] = Form.useForm<{ currentPassword: string; password: string; confirm: string }>();
@@ -33,7 +35,13 @@ export function AccountProfileScreen() {
   const [passwordSaving, setPasswordSaving] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSaved, setPasswordSaved] = useState(false);
-  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(searchParams.get('password') === 'change');
+  useEffect(() => {
+    if (searchParams.get('password') === 'change') {
+      setPasswordOpen(true);
+      setSearchParams((previous) => { const next = new URLSearchParams(previous); next.delete('password'); return next; }, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     form.setFieldsValue({
@@ -94,11 +102,12 @@ export function AccountProfileScreen() {
     <>
       <PageHeader
         title="Hồ sơ tài khoản"
-        action={<Tag color={user.status === 'ACTIVE' ? 'green' : 'orange'}>{user.status}</Tag>}
+        action={<Tag color={user.status === 'ACTIVE' ? 'green' : 'orange'}>{user.status === 'ACTIVE' ? 'Đang hoạt động' : user.status}</Tag>}
       />
       <div className="workspace-two-column profile-layout">
         <section className="workspace-card section-card">
-          <h2>Thông tin cá nhân</h2>
+          <h2>Thông tin hồ sơ</h2>
+          <p className="muted-copy">Cập nhật thông tin liên hệ và tổ chức.</p>
           <Form
             form={form}
             initialValues={{
@@ -113,12 +122,9 @@ export function AccountProfileScreen() {
             <Form.Item
               label="Tên hiển thị"
               name="displayName"
-              rules={[{ required: true, message: 'Vui lòng nhập tên hiển thị.' }, { max: 255 }]}
+              rules={[{ required: true, whitespace: true, message: 'Vui lòng nhập tên hiển thị.' }, { max: 255 }]}
             >
               <Input autoComplete="name" />
-            </Form.Item>
-            <Form.Item label="Email">
-              <span className="readonly-value">{user.email}</span>
             </Form.Item>
             <Form.Item label="Số điện thoại" name="phone" rules={[{ max: 30 }]}>
               <Input autoComplete="tel" />
@@ -143,13 +149,15 @@ export function AccountProfileScreen() {
           </Form>
         </section>
         <aside className="workspace-card section-card profile-summary">
-          <span className="status-chip status-chip--neutral">{roleLabels[user.role] ?? user.role}</span>
-          <h2>{user.displayName}</h2>
-          <p>{user.email}</p>
+          <h2>Tài khoản</h2>
+          <p><strong>Email</strong><br />{user.email}</p>
+          <p><strong>Vai trò</strong><br />{roleLabels[user.role] ?? user.role}</p>
+          <p><strong>Trạng thái</strong><br />{user.status === 'ACTIVE' ? 'Đang hoạt động' : user.status}</p>
           <small>
             Email và vai trò được bảo vệ bởi hệ thống xác thực, không thay đổi tại màn hình này.
           </small>
-          <Button onClick={() => { setPasswordError(null); setPasswordOpen(true); }} style={{ marginTop: 16 }} type="default">Đổi mật khẩu</Button>
+          <h3>Bảo mật</h3>
+          <Button onClick={() => { setPasswordError(null); setPasswordOpen(true); }} type="default">Đổi mật khẩu</Button>
           <Modal
             className="account-password-modal"
             destroyOnHidden

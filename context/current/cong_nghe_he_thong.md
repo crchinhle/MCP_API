@@ -1,5 +1,7 @@
 # Công nghệ và kiến trúc hệ thống EmuKey — baseline v5.1-r4
 
+> Phạm vi cập nhật 20/10/2026: gỡ nhật ký hoạt động người dùng (`OPS-02`), schema còn 18 bảng và danh mục còn 34 capability. Giữ lịch sử nghiệp vụ và log lỗi kỹ thuật tối thiểu; không có màn hình/API audit tổng quát. Các kết quả có ngày của phiên bản cũ là dữ liệu lịch sử.
+
 > **Đề tài:** Xây dựng hệ thống quản lý và phân phối bản quyền phần mềm ứng dụng Blockchain  
 > **Ngày cập nhật:** 17/09/2026  
 > **Phạm vi:** snapshot implementation của repository `EmuKey`; phân biệt rõ dependency đã cài, adapter đã bind, flow đã chạy và target chưa triển khai.
@@ -39,8 +41,8 @@ flowchart TB
 | HTTP | `@nestjs/platform-express` | HTTP server; SePay/Brevo dùng SDK riêng và blockchain dùng `viem`. Axios có trong dependency tree nhưng chưa có caller runtime trong `backend/src` |
 | API contract | `@nestjs/swagger`, OpenAPI, `@hey-api/openapi-ts` | Backend sinh OpenAPI; Web/Mobile đồng bộ snapshot và chỉ generate TypeScript types, không generate runtime client; HTTP wrapper được viết tay |
 | Realtime | Socket.IO 4.8.3, `@nestjs/platform-socket.io` | Dependency đã cài nhưng chưa có Gateway/emit runtime; trạng thái command hiện được Web/Mobile theo dõi bằng HTTP polling 2 giây |
-| Database | PostgreSQL 15+, `pg` 8.23.0 | Database authoritative cho identity, catalog, commerce, audit và blockchain projection |
-| PostgreSQL extensions | `pgcrypto`, `citext`, `vector` | UUID/hash, email không phân biệt hoa thường và vector embedding schema |
+| Database | PostgreSQL 15+, `pg` 8.23.0 | Database authoritative cho identity, catalog, commerce và blockchain projection |
+| PostgreSQL extensions | `pgcrypto`, `citext` | UUID/hash và email không phân biệt hoa thường; tìm tài liệu bằng full-text search |
 | Cache/scheduling | Redis 8.2 Alpine, `ioredis` 5.11.1, BullMQ 6.3.4 | Redis phục vụ TTL, session/refresh và activation envelope; BullMQ chỉ làm scheduler/trigger đánh thức Worker, còn command và retry state bền vững nằm trong PostgreSQL |
 | Web | React 19.2.8, Vite 8.2.2, React Router 7.18.3 | Public verification và các portal Customer/Provider/System/Support |
 | UI Web | Ant Design 6.6.2, Ant Design Icons 6.3.4 | Component và icon system của Web |
@@ -77,7 +79,7 @@ backend/
       licensing/              # challenge/proof, activate/revoke/rotate, lifecycle, entitlement
       blockchain/             # projection query/public verify, command, relayer, indexer, reconcile, envelope
       assistance-support/     # AI/storage ports và fake/local scaffold; chưa có flow API hoàn chỉnh
-      operations/             # Brevo/fake email và fake push binding; AuditWriter nằm ở platform
+      operations/             # Brevo/fake email và fake push binding; log lỗi kỹ thuật nằm ở platform
     entrypoints/
       api/                    # process HTTP API
       worker/                 # process BullMQ/chain worker
@@ -114,16 +116,16 @@ PostgreSQL là nguồn dữ liệu bền vững cho dữ liệu riêng tư và p
 | Licensing | `licenses`, `license_devices` |
 | Blockchain | `chain_commands`, `chain_events`, `chain_indexer_checkpoints` |
 | Assistance | `knowledge_documents`, `knowledge_chunks`, `conversations`, `messages` |
-| Operations | `notifications`, `mobile_push_tokens`, `audit_logs` |
+| Operations | `notifications`, `mobile_push_tokens` |
 
 Các nguyên tắc đang áp dụng:
 
 - Truy cập database bằng `pg` và SQL version-controlled; không dùng TypeORM, Prisma hoặc automatic schema synchronization.
 - PostgreSQL không chạy trong Docker Compose mặc định. API, Worker và maintenance command lấy `DATABASE_URL` từ `backend/.env`; môi trường phát triển hiện dùng database PostgreSQL bên ngoài.
-- `pgvector` đã được bật trong schema để hỗ trợ knowledge/vector embedding, nhưng AI runtime hiện chưa có Gemini adapter thực tế.
+- Knowledge lưu nội dung hướng dẫn theo chunk cho người đọc và AI truy xuất bằng PostgreSQL full-text search. Schema không còn lưu embedding hoặc yêu cầu `pgvector`; Gemini dùng nguồn truy xuất để trả lời câu hỏi, không lưu tên model trên tin nhắn.
 - Database transaction là nơi ghi durable state trước khi đẩy queue hoặc gọi adapter bên ngoài.
 - Seed và schema initialization là thao tác explicit, không tự chạy khi `docker compose up`.
-- Schema v7.3 dùng DB statement clock cho Order/Attempt lifecycle và IPN `received_at`, lưu immutable `ipn_accept_until` cùng late-correction provenance; guard exact Order↔Attempt↔effect amount/time/status hai chiều theo thứ tự effect -> late-correct Attempt -> `PAYMENT_ACCEPTED`, terminal review/effect immutability và paid-origin cho License/`ISSUE_LICENSE`/`RENEW_LICENSE`. License mới phải bind exact durable effect, `period_start = provider_occurred_at`, quota snapshot và ISSUE cùng transaction. Command sequence dùng latest-confirmed basis cho non-ISSUE, reciprocal replacement/ISSUE recovery và typed resolution proof gồm cả audited nonce release; `ABANDONED/SUPERSEDED` là row bất biến hoàn toàn, `RAW_TX_IRREVOCABLE_NO_EFFECT` loại receipt `SUCCESS/REVERTED`, và `checkedAt` phải là RFC3339 parse được trong biên evidence -> resolution. ChainEvent mới bắt đầu `PENDING`, một confirmed event/command, latest canonical projection pointer đúng event type; Individual Device chỉ có ACTIVE/REVOKED và không có canonical event pointer. Expiry chỉ tăng một lần theo exact confirmed renewal pointer và chỉ giảm khi rollback chính renewal reorg. Event timestamps phải chronological, re-inclusion được observe sau prior reorg; durable evidence no-delete, reorg summary chỉ giữ latest timestamps + count. EVM address/hash được normalize lowercase; provider namespace dùng so sánh case-insensitive.
+- Schema v7.3 dùng DB statement clock cho Order/Attempt lifecycle và IPN `received_at`, lưu immutable `ipn_accept_until` cùng late-correction provenance; guard exact Order↔Attempt↔effect amount/time/status hai chiều theo thứ tự effect -> late-correct Attempt -> `PAYMENT_ACCEPTED`, terminal review/effect immutability và paid-origin cho License/`ISSUE_LICENSE`/`RENEW_LICENSE`. License mới phải bind exact durable effect, `period_start = provider_occurred_at`, quota snapshot và ISSUE cùng transaction. Command sequence dùng latest-confirmed basis cho non-ISSUE, reciprocal replacement/ISSUE recovery và typed resolution proof gồm cả nonce release; `ABANDONED/SUPERSEDED` là row bất biến hoàn toàn, `RAW_TX_IRREVOCABLE_NO_EFFECT` loại receipt `SUCCESS/REVERTED`, và `checkedAt` phải là RFC3339 parse được trong biên evidence -> resolution. ChainEvent mới bắt đầu `PENDING`, một confirmed event/command, latest canonical projection pointer đúng event type; Individual Device chỉ có ACTIVE/REVOKED và không có canonical event pointer. Expiry chỉ tăng một lần theo exact confirmed renewal pointer và chỉ giảm khi rollback chính renewal reorg. Event timestamps phải chronological, re-inclusion được observe sau prior reorg; durable evidence no-delete, reorg summary chỉ giữ latest timestamps + count. EVM address/hash được normalize lowercase; provider namespace dùng so sánh case-insensitive.
 
 ## 5. Blockchain và bản quyền
 
@@ -161,7 +163,7 @@ Activation secret được tạo bằng CSPRNG. ISSUE giữ proposal commitment/
 
 1. Customer tạo Order và chấp nhận Terms.
 2. Backend tạo PaymentAttempt và checkout form SePay có chữ ký server-side.
-3. SePay gửi IPN; backend xác thực secret key rồi normalize stable event ID, positive amount, ISO currency và provider occurrence time. Payload không normalize được chỉ ghi security audit redacted; normalized semantic anomaly (gồm currency khác VND) mới vào durable PaymentTransaction/review. Fulfillment VND chỉ xảy ra khi transaction amount = Attempt amount = immutable Order price snapshot.
+3. SePay gửi IPN; backend xác thực secret key rồi normalize stable event ID, positive amount, ISO currency và provider occurrence time. Payload không normalize được bị từ chối trước khi ghi dữ liệu nghiệp vụ; normalized semantic anomaly (gồm currency khác VND) mới vào durable PaymentTransaction/review. Fulfillment VND chỉ xảy ra khi transaction amount = Attempt amount = immutable Order price snapshot.
 4. `NEW_PURCHASE`: trong DB transaction, payment thành công commit License `PENDING_ONCHAIN` và `ISSUE_LICENSE` command. Sau commit mới prepare/verify activation envelope; worker chỉ submit khi commitment/envelope khớp.
 5. `RENEWAL`: đã có đường tạo Renewal Order/`RENEW_LICENSE` command và chỉ apply expiry sau finality, nhưng chưa được coi là conformance-complete. Target SQL v7.3 đã tách `provider_occurred_at` khỏi `received_at`; việc adapter/repository thực sự validate/use đúng hai timestamp cùng race/negative evidence vẫn nằm trong gate Phase 4.
 6. Worker submit transaction; chỉ sau canonical event/finality, projection mới activate License hoặc apply expiry mới.
@@ -169,11 +171,11 @@ Activation secret được tạo bằng CSPRNG. ISSUE giữ proposal commitment/
 ### 6.2. TARGET — renewal canonical còn gate mở
 
 - Customer owner phải gửi current `X-License-Key`; Renewal Order phải target cùng owner/Provider/Product/Plan/commitment với License và không được biến thành upgrade/downgrade.
-- New purchase dùng proposed period từ verified provider time; renewal dùng `addPlanDuration(max(canonical expiresAt, verified provider_occurred_at), duration_months)` với UTC calendar-month/end-of-month clamp. `received_at` chỉ đo delivery/audit; expiry chỉ canonical sau chain finality.
+- New purchase dùng proposed period từ verified provider time; renewal dùng `addPlanDuration(max(canonical expiresAt, verified provider_occurred_at), duration_months)` với UTC calendar-month/end-of-month clamp. `received_at` chỉ đo delivery; expiry chỉ canonical sau chain finality.
 - Target SQL v7.3 có `uq_orders_one_open_renewal`, forward-admission index và per-License admission trigger. Deep reorg vẫn có thể tạo nhiều historical `SUBMITTED_UNKNOWN`, nhưng trigger/application lock chặn command mới khi `SUBMITTED_UNKNOWN` hoặc `DEAD_LETTER` chưa resolve tồn tại. Policy end-to-end vẫn chưa CLOSED cho atomic handoff, concurrent/late IPN, review outcome, recovery và executable evidence.
 - Order mới bắt buộc vào `WAITING_TERMS_ACCEPTANCE`; import/seed không được chèn thẳng trạng thái sau hoặc terminal. PostgreSQL tự đóng dấu Order/Attempt lifecycle và IPN `received_at` bằng `statement_timestamp()`, nên caller không thể backdate cutoff. PaymentAttempt hết hạn chỉ đóng reference đó và expire khi `commerceNow >= expires_at`; supersede chỉ trước expiry. CreateOrder snapshot bất biến `ipn_accept_until = payment_due_at + policy grace`; từ due đến cutoff, Order chờ payment là callback-only, tại/sau cutoff mới terminal-expire. Auto/manual fulfillment chỉ từ `WAITING_PAYMENT`, exact Terms/amount, `provider_occurred_at` trong `[max(terms_accepted_at, attempt.created_at), min(attempt.expires_at, payment_due_at))`, thêm `provider_occurred_at < superseded_at` nếu attempt đã supersede, và `received_at < ipn_accept_until`. Cùng transaction phải ghi durable effect trước, late-correct exact Attempt sang `SUCCEEDED` nếu cần, rồi mới project Order `PAYMENT_ACCEPTED`; correction giữ immutable `corrected_from_status + correction_boundary_at` và mọi attempt khác còn `PENDING` phải supersede atomically. License purchase phải bind exact paid effect, `period_start = provider_occurred_at`, quota snapshot và ISSUE cùng transaction; ISSUE/RENEW command không được tồn tại thiếu exact `PAYMENT_ACCEPTED` effect. Durable effect, exact Attempt `SUCCEEDED` và Order `PAYMENT_ACCEPTED` đồng nhất hai chiều tại commit; Order `CANCELLED/EXPIRED` không giữ attempt `PENDING`. Review đi `NONE -> OPEN -> RESOLVED|CLOSED_NO_ACTION`, terminal/effect tuple immutable; `AMOUNT_MISMATCH` không accept trực tiếp và Order terminal không hồi sinh. `canonicalNow` từ finalized block dành cho License/chain temporal state, không thay provider payment time.
 
-`IPN_DELIVERY_GRACE` là deployment policy (không phải client input), phải lớn hơn delivery-latency/retry contract đã chọn của SePay và có boundary test. Policy chỉ tính cutoff khi tạo Order; đổi cấu hình không sửa Order cũ. `provider_occurred_at` còn phải qua bounded clock-skew validation; `received_at` chỉ kiểm tra delivery cutoff/audit, không thay provider time.
+`IPN_DELIVERY_GRACE` là deployment policy (không phải client input), phải lớn hơn delivery-latency/retry contract đã chọn của SePay và có boundary test. Policy chỉ tính cutoff khi tạo Order; đổi cấu hình không sửa Order cũ. `provider_occurred_at` còn phải qua bounded clock-skew validation; `received_at` chỉ kiểm tra delivery cutoff, không thay provider time.
 
 Đối với sơ đồ trạng thái, smart contract lưu administrative state `ACTIVE/SUSPENDED/REVOKED`; `EXPIRED` là effective/temporal result từ `expiresAt` theo timestamp của latest finalized block. Renewal của License suspended chỉ đưa expiry về tương lai, không tự resume. Device đã revoke có thể bind lại cùng reference bằng `binding_generation` mới; PostgreSQL lưu lowercase `device_signer_address` suy ra từ public key, còn private key chỉ ở client SecureStore. Runtime hiện bind challenge và activate/revoke command theo purpose + generation, đồng thời expiry worker lấy timestamp của finalized block; request-scoped idempotency đầy đủ và compatibility/manual recovery matrix vẫn là gap Phase 6.
 

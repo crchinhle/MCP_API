@@ -12,6 +12,8 @@ export class CreateKnowledgeDocumentDto {
 
 export class KnowledgeDocumentDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiPropertyOptional({ format: 'uuid' }) providerUserId?: string;
+  @ApiPropertyOptional({ format: 'uuid' }) productId?: string;
   @ApiProperty() title!: string;
   @ApiProperty() logicalDocumentKey!: string;
   @ApiProperty() version!: number;

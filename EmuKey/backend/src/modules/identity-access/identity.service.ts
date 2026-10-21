@@ -29,13 +29,10 @@ export interface PasswordRepository {
   acceptProviderInvitation(tokenHash: string, passwordHash: string): Promise<IdentityUser | null>;
   isProviderInvitationPending(tokenHash: string): Promise<boolean>;
   activateCustomer(id: string): Promise<IdentityUser | null>;
-  bumpSessionVersion(id: string, action?: string): Promise<void>;
+  bumpSessionVersion(id: string): Promise<void>;
   changeStateByAdmin(
     targetId: string,
     status: UserState,
-    actorId: string,
-    actorRole: string,
-    reason: string,
   ): Promise<IdentityUser>;
   createCustomer(input: {
     customerType: 'BUSINESS' | 'INDIVIDUAL' | 'STUDENT';
@@ -56,7 +53,6 @@ export interface PasswordRepository {
   updatePassword(id: string, passwordHash: string): Promise<void>;
   updateProfile(
     id: string,
-    actorRole: string,
     fields: Record<string, string | null>,
   ): Promise<IdentityUser | null>;
 }
@@ -410,7 +406,7 @@ export class IdentityService {
     const replay = await this.redis.get(`refresh-used:${digest}`);
     if (replay) {
       const session = JSON.parse(replay) as RefreshSession;
-      await this.repo.bumpSessionVersion(session.id, 'SESSION_REVOKED_REPLAY');
+      await this.repo.bumpSessionVersion(session.id);
       throw new UnauthorizedException({
         code: 'REFRESH_REUSE_DETECTED',
         message: 'Refresh token reuse was detected.',
@@ -428,7 +424,7 @@ export class IdentityService {
       user.status !== 'ACTIVE' ||
       user.sessionVersion !== data.version
     ) {
-      if (user) await this.repo.bumpSessionVersion(data.id, 'SESSION_REVOKED_INVALID');
+      if (user) await this.repo.bumpSessionVersion(data.id);
       throw this.invalidSession();
     }
     return this.issue(user, data.familyId);
@@ -437,7 +433,7 @@ export class IdentityService {
   async logout(raw: string | undefined): Promise<void> {
     try {
       const session = await this.consumeRefresh(raw);
-      if (session) await this.repo.bumpSessionVersion(session.id, 'SESSION_REVOKED_LOGOUT');
+      if (session) await this.repo.bumpSessionVersion(session.id);
     } catch (error) {
       if (error instanceof UnauthorizedException) return;
       throw error;
@@ -445,7 +441,7 @@ export class IdentityService {
   }
 
   async revokeUserSessions(userId: string): Promise<void> {
-    await this.repo.bumpSessionVersion(userId, 'SESSION_REVOKED');
+    await this.repo.bumpSessionVersion(userId);
   }
 
   async authenticate(token: string): Promise<AuthPrincipal> {
@@ -496,7 +492,7 @@ export class IdentityService {
     const allowed = Object.fromEntries(
       Object.entries(fields).filter(([key]) => roleFields.has(key)),
     );
-    const user = await this.repo.updateProfile(actor.sub, actor.role, allowed);
+    const user = await this.repo.updateProfile(actor.sub, allowed);
     if (!user) {
       throw new NotFoundException({
         code: 'USER_NOT_FOUND',
@@ -510,7 +506,6 @@ export class IdentityService {
     targetId: string,
     status: UserState,
     actor: AuthPrincipal,
-    reason: string,
   ) {
     if (actor.role !== 'SYSTEM_ADMIN') {
       throw new ForbiddenException({
@@ -522,9 +517,6 @@ export class IdentityService {
       const user = await this.repo.changeStateByAdmin(
         targetId,
         status,
-        actor.sub,
-        actor.role,
-        reason,
       );
       return this.publicUser(user);
     } catch (error) {

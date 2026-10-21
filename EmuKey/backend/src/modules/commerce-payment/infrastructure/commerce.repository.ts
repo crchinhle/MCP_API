@@ -2,8 +2,6 @@ import { randomUUID } from 'node:crypto';
 
 import { Pool, type PoolClient } from 'pg';
 import { keccak256, stringToHex, type Hex } from 'viem';
-
-import { AuditWriter } from '../../../platform/audit/audit-writer.js';
 import { NotificationRepository } from '../../operations/infrastructure/notification.repository.js';
 import { canonicalizeEntitlements } from '../../../platform/crypto/license-crypto.js';
 import type { AuthPrincipal } from '../../identity-access/identity.types.js';
@@ -221,7 +219,6 @@ const PENDING_RENEWAL = `${ORDER_READ}
 export class CommerceRepository {
   constructor(
     private readonly pool: Pool,
-    private readonly audit = new AuditWriter(),
     private readonly ipnDeliveryGraceSeconds = 86_400,
     private readonly notifications = new NotificationRepository(pool),
   ) {
@@ -356,14 +353,6 @@ export class CommerceRepository {
         ],
       );
       const order = mapOrder(result.rows[0] ?? {});
-      await this.audit.write(client, {
-        action: 'ORDER_CREATED',
-        actorRole: 'CUSTOMER',
-        actorUserId: customerUserId,
-        metadata: { orderType: order.orderType },
-        targetId: order.id,
-        targetType: 'ORDER',
-      });
       return order;
     });
   }
@@ -400,7 +389,6 @@ export class CommerceRepository {
       for (const { id } of due.rows) {
         await client.query("UPDATE orders SET order_status='CANCELLED', auto_cancelled=true WHERE id=$1", [id]);
         await client.query("UPDATE payment_attempts SET status='EXPIRED' WHERE order_id=$1 AND status='PENDING' AND expires_at <= statement_timestamp()", [id]);
-        await this.audit.write(client, { action: 'ORDER_AUTO_CANCELLED', targetType: 'ORDER', targetId: id, reason: 'PAYMENT_DEADLINE_REACHED' });
       }
       return due.rowCount ?? 0;
     });
@@ -456,14 +444,6 @@ export class CommerceRepository {
         [id],
       );
       const accepted = mapOrder(result.rows[0] ?? {});
-      await this.audit.write(client, {
-        action: 'ORDER_TERMS_ACCEPTED',
-        actorRole: 'CUSTOMER',
-        actorUserId: customerUserId,
-        metadata: { accepted: true, termsHash: terms.hash, termsVersion: terms.version },
-        targetId: id,
-        targetType: 'ORDER',
-      });
       return accepted;
     });
   }
@@ -490,13 +470,6 @@ export class CommerceRepository {
         [id],
       );
       const order = mapOrder(result.rows[0] ?? {});
-      await this.audit.write(client, {
-        action: 'ORDER_CANCELLED',
-        actorRole: 'CUSTOMER',
-        actorUserId: customerUserId,
-        targetId: id,
-        targetType: 'ORDER',
-      });
       await client.query("UPDATE payment_attempts SET status='SUPERSEDED' WHERE order_id=$1 AND status='PENDING'", [id]);
       return order;
     });
@@ -822,11 +795,6 @@ export class CommerceRepository {
            WHERE id = $1`,
           [transactionId, reconciliation.reason, reconciliation.actor.sub],
         );
-        await this.audit.write(client, {
-          action: 'SANDBOX_PAYMENT_RECONCILED', actorRole: 'SYSTEM_ADMIN', actorUserId: reconciliation.actor.sub,
-          targetId: transactionId, targetType: 'PAYMENT_TRANSACTION', reason: reconciliation.reason,
-          metadata: { orderId, timingBasis, originalReason: stored!.review_reason, providerOccurredAt: event.occurredAt.toISOString(), receivedAt: effectiveAt.toISOString() },
-        });
       } else await client.query(
         `INSERT INTO payment_transactions
           (id, provider_event_id, provider_transaction_ref, order_id,
@@ -997,14 +965,6 @@ export class CommerceRepository {
           commandPayloadHash.slice(2),
         ],
       );
-      await this.audit.write(client, {
-        action: 'PAYMENT_ACCEPTED',
-        actorRole: 'CUSTOMER',
-        actorUserId: String(row.customer_user_id),
-        metadata: { classification: reconciliation ? 'UNMATCHED' : 'MATCHED', timingBasis, reconciled: !!reconciliation, orderType: row.order_type },
-        targetId: orderId,
-        targetType: 'ORDER',
-      });
       await this.notifications.enqueueInTransaction(client, {
         channel: 'IN_APP',
         content: row.order_type === 'NEW_PURCHASE'
@@ -1161,15 +1121,6 @@ export class CommerceRepository {
         );
         result.rows[0].order_number = order.rows[0]?.order_number ?? null;
       }
-      await this.audit.write(client, {
-        action: 'PAYMENT_REVIEWED',
-        actorRole: actor.role,
-        actorUserId: actor.sub,
-        metadata: { status },
-        reason,
-        targetId: id,
-        targetType: 'PAYMENT_TRANSACTION',
-      });
       return mapPaymentReview(result.rows[0]);
     });
   }

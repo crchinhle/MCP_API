@@ -1039,16 +1039,6 @@
             }
           }
         ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/StateDto"
-              }
-            }
-          }
-        },
         "responses": {
           "201": {
             "description": ""
@@ -1077,16 +1067,6 @@
             }
           }
         ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/StateDto"
-              }
-            }
-          }
-        },
         "responses": {
           "201": {
             "description": ""
@@ -1115,16 +1095,6 @@
             }
           }
         ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/StateDto"
-              }
-            }
-          }
-        },
         "responses": {
           "201": {
             "description": ""
@@ -1324,68 +1294,6 @@
         "responses": {
           "200": {
             "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "tags": [
-          "operations"
-        ]
-      }
-    },
-    "/api/v1/operations/audit-logs": {
-      "get": {
-        "operationId": "AuditController_list",
-        "parameters": [
-          {
-            "name": "page",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "default": 1,
-              "allOf": [
-                {
-                  "$ref": "#/components/schemas/Object"
-                }
-              ]
-            }
-          },
-          {
-            "name": "action",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "maxLength": 120,
-              "type": "string"
-            }
-          },
-          {
-            "name": "outcome",
-            "required": false,
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "SUCCESS",
-                "DENIED",
-                "FAILED"
-              ]
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuditPageDto"
-                }
-              }
-            }
           }
         },
         "security": [
@@ -3624,6 +3532,14 @@
             "type": "string",
             "format": "uuid"
           },
+          "providerUserId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "productId": {
+            "type": "string",
+            "format": "uuid"
+          },
           "title": {
             "type": "string"
           },
@@ -3696,6 +3612,14 @@
         "type": "object",
         "properties": {
           "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "providerUserId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "productId": {
             "type": "string",
             "format": "uuid"
           },
@@ -4055,17 +3979,6 @@
           }
         }
       },
-      "StateDto": {
-        "type": "object",
-        "properties": {
-          "reason": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "reason"
-        ]
-      },
       "NotificationDto": {
         "type": "object",
         "properties": {
@@ -4123,81 +4036,6 @@
         "required": [
           "token",
           "provider"
-        ]
-      },
-      "Object": {
-        "type": "object",
-        "properties": {}
-      },
-      "AuditEntryDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "action": {
-            "type": "string"
-          },
-          "outcome": {
-            "type": "string"
-          },
-          "actorUserId": {
-            "type": "string",
-            "nullable": true
-          },
-          "actorRole": {
-            "type": "string",
-            "nullable": true
-          },
-          "targetType": {
-            "type": "string",
-            "nullable": true
-          },
-          "targetId": {
-            "type": "string",
-            "nullable": true
-          },
-          "reason": {
-            "type": "string",
-            "nullable": true
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "required": [
-          "id",
-          "action",
-          "outcome",
-          "actorUserId",
-          "actorRole",
-          "targetType",
-          "targetId",
-          "reason",
-          "createdAt"
-        ]
-      },
-      "AuditPageDto": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AuditEntryDto"
-            }
-          },
-          "hasMore": {
-            "type": "boolean"
-          },
-          "page": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "items",
-          "hasMore",
-          "page"
         ]
       },
       "AdminProductDto": {

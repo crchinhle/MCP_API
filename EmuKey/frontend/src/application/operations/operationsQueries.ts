@@ -1,14 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { AuditPageDto, ReadinessDto } from '../../infrastructure/api/generated';
+import type { ReadinessDto } from '../../infrastructure/api/generated';
 import { requestJson } from '../auth/authContext';
-
-export function useAuditLogs(page: number, action: string, outcome: string) {
-  const params = new URLSearchParams({ page: String(page) });
-  if (action.trim()) params.set('action', action.trim());
-  if (outcome) params.set('outcome', outcome);
-  return useQuery({ queryKey: ['operations', 'audit', page, action, outcome], queryFn: () => requestJson<AuditPageDto>(`/operations/audit-logs?${params.toString()}`) });
-}
 
 export interface AssistanceHealth {
   readonly conversations: { readonly supportActive: number; readonly waitingSupport: number };

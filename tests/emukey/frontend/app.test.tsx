@@ -13,7 +13,6 @@ afterEach(cleanup);
 describe('Emukey public web screens', () => {
   it.each([
     ['/buyer', 'Lối tắt'],
-    ['/provider', 'Tổng quan nhà cung cấp'],
     ['/system/console', 'Tổng quan hệ thống'],
   ])('hides unfinished page content while initial data loads at %s', async (path, heading) => {
     const original = vi.mocked(fetch).getMockImplementation()!;
@@ -31,6 +30,22 @@ describe('Emukey public web screens', () => {
       cleanup();
       vi.mocked(fetch).mockImplementation(original);
     }
+  });
+
+  it('keeps the provider heading and skeletons visible without showing zero while data loads', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    vi.mocked(fetch).mockImplementation(async (input, init) => { await pending; return original(input, init); });
+    try {
+      render(<App initialEntries={['/provider']} />);
+      expect(screen.getByRole('heading', { name: 'Tổng quan nhà cung cấp' })).toBeTruthy();
+      const metrics = screen.getByRole('region', { name: 'Chỉ số hoạt động' });
+      expect(metrics.querySelectorAll('.ant-skeleton').length).toBe(4);
+      expect(metrics.textContent).not.toMatch(/\b0\b/);
+      await act(async () => { release(); });
+      await waitFor(() => expect(metrics.querySelector('.ant-skeleton')).toBeNull());
+    } finally { cleanup(); release(); vi.mocked(fetch).mockImplementation(original); }
   });
 
   it.each([

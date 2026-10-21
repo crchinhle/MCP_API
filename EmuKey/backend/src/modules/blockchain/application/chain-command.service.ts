@@ -119,9 +119,8 @@ export class ChainCommandService {
     mode: 'REQUEUE_NO_SUBMISSION' | 'RECONCILE_SAME_RAW' | 'ABANDON_REVERTED' | 'ABANDON_NO_EFFECT',
     reason: string,
     evidence?: Record<string, unknown>,
-    actor?: { userId: string; role: string },
   ) {
-    return this.repository.recoverDeadLetter(commandId, mode, reason, evidence, actor);
+    return this.repository.recoverDeadLetter(commandId, mode, reason, evidence);
   }
 
   private input(command: ChainCommandRecord): ChainCommandInput {

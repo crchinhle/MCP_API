@@ -1,3 +1,4 @@
+import { paginationTextControls } from '../theme';
 import { LoadingOverlay } from '../components/WorkspacePrimitives';
 import { Alert, Button, Checkbox, Drawer, Empty, Input, Modal, Pagination, Result, Select } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
@@ -114,7 +115,7 @@ export function BuyerOrdersScreen() {
           </table>
           {data.length === 0 ? <Empty description={orders.length ? 'Không có đơn hàng phù hợp bộ lọc.' : 'Bạn chưa có đơn hàng nào.'} /> : null}
         </section>
-        <Pagination current={currentPage} pageSize={10} total={data.length} onChange={setPage} hideOnSinglePage showSizeChanger={false} />
+        <Pagination {...paginationTextControls} current={currentPage} pageSize={10} total={data.length} onChange={setPage} hideOnSinglePage showSizeChanger={false} />
       </main>
       <Modal centered width={460} open={Boolean(cancelTarget)} title="Xác nhận hủy đơn hàng"
         okText="Hủy đơn" cancelText="Giữ đơn" okButtonProps={{ ...({ danger: true }), disabled: mutations.cancel.isPending }}

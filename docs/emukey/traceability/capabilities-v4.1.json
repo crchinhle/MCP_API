@@ -4,7 +4,7 @@
     "sql": "v7.2",
     "technology": "v5.1-account-linked-buyer",
     "implementationPlan": "v5.1-account-linked-buyer",
-    "capabilityCount": 35
+    "capabilityCount": 34
   },
   "currentTables": [
     "users",
@@ -24,8 +24,7 @@
     "conversations",
     "messages",
     "notifications",
-    "mobile_push_tokens",
-    "audit_logs"
+    "mobile_push_tokens"
   ],
   "uniqueOwners": {
     "comparePlans": "CAT-05",
@@ -41,8 +40,7 @@
       "owner": "identity-access/customer-registration",
       "api": "POST /auth/register; POST /auth/verify-email; POST /auth/resend-verification",
       "tables": [
-        "users",
-        "audit_logs"
+        "users"
       ],
       "transaction": "create account pending email verification; activate exactly once",
       "testOwner": "tests/emukey/backend/integration/identity/identity-flow.integration.test.ts"
@@ -54,8 +52,7 @@
       "owner": "identity-access/session",
       "api": "POST /auth/login; POST /auth/refresh; POST /auth/logout",
       "tables": [
-        "users",
-        "audit_logs"
+        "users"
       ],
       "transaction": "rotate refresh family atomically; session_version is durable revocation",
       "testOwner": "tests/emukey/backend/integration/identity/identity-flow.integration.test.ts"
@@ -68,10 +65,9 @@
       "api": "GET/PUT /auth/profile; PUT /auth/password; POST /auth/users/:id/{lock|unlock|disable}; GET/POST /auth/provider-invitations; POST /auth/provider-invitations/accept",
       "tables": [
         "users",
-        "provider_invitations",
-        "audit_logs"
+        "provider_invitations"
       ],
-      "transaction": "account mutation and audit commit together; provider invitation and acceptance are durable, single-use and audited",
+      "transaction": "account mutation commit together; provider invitation and acceptance are durable, single-use",
       "testOwner": "tests/emukey/backend/integration/identity/identity-flow.integration.test.ts"
     },
     {
@@ -93,8 +89,7 @@
       "owner": "identity-access/provider-profile",
       "api": "GET/PUT /auth/profile and system provider provisioning",
       "tables": [
-        "users",
-        "audit_logs"
+        "users"
       ],
       "transaction": "provider chain identity becomes immutable once referenced",
       "testOwner": "tests/emukey/backend/integration/catalog/catalog-lifecycle.integration.test.ts"
@@ -106,10 +101,9 @@
       "owner": "catalog/product-lifecycle",
       "api": "/products provider mutations and public reads",
       "tables": [
-        "products",
-        "audit_logs"
+        "products"
       ],
-      "transaction": "provider-scoped product mutation and audit",
+      "transaction": "provider-scoped product mutation",
       "testOwner": "tests/emukey/backend/integration/catalog/catalog-lifecycle.integration.test.ts"
     },
     {
@@ -120,8 +114,7 @@
       "api": "/plans provider mutations",
       "tables": [
         "plans",
-        "products",
-        "audit_logs"
+        "products"
       ],
       "transaction": "provider-scoped version creation; published rows immutable",
       "testOwner": "tests/emukey/backend/integration/catalog/catalog-lifecycle.integration.test.ts"
@@ -133,8 +126,7 @@
       "owner": "catalog/terms-and-plan-commitment",
       "api": "plan publish application interface",
       "tables": [
-        "plans",
-        "audit_logs"
+        "plans"
       ],
       "transaction": "bind approved terms hash and deterministic commitment on publish",
       "testOwner": "tests/emukey/backend/unit/platform/license-crypto.test.ts"
@@ -162,8 +154,7 @@
         "orders",
         "plans",
         "products",
-        "users",
-        "audit_logs"
+        "users"
       ],
       "transaction": "lock published plan and persist immutable server snapshot",
       "testOwner": "tests/emukey/backend/integration/commerce/commerce-flow.integration.test.ts"
@@ -175,8 +166,7 @@
       "owner": "commerce-payment/accept-service-terms",
       "api": "POST /orders/:id/accept-service-terms",
       "tables": [
-        "orders",
-        "audit_logs"
+        "orders"
       ],
       "transaction": "lock owned order and record one DB-stamped Service Terms acceptance once",
       "testOwner": "tests/emukey/backend/integration/commerce/commerce-flow.integration.test.ts"
@@ -189,8 +179,7 @@
       "api": "POST /orders/:id/checkout",
       "tables": [
         "orders",
-        "payment_attempts",
-        "audit_logs"
+        "payment_attempts"
       ],
       "transaction": "persist owner attempt before external checkout call",
       "testOwner": "tests/emukey/backend/integration/commerce/commerce-flow.integration.test.ts"
@@ -220,10 +209,9 @@
       "tables": [
         "payment_transactions",
         "payment_attempts",
-        "orders",
-        "audit_logs"
+        "orders"
       ],
-      "transaction": "review mutation and audit commit together",
+      "transaction": "review mutation commit together",
       "testOwner": "tests/emukey/backend/integration/commerce/commerce-flow.integration.test.ts"
     },
     {
@@ -309,7 +297,7 @@
         "chain_commands",
         "chain_events"
       ],
-      "transaction": "persist authorized revoke command and audit",
+      "transaction": "persist authorized revoke command",
       "testOwner": "tests/emukey/backend/unit/licensing.service.test.ts"
     },
     {
@@ -350,8 +338,7 @@
       "tables": [
         "licenses",
         "chain_commands",
-        "chain_events",
-        "audit_logs"
+        "chain_events"
       ],
       "transaction": "request creates command; canonical event controls projection",
       "testOwner": "tests/emukey/backend/unit/blockchain-reconciliation.service.test.ts"
@@ -373,8 +360,7 @@
       "owner": "blockchain/chain-command-relayer",
       "api": "internal chain-submit processor",
       "tables": [
-        "chain_commands",
-        "audit_logs"
+        "chain_commands"
       ],
       "transaction": "durable claim/state before and after external RPC submit",
       "testOwner": "tests/emukey/backend/integration/blockchain/license-db-invariants.integration.test.ts"
@@ -402,10 +388,9 @@
         "chain_events",
         "chain_commands",
         "licenses",
-        "license_devices",
-        "audit_logs"
+        "license_devices"
       ],
-      "transaction": "rebuild projection from canonical events and audit manual trigger",
+      "transaction": "rebuild projection from canonical events",
       "testOwner": "tests/emukey/backend/integration/blockchain/license-db-invariants.integration.test.ts"
     },
     {
@@ -460,8 +445,7 @@
       "api": "conversation/message endpoints and socket protocol",
       "tables": [
         "conversations",
-        "messages",
-        "audit_logs"
+        "messages"
       ],
       "transaction": "persist ordered message before socket emit",
       "testOwner": "tests/emukey/backend/integration/assistance/conversation.integration.test.ts"
@@ -474,10 +458,9 @@
       "api": "support queue/claim/close endpoints",
       "tables": [
         "conversations",
-        "messages",
-        "audit_logs"
+        "messages"
       ],
-      "transaction": "CAS assignment and audit commit together",
+      "transaction": "CAS assignment commit together",
       "testOwner": "tests/emukey/backend/integration/assistance/support-assignment.integration.test.ts"
     },
     {
@@ -494,25 +477,12 @@
       "testOwner": "tests/emukey/backend/integration/operations/notification.integration.test.ts"
     },
     {
-      "id": "OPS-02",
-      "phase": 2,
-      "actor": "BACKEND_OR_SYSTEM",
-      "owner": "operations/audit",
-      "api": "internal append-only audit interface",
-      "tables": [
-        "audit_logs"
-      ],
-      "transaction": "audit participates in security/business mutation transaction",
-      "testOwner": "tests/emukey/backend/integration/database/baseline-schema.integration.test.ts"
-    },
-    {
       "id": "OPS-03",
       "phase": 7,
       "actor": "PROVIDER_ADMIN_OR_SYSTEM",
       "owner": "operations/dashboard-health",
       "api": "health/dashboard endpoints consuming BC-04",
       "tables": [
-        "audit_logs",
         "chain_commands",
         "chain_events"
       ],

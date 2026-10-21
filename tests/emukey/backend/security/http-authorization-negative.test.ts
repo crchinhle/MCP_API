@@ -49,7 +49,6 @@ describe('Phase 8 HTTP authorization negative matrix', () => {
     ['GET', '/api/v1/orders/00000000-0000-4000-8000-000000000501/payment-retry'],
     ['POST', '/api/v1/orders'],
     ['GET', '/api/v1/orders/renewal-preview/00000000-0000-4000-8000-000000000401'],
-    ['GET', '/api/v1/operations/audit-logs'],
     ['GET', '/api/v1/licenses'],
     ['GET', '/api/v1/payments/history'],
     ['GET', '/api/v1/payments/review'],
@@ -58,5 +57,9 @@ describe('Phase 8 HTTP authorization negative matrix', () => {
     const response = await request(app.getHttpServer() as Server)[method.toLowerCase() as 'get' | 'post'](path);
     expect(response.status).toBe(401);
     expect((response.body as { error?: unknown }).error).toMatchObject({ code: 'UNAUTHORIZED' });
+  });
+
+  it('does not expose the removed audit endpoint', async () => {
+    await request(app.getHttpServer() as Server).get('/api/v1/operations/audit-logs').expect(404);
   });
 });

@@ -105,8 +105,8 @@ describe('IdentityController HTTP boundary', () => {
   });
   it('routes admin state changes through the service', async () => {
     const targetId = '00000000-0000-4000-8000-000000000022';
-    await request(server()).post(`/auth/users/${targetId}/lock`).send({ reason: 'security review' }).expect(201);
-    expect(service.changeAccountState).toHaveBeenCalledWith(targetId, 'LOCKED', { sub: 'u1', role: 'SYSTEM_ADMIN' }, 'security review');
+    await request(server()).post(`/auth/users/${targetId}/lock`).expect(201);
+    expect(service.changeAccountState).toHaveBeenCalledWith(targetId, 'LOCKED', { sub: 'u1', role: 'SYSTEM_ADMIN' });
   });
 
   it('revokes the server-side refresh session on logout', async () => {

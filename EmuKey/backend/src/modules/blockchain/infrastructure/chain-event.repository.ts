@@ -2,8 +2,6 @@ import { randomUUID } from 'node:crypto';
 
 import { Pool, type PoolClient } from 'pg';
 
-import { AuditWriter } from '../../../platform/audit/audit-writer.js';
-
 export type ChainEventType =
   | 'LICENSE_ISSUED'
   | 'LICENSE_RENEWED'
@@ -40,7 +38,6 @@ export interface CanonicalProjectionRepairReport {
 export class ChainEventRepository {
   constructor(
     private readonly pool: Pool,
-    private readonly audit = new AuditWriter(),
   ) {}
 
   async ingest(
@@ -170,17 +167,6 @@ export class ChainEventRepository {
         [event.chain_command_id, event.id],
       );
       await this.applyEvent(client, event);
-      await this.audit.write(client, {
-        action: 'CHAIN_EVENT_CONFIRMED',
-        metadata: {
-          blockHash: event.block_hash,
-          blockNumber: Number(event.block_number),
-          confirmations,
-          transactionHash: event.transaction_hash,
-        },
-        targetId: eventId,
-        targetType: 'CHAIN_EVENT',
-      });
       return true;
     });
   }
@@ -236,16 +222,6 @@ export class ChainEventRepository {
       } else {
          await this.rebuildProjectionWithoutKeyReset(client, String(row.license_id));
       }
-      await this.audit.write(client, {
-        action: 'CHAIN_EVENT_REORGED',
-        metadata: {
-          blockHash: row.block_hash,
-          blockNumber: Number(row.block_number),
-          transactionHash: row.transaction_hash,
-        },
-        targetId: eventId,
-        targetType: 'CHAIN_EVENT',
-      });
     });
   }
 

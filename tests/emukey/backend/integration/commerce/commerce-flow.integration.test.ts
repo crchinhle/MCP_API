@@ -213,7 +213,6 @@ describe('customer commerce and payment flow', () => {
     expect((await repo.findOrder(customer.sub, overdueId))?.orderStatus).toBe('CANCELLED');
     expect((await repo.findOrder(customer.sub, termsPendingId))?.orderStatus).toBe('CANCELLED');
     expect((await repo.findOrder(customer.sub, original.id))?.orderStatus).toBe('WAITING_SERVICE_TERMS_ACCEPTANCE');
-    expect((await pool.query<{ n: number }>("SELECT count(*)::int AS n FROM audit_logs WHERE action='ORDER_AUTO_CANCELLED' AND target_id=$1", [overdueId])).rows[0]!.n).toBe(1);
     const payment = { amountVnd: original.priceVndSnapshot, protocolVersion: 1 as const, eventId: 'late-timeout', occurredAt, providerReference: checkout.checkoutReference };
     const issuance = { activationCommitment: `0x${'77'.repeat(32)}` as const, commandId: '00000000-0000-4000-8000-000000000712', licenseId: '00000000-0000-4000-8000-000000000713', payload: {}, payloadHash: `0x${'88'.repeat(32)}` as const };
     const chain = { chainId: 11155111, contractAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3', network: 'sepolia' };
@@ -270,7 +269,7 @@ describe('customer commerce and payment flow', () => {
     expect(evidence.rows[0]).toMatchObject({ timing_basis: 'SANDBOX_RECEIPT', provider_occurred_at: new Date('2025-08-31T17:00:15Z'), exact_period: true });
   });
 
-  it('reconciles stored clock-drift evidence once with administrator audit and preserves source evidence', async () => {
+  it('reconciles stored clock-drift evidence once and preserves source evidence', async () => {
     const order = await service.createOrder(customer, '00000000-0000-4000-8000-000000000704', undefined, { planId });
     await acceptTerms(order.id);
     const checkout = await service.checkout(customer, order.id);
@@ -289,7 +288,6 @@ describe('customer commerce and payment flow', () => {
     expect(await service.getPaymentReceipt(customer, rejected.transactionId)).toMatchObject({ orderId: order.id });
     expect((await pool.query<{ count: number }>('SELECT count(*)::int AS count FROM licenses WHERE origin_order_id=$1', [order.id])).rows[0]!.count).toBe(1);
     expect((await pool.query<{ count: number }>('SELECT count(*)::int AS count FROM chain_commands WHERE order_id=$1', [order.id])).rows[0]!.count).toBe(1);
-    expect((await pool.query<{ count: number }>("SELECT count(*)::int AS count FROM audit_logs WHERE target_id=$1 AND action='SANDBOX_PAYMENT_RECONCILED'", [rejected.transactionId])).rows[0]!.count).toBe(1);
     await expect(pool.query("UPDATE payment_transactions SET timing_basis='PROVIDER' WHERE id=$1", [rejected.transactionId])).rejects.toThrow();
   });
 

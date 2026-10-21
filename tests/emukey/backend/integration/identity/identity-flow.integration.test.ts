@@ -111,8 +111,6 @@ describe('identity security flow', () => {
     expect(outcomes.filter((result) => result.status === 'rejected')).toHaveLength(1);
     const login = await service.login(input.email, password);
     expect(login.user).toMatchObject({ role: 'PROVIDER_ADMIN', status: 'ACTIVE' });
-    const audit = await pool.query("SELECT action FROM audit_logs WHERE action IN ('PROVIDER_INVITED', 'PROVIDER_INVITATION_ACCEPTED') ORDER BY id");
-    expect(audit.rows.map((row) => row.action)).toEqual(['PROVIDER_INVITED', 'PROVIDER_INVITED', 'PROVIDER_INVITATION_ACCEPTED']);
     await expect(service.inviteProvider(admin, input)).rejects.toBeInstanceOf(ConflictException);
   });
 

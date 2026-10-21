@@ -1,7 +1,5 @@
 import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Pool } from 'pg';
-
-import { AuditWriter } from '../../../platform/audit/audit-writer.js';
 import type { AuthPrincipal } from '../../identity-access/identity.types.js';
 import { ChainCommandService } from './chain-command.service.js';
 import type { ChainRpcIndexerPort } from './rpc-chain-indexer.service.js';
@@ -19,14 +17,13 @@ export class BlockchainReconciliationService {
       'reconcileCanonicalProjections'
       | 'deriveExpiredFromCanonicalChain'
     >,
-    private readonly audit: AuditWriter,
   ) {}
 
   async run(actor: AuthPrincipal) {
     if (actor.role !== 'SYSTEM_ADMIN' && actor.role !== 'SUPPORT_STAFF') {
       throw new ForbiddenException();
     }
-    return this.reconcile(`operations:${actor.sub}`, actor);
+    return this.reconcile(`operations:${actor.sub}`);
   }
 
   runAutomatic(workerId: string) {
@@ -51,7 +48,6 @@ export class BlockchainReconciliationService {
         request.mode,
         request.reason,
         request.evidence,
-        { role: actor.role, userId: actor.sub },
       );
     } catch (error) {
       const code = error instanceof Error ? error.message : 'CHAIN_COMMAND_RECOVERY_FAILED';
@@ -60,7 +56,7 @@ export class BlockchainReconciliationService {
     }
   }
 
-  private async reconcile(workerId: string, actor?: AuthPrincipal) {
+  private async reconcile(workerId: string) {
     const reconciledCommandIds: string[] = [];
     let indexedEvents = 0;
     for (let index = 0; index < MAX_RECONCILIATION_STEPS; index += 1) {
@@ -102,34 +98,6 @@ export class BlockchainReconciliationService {
       projection.commandRepairs > 0 ||
       projection.licenseRepairs > 0 ||
       expiredLicenseIds.length > 0;
-    if (actor || processed) {
-      const client = await this.pool.connect();
-      try {
-        await client.query('BEGIN');
-        await this.audit.write(client, {
-          action: 'BLOCKCHAIN_RECONCILIATION_COMPLETED',
-          ...(actor
-            ? { actorRole: actor.role, actorUserId: actor.sub }
-            : {}),
-          metadata: {
-            ...(!actor ? { source: 'SYSTEM_WORKER', workerId } : {}),
-            indexedEvents,
-            canonicalTime: canonicalTime.toISOString(),
-            expiredLicenseIds,
-            projection,
-            reconciledCommandIds,
-            ...health.rows[0],
-          },
-          targetType: 'BLOCKCHAIN_PROJECTION',
-        });
-        await client.query('COMMIT');
-      } catch (error) {
-        await client.query('ROLLBACK');
-        throw error;
-      } finally {
-        client.release();
-      }
-    }
     return {
       health: health.rows[0],
       indexedEvents,

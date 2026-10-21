@@ -23,7 +23,6 @@ import {
   ProfileDto,
   RegisterDto,
   ResetPasswordDto,
-  StateDto,
   TokenDto,
   InviteProviderDto,
   AcceptProviderInvitationDto,
@@ -209,10 +208,9 @@ export class IdentityController {
   @ApiBearerAuth()
   lock(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: StateDto,
     @CurrentUser() actor: AuthPrincipal,
   ) {
-    return this.service.changeAccountState(id, 'LOCKED', actor, dto.reason);
+    return this.service.changeAccountState(id, 'LOCKED', actor);
   }
 
   @Post('users/:id/unlock')
@@ -221,10 +219,9 @@ export class IdentityController {
   @ApiBearerAuth()
   unlock(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: StateDto,
     @CurrentUser() actor: AuthPrincipal,
   ) {
-    return this.service.changeAccountState(id, 'ACTIVE', actor, dto.reason);
+    return this.service.changeAccountState(id, 'ACTIVE', actor);
   }
 
   @Post('users/:id/disable')
@@ -233,10 +230,9 @@ export class IdentityController {
   @ApiBearerAuth()
   disable(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: StateDto,
     @CurrentUser() actor: AuthPrincipal,
   ) {
-    return this.service.changeAccountState(id, 'DISABLED', actor, dto.reason);
+    return this.service.changeAccountState(id, 'DISABLED', actor);
   }
 
   @Get('users')

@@ -59,10 +59,11 @@ describe('workspace foundation', () => {
     expect(screen.getByRole('link', { name: 'Tổng quan' }).getAttribute('aria-current')).toBeNull();
   });
 
-  it.each([buyerShell, providerShell, supportShell, systemShell])('shows the signed-in account name and email for $role', (config) => {
+  it.each([buyerShell, providerShell, supportShell, systemShell])('shows the signed-in account identity for $role', async (config) => {
     render(<QueryClientProvider client={new QueryClient()}><AuthProvider skipBootstrap initialUser={{ id: 'account', email: 'actual@example.test', displayName: 'Actual Account', role: config.role, status: 'ACTIVE' }}><MemoryRouter><RoleShell config={config} /></MemoryRouter></AuthProvider></QueryClientProvider>);
     expect(screen.getByText('Actual Account')).toBeTruthy();
-    expect(screen.getByText('actual@example.test')).toBeTruthy();
+    if (config.role === 'PROVIDER_ADMIN') fireEvent.click(screen.getByRole('button', { name: /Mở menu tài khoản/ }));
+    expect(await screen.findByText('actual@example.test')).toBeTruthy();
   });
 
   it('does not display a demo identity without a signed-in account', () => {

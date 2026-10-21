@@ -1,3 +1,4 @@
+import { paginationTextControls } from '../theme';
 import { Alert, Button, Form, Input, Modal, Table } from 'antd';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -33,7 +34,7 @@ export function ProviderInvitationsPanel() {
     {invite.isSuccess ? <Alert showIcon type="success" title="Đã gửi email mời nhà cung cấp." /> : null}
     {invite.isError && !open ? <Alert role="alert" showIcon type="error" title={error} /> : null}
     {invitations.isError ? <Alert type="error" title="Không thể tải lời mời." action={<Button onClick={() => void invitations.refetch()}>Thử lại</Button>} /> : null}
-    {invitations.isPending ? <p role="status">Đang tải lời mời…</p> : invitations.data?.length ? <Table<ProviderInvitationDto> rowKey="id" dataSource={invitations.data} scroll={{ x: 750 }} columns={[
+    {invitations.isPending ? <p role="status">Đang tải lời mời…</p> : invitations.data?.length ? <Table<ProviderInvitationDto> pagination={paginationTextControls} rowKey="id" dataSource={invitations.data} scroll={{ x: 750 }} columns={[
       { title: 'Email', dataIndex: 'email' },
       { title: 'Tổ chức', dataIndex: 'organizationName' },
       { title: 'Trạng thái', render: (_, row) => row.status === 'ACCEPTED' ? 'Đã kích hoạt' : row.status === 'EXPIRED' ? 'Hết hạn' : row.sentAt ? 'Chờ chấp nhận' : 'Chưa xác nhận gửi email' },

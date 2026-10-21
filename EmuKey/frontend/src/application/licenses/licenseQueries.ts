@@ -83,6 +83,47 @@ export function finalityLabel(finality: string | null | undefined): string {
     default: return finality ?? 'Chưa rõ trạng thái';
   }
 }
+
+// Provider copy is intentionally separate from Customer and System Admin views.
+export const providerLicenseLabels = {
+  PENDING_ONCHAIN: 'Đang phát hành',
+  ACTIVE: 'Có hiệu lực',
+  SUSPENDED: 'Tạm ngưng',
+  EXPIRED: 'Hết hạn',
+  REVOKED: 'Đã thu hồi',
+} satisfies Record<LicenseProjectionDto['status'], string>;
+
+export const providerFinalityLabels: Record<string, string> = {
+  PENDING: 'Chưa ghi nhận xác nhận',
+  PENDING_FINALITY: 'Chờ đủ xác nhận',
+  CONFIRMED: 'Đã ghi nhận trên blockchain',
+  CHAIN_CONFIRMED: 'Đã ghi nhận trên blockchain',
+  PROJECTION_STALE: 'Đang chờ đồng bộ dữ liệu',
+  REORGED: 'Cần kiểm tra ghi nhận blockchain',
+  UNTRUSTED_REORG: 'Cần kiểm tra độ tin cậy',
+};
+
+export function providerFinalityLabel(finality: string): string {
+  return providerFinalityLabels[finality] ?? 'Chưa có thông tin xác nhận';
+}
+
+export type ProviderLifecycleAction = 'SUSPEND_LICENSE' | 'RESUME_LICENSE' | 'REVOKE_LICENSE';
+export const providerActionLabels: Record<ProviderLifecycleAction, string> = {
+  SUSPEND_LICENSE: 'Tạm ngưng', RESUME_LICENSE: 'Tiếp tục', REVOKE_LICENSE: 'Thu hồi',
+};
+
+export function providerLicenseActions(license: LicenseProjectionDto): ProviderLifecycleAction[] {
+  // Mirrors createLifecycleCommand; the server still enforces ownership/state.
+  if (license.status === 'ACTIVE') {
+    return Date.parse(license.expiresAt) > Date.now() ? ['SUSPEND_LICENSE', 'REVOKE_LICENSE'] : ['REVOKE_LICENSE'];
+  }
+  return license.status === 'SUSPENDED' ? ['RESUME_LICENSE', 'REVOKE_LICENSE'] : [];
+}
+
+export function providerLicenseDate(value: string): string {
+  return Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Chưa có thông tin';
+}
+
 export function useLicenses() {
   return useQuery({
     queryKey: ['licenses'],

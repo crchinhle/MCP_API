@@ -107,17 +107,6 @@ export interface JobRecord {
   readonly helper: string;
 }
 
-export interface AuditEvent {
-  readonly id: string;
-  readonly time: string;
-  readonly actor: string;
-  readonly action: string;
-  readonly resource: string;
-  readonly ip: string;
-  readonly requestId: string;
-  readonly tone: StatusTone;
-}
-
 export interface VerificationRecord {
   readonly code: string;
   readonly licenseId: string;

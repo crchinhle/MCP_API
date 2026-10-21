@@ -14,9 +14,9 @@ export class KnowledgeService {
     this.requireProvider(actor);
     return this.repository.create(actor, input);
   }
-  list(actor: AuthPrincipal) { this.requireProvider(actor); return this.repository.list(actor); }
+  list(actor: AuthPrincipal) { this.requireReader(actor); return this.repository.list(actor); }
   async publish(actor: AuthPrincipal, id: string, expectedCurrentVersion?: number) {
-    this.requireProvider(actor);
+    if (actor.role !== 'SYSTEM_ADMIN') throw new ForbiddenException();
     try {
       return await this.repository.publish(actor, id, expectedCurrentVersion);
     } catch (error) {
@@ -30,7 +30,7 @@ export class KnowledgeService {
     }
   }
   async detail(actor: AuthPrincipal, id: string) {
-    this.requireProvider(actor);
+    this.requireReader(actor);
     try {
       return await this.repository.detail(actor, id);
     } catch (error) {
@@ -45,4 +45,5 @@ export class KnowledgeService {
     return this.repository.search(actor, question);
   }
   private requireProvider(actor: AuthPrincipal) { if (actor.role !== 'PROVIDER_ADMIN' && actor.role !== 'SYSTEM_ADMIN') throw new ForbiddenException(); }
+  private requireReader(actor: AuthPrincipal) { if (!['CUSTOMER', 'PROVIDER_ADMIN', 'SYSTEM_ADMIN'].includes(actor.role)) throw new ForbiddenException(); }
 }

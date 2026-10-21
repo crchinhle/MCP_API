@@ -1,23 +1,31 @@
+import { paginationTextControls } from '../theme';
 import { LoadingOverlay } from '../components/WorkspacePrimitives';
-import { Alert, Button, Empty, Input, Modal, Select, Upload, message } from 'antd';
+import { Alert, Button, Drawer, Empty, Input, Modal, Select, Table, Upload, message } from 'antd';
 import type { UploadProps } from 'antd';
 import { useState } from 'react';
 
 import { useAdminProducts } from '../../application/catalog/catalogQueries';
-import { useCreateKnowledgeDocument, useKnowledgeDocuments, usePublishKnowledgeDocument } from '../../application/assistance/knowledgeQueries';
-import { PageLoading, PageHeader } from '../components/WorkspacePrimitives';
-import { describeApiError } from '../../application/auth/authContext';
+import { useCreateKnowledgeDocument, useKnowledgeDocument, useKnowledgeDocuments, usePublishKnowledgeDocument } from '../../application/assistance/knowledgeQueries';
+import type { KnowledgeDocumentDto } from '../../infrastructure/api/generated';
+import { PageLoading, PageHeader, StatusChip } from '../components/WorkspacePrimitives';
+import { describeApiError, useAuth } from '../../application/auth/authContext';
 
 export function AiKnowledgeScreen() {
+  const { user } = useAuth();
+  const canApprove = user?.role === 'SYSTEM_ADMIN';
+  const publish = usePublishKnowledgeDocument();
   const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [productFilter, setProductFilter] = useState('');
   const [file, setFile] = useState<File>();
   const [productId, setProductId] = useState('');
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [selected, setSelected] = useState<KnowledgeDocumentDto>();
+  const detail = useKnowledgeDocument(selected?.id);
   const [messageApi, contextHolder] = message.useMessage();
-  const products = useAdminProducts();
+  const products = useAdminProducts(!canApprove);
   const documents = useKnowledgeDocuments();
   const create = useCreateKnowledgeDocument();
-  const publish = usePublishKnowledgeDocument();
   const beforeUpload: UploadProps['beforeUpload'] = (file) => {
     if (!/\.(pdf|txt)$/i.test(file.name) || file.size > 10 * 1024 * 1024) {
       void messageApi.error('Vui lòng chọn tệp PDF hoặc TXT không quá 10 MB.');
@@ -26,7 +34,13 @@ export function AiKnowledgeScreen() {
     setFile(file);
     return false;
   };
-  const visibleDocuments = (documents.data ?? []).filter((document) => `${document.title} ${document.logicalDocumentKey}`.toLocaleLowerCase('vi').includes(query.trim().toLocaleLowerCase('vi')));
+  const documentState = (document: KnowledgeDocumentDto) => {
+    if (document.isCurrent) return 'PUBLISHED';
+    if (documents.data?.some((other) => other.providerUserId === document.providerUserId && other.logicalDocumentKey === document.logicalDocumentKey && other.isCurrent && other.version > document.version)) return 'PREVIOUS';
+    return document.status;
+  };
+  const statusLabels: Record<string, string> = { PUBLISHED: 'Đã công bố', READY: 'Chờ duyệt', PREVIOUS: 'Phiên bản cũ', PENDING: 'Đang tiếp nhận', PROCESSING: 'Đang xử lý', FAILED: 'Xử lý thất bại', ARCHIVED: 'Đã lưu trữ' };
+  const visibleDocuments = (documents.data ?? []).filter((document) => (!productFilter || document.productId === productFilter) && (!statusFilter || documentState(document) === statusFilter) && `${document.title} ${document.logicalDocumentKey}`.toLocaleLowerCase('vi').includes(query.trim().toLocaleLowerCase('vi')));
   const upload = () => {
     if (!file || !productId) return;
     const title = file.name.replace(/\.[^.]+$/, '');
@@ -37,26 +51,21 @@ export function AiKnowledgeScreen() {
   if (products.isLoading || documents.isLoading) return <PageLoading />;
 
   return (
-    <>
+    <div className="knowledge-screen">
       {contextHolder}
-      <PageHeader
-        title="Kho tri thức AI"
-      />
-      <div className="workspace-actions knowledge-upload-actions">
-        <Button onClick={() => setUploadOpen(true)} type="primary">Tải tài liệu</Button>
-      </div>
+      <PageHeader title="Tài liệu sản phẩm" action={!canApprove ? <Button onClick={() => { create.reset(); setUploadOpen(true); }} type="primary">Tải tài liệu lên</Button> : undefined} />
       <Modal
         className="knowledge-upload-modal"
         destroyOnHidden
         footer={null}
         onCancel={() => { if (!create.isPending) setUploadOpen(false); }}
         open={uploadOpen}
-        title="Tải tài liệu kiến thức"
+        title="Tải tài liệu sản phẩm"
       >
-        <p>Tải hướng dẫn sản phẩm để trợ lý AI có nguồn tham khảo. Chấp nhận PDF hoặc TXT tối đa 10 MB. Tải lại cùng tên cho cùng sản phẩm sẽ tạo phiên bản mới; phiên bản cũ vẫn được dùng cho đến khi bạn công bố bản mới.</p>
+        <p>Tải tài liệu hướng dẫn sử dụng để khách hàng và trợ lý AI cùng tham khảo sau khi System Admin duyệt. Chấp nhận PDF hoặc TXT tối đa 10 MB. Tải lại cùng tên cho cùng sản phẩm sẽ tạo phiên bản mới; phiên bản đang công bố vẫn được sử dụng cho đến khi bản mới được duyệt.</p>
         <div className="file-picker">
           <Select aria-label="Sản phẩm của tài liệu" onChange={setProductId} options={(products.data ?? []).filter((product) => product.status !== 'ARCHIVED').map((product) => ({ label: product.name, value: product.id }))} placeholder="Chọn sản phẩm" {...(productId ? { value: productId } : {})} />
-          <label htmlFor="knowledge-upload">Chọn tài liệu kiến thức</label>
+          <label htmlFor="knowledge-upload">Chọn tài liệu hướng dẫn</label>
           <Upload
             accept=".pdf,.txt"
             beforeUpload={beforeUpload}
@@ -67,13 +76,18 @@ export function AiKnowledgeScreen() {
           </Upload>
           <><Button disabled={(!file || !productId) || (create.isPending)} onClick={upload} type="primary">Tải lên</Button><LoadingOverlay active={create.isPending} label="Đang xử lý yêu cầu: Tải lên" /></>
           {file ? <span>Đã chọn: {file.name}</span> : null}
+          {create.isError ? <Alert showIcon type="error" title={describeApiError(create.error, 'Không thể tải tài liệu. Vui lòng thử lại.')} /> : null}
         </div>
       </Modal>
       {products.isError ? <Alert type="error" title="Không thể tải danh sách sản phẩm" action={<Button onClick={() => void products.refetch()}>Thử lại</Button>} /> : null}
-      {create.isError || publish.isError ? <Alert type="error" title={describeApiError(publish.error ?? create.error, 'Không thể lưu hoặc công bố tài liệu. Vui lòng thử lại.')} action={<Button onClick={() => { void documents.refetch(); publish.reset(); }}>Tải lại danh sách</Button>} /> : null}
+      {create.isError ? <Alert type="error" title={describeApiError(create.error, 'Không thể tải tài liệu. Vui lòng thử lại.')} action={<Button onClick={() => { void documents.refetch(); create.reset(); }}>Tải lại danh sách</Button>} /> : null}
+      <Alert showIcon type="info" title="Quy trình duyệt tài liệu" description="Tài liệu do nhà cung cấp tải lên cần được quản trị viên hệ thống duyệt và công bố trước khi khách hàng hoặc trợ lý AI sử dụng. Tài liệu đã công bố vẫn có hiệu lực trong lúc phiên bản mới chờ duyệt." />
+      {publish.isError ? <Alert type="error" title={describeApiError(publish.error, 'Không thể công bố tài liệu.')} action={<Button onClick={() => { void documents.refetch(); publish.reset(); }}>Tải lại danh sách</Button>} /> : null}
       <section className="workspace-card document-list">
         <div className="card-heading">
-          <h2>Tài liệu đã nạp</h2>
+          <h2>Danh sách tài liệu</h2>
+          {!canApprove ? <Select aria-label="Lọc sản phẩm của tài liệu" value={productFilter} onChange={setProductFilter} options={[{ value: '', label: 'Tất cả sản phẩm' }, ...(products.data ?? []).map((product) => ({ value: product.id, label: product.name }))]} /> : null}
+          <Select aria-label="Lọc trạng thái tài liệu" value={statusFilter} onChange={setStatusFilter} options={[{value:'',label:'Tất cả trạng thái'}, ...Object.entries(statusLabels).map(([value, label]) => ({ value, label }))]} />
           <Input.Search
             aria-label="Tìm tài liệu"
             onChange={(event) => setQuery(event.target.value)}
@@ -84,13 +98,18 @@ export function AiKnowledgeScreen() {
 
         {documents.isError ? <Alert showIcon type="error" message="Không thể tải tài liệu kiến thức." action={<Button disabled={documents.isFetching} onClick={() => void documents.refetch()}>Thử lại</Button>} /> : null}
         {!documents.isLoading && !documents.isError && visibleDocuments.length === 0 ? <Empty description="Chưa có tài liệu kiến thức phù hợp." /> : null}
-        {visibleDocuments.map((document) => (
-          <div className="data-row" key={document.id}>
-            <span><strong>{document.title}</strong><small>{document.logicalDocumentKey} · v{document.version}</small></span>
-            <span className="table-actions"><span className="status-chip status-chip--neutral">{document.isCurrent ? 'Đã công bố' : document.status === 'READY' ? 'Sẵn sàng' : document.status}</span>{document.status === 'READY' && !document.isCurrent ? <><Button disabled={(documents.isFetching || documents.isError) || (publish.isPending)}  onClick={() => publish.mutate({ id: document.id, expectedCurrentVersion: documents.data?.find((current) => current.logicalDocumentKey === document.logicalDocumentKey && current.isCurrent)?.version ?? 0 })}>Công bố</Button><LoadingOverlay active={publish.isPending} label="Đang xử lý yêu cầu: Công bố" /></> : null}</span>
-          </div>
-        ))}
+        {!documents.isError && visibleDocuments.length > 0 ? <Table rowKey="id" dataSource={visibleDocuments} scroll={{ x: 640 }} pagination={{ ...paginationTextControls,pageSize:10,showSizeChanger:false,hideOnSinglePage:true}} columns={[
+          {title:'Tài liệu',render:(_,document) => <><Button type="link" onClick={() => setSelected(document)}>{document.title}</Button><div className="muted-copy">{document.logicalDocumentKey}</div></>},
+          ...(!canApprove ? [{ title: 'Sản phẩm', render: (_: unknown, document: KnowledgeDocumentDto) => products.data?.find((product) => product.id === document.productId)?.name ?? '—' }] : []),
+          {title:'Phiên bản',dataIndex:'version',render:(value:number) => `v${value}`},
+          {title:'Trạng thái duyệt',render:(_,document) => <StatusChip tone={document.isCurrent ? 'success' : documentState(document) === 'READY' ? 'warning' : document.status === 'FAILED' ? 'error' : 'neutral'}>{statusLabels[documentState(document)] ?? document.status}</StatusChip>},
+          ...(canApprove ? [{ title: 'Phê duyệt', render: (_: unknown, document: KnowledgeDocumentDto) => documentState(document) === 'READY' ? <Button disabled={publish.isPending} onClick={() => publish.mutate({ id: document.id, expectedCurrentVersion: documents.data?.find((other) => other.providerUserId === document.providerUserId && other.logicalDocumentKey === document.logicalDocumentKey && other.isCurrent)?.version ?? 0 })}>Công bố</Button> : null }] : []),
+        ]} /> : null}
       </section>
-    </>
+      <Drawer title={selected?.title ?? 'Chi tiết tài liệu'} size="large" open={Boolean(selected)} onClose={() => setSelected(undefined)}>
+        {selected ? <><p className="muted-copy">{selected.logicalDocumentKey} · v{selected.version} · {statusLabels[documentState(selected)] ?? selected.status}</p><h2>Nội dung tài liệu</h2></> : null}
+        {detail.isPending ? <p role="status">Đang tải nội dung…</p> : detail.isError ? <Alert type="error" title="Không thể tải nội dung tài liệu" action={<Button onClick={() => void detail.refetch()}>Thử lại</Button>} /> : <div className="document-content">{detail.data?.chunks.join('\n\n') || 'Chưa có nội dung để hiển thị.'}</div>}
+      </Drawer>
+    </div>
   );
 }

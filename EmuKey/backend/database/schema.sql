@@ -1,16 +1,15 @@
 -- License Management — account-linked Customer, relayer-only blockchain schema v7.3
 -- PostgreSQL 15+
 -- Target baseline reviewed 17/09/2026.
--- This target schema has 19 tables. Customer accounts are retained; Customer Controller/KMS are removed.
+-- This target schema has 18 tables. Customer accounts are retained; Customer Controller/KMS are removed.
 -- Smart-contract policy/ABI is authoritative for License/Device rights.
--- PostgreSQL owns private identity/catalog/commerce/audit plus chain projection/evidence.
+-- PostgreSQL owns private identity/catalog/commerce plus chain projection/evidence.
 -- Global License Terms content is a versioned application artefact, not a DB table.
 
 BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS citext;
-CREATE EXTENSION IF NOT EXISTS vector;
 
 -- 1. Login identity for internal users and Customers.
 CREATE TABLE users (
@@ -24,8 +23,6 @@ CREATE TABLE users (
     email_verified_at TIMESTAMPTZ,
     session_version INT NOT NULL DEFAULT 1,
     organization_name VARCHAR(255),
-    representative_name VARCHAR(255),
-    tax_code VARCHAR(50),
     phone VARCHAR(30),
     address TEXT,
     provider_chain_address VARCHAR(42),
@@ -757,7 +754,7 @@ BEGIN
         AND NEW.review_status = 'RESOLVED' AND NEW.review_resolution = 'ACCEPT_AND_FULFILL'
         AND NEW.reviewed_by_user_id IS NOT NULL
     ), FALSE) THEN
-        RAISE EXCEPTION 'Payment timing basis is immutable outside audited sandbox reconciliation';
+        RAISE EXCEPTION 'Payment timing basis is immutable outside validated sandbox reconciliation';
     END IF;
     RETURN NEW;
 END;
@@ -2951,31 +2948,19 @@ CREATE UNIQUE INDEX uq_knowledge_documents_one_current
     ON knowledge_documents (provider_user_id, logical_document_key)
     WHERE is_current;
 
--- 13. RAG chunks. Embedding dimension remains configuration-gated.
+-- 13. Guide chunks for human-readable content and full-text AI retrieval.
 CREATE TABLE knowledge_chunks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     document_id UUID NOT NULL,
     chunk_index INT NOT NULL,
     content TEXT NOT NULL,
     token_count INT,
-    embedding VECTOR,
-    embedding_model VARCHAR(120),
-    embedding_dimension INT,
-    source_metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT fk_knowledge_chunks_document
         FOREIGN KEY (document_id) REFERENCES knowledge_documents(id) ON DELETE CASCADE,
     CONSTRAINT uq_knowledge_chunks_position UNIQUE (document_id, chunk_index),
     CONSTRAINT ck_knowledge_chunks_index CHECK (chunk_index >= 0),
-    CONSTRAINT ck_knowledge_chunks_tokens CHECK (token_count IS NULL OR token_count >= 0),
-    CONSTRAINT ck_knowledge_chunks_source_metadata CHECK (
-        jsonb_typeof(source_metadata) = 'object'
-    ),
-    CONSTRAINT ck_knowledge_chunks_embedding CHECK (
-        (embedding IS NULL AND embedding_model IS NULL AND embedding_dimension IS NULL) OR
-        (embedding IS NOT NULL AND embedding_model IS NOT NULL AND embedding_dimension > 0 AND
-            vector_dims(embedding) = embedding_dimension)
-    )
+    CONSTRAINT ck_knowledge_chunks_tokens CHECK (token_count IS NULL OR token_count >= 0)
 );
 
 -- 14. Unified AI/Support conversation lifecycle.
@@ -3041,7 +3026,6 @@ CREATE TABLE messages (
     client_message_id UUID NOT NULL,
     server_sequence BIGINT NOT NULL,
     content TEXT NOT NULL,
-    model_name VARCHAR(120),
     grounded BOOLEAN,
     sources JSONB NOT NULL DEFAULT '[]'::jsonb,
     read_at TIMESTAMPTZ,
@@ -3118,49 +3102,6 @@ CREATE TABLE mobile_push_tokens (
         (status = 'INVALID' AND invalidated_at IS NOT NULL)
     )
 );
-
--- 18. Append-only audit. Message body, secrets and private keys must be redacted.
-CREATE TABLE audit_logs (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    actor_user_id UUID,
-    actor_role VARCHAR(30),
-    actor_email_snapshot CITEXT,
-    action VARCHAR(120) NOT NULL,
-    target_type VARCHAR(80),
-    target_id UUID,
-    reason TEXT,
-    outcome VARCHAR(20) NOT NULL DEFAULT 'SUCCESS',
-    metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT fk_audit_logs_actor
-        FOREIGN KEY (actor_user_id, actor_role)
-        REFERENCES users(id, role) ON DELETE RESTRICT,
-    CONSTRAINT ck_audit_logs_actor_role CHECK (
-        (actor_user_id IS NULL AND actor_role IS NULL) OR
-        (actor_user_id IS NOT NULL AND
-            actor_role IN ('SYSTEM_ADMIN', 'PROVIDER_ADMIN', 'CUSTOMER', 'SUPPORT_STAFF'))
-    ),
-    CONSTRAINT ck_audit_logs_outcome CHECK (outcome IN ('SUCCESS', 'DENIED', 'FAILED')),
-    CONSTRAINT ck_audit_logs_metadata CHECK (jsonb_typeof(metadata) = 'object')
-);
-
-CREATE FUNCTION reject_audit_logs_mutation()
-RETURNS TRIGGER
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    RAISE EXCEPTION 'audit_logs is append-only' USING ERRCODE = '55000';
-    RETURN NULL;
-END;
-$$;
-
-CREATE TRIGGER audit_logs_no_update_or_delete
-    BEFORE UPDATE OR DELETE ON audit_logs
-    FOR EACH ROW EXECUTE FUNCTION reject_audit_logs_mutation();
-
-CREATE TRIGGER audit_logs_no_truncate
-    BEFORE TRUNCATE ON audit_logs
-    FOR EACH STATEMENT EXECUTE FUNCTION reject_audit_logs_mutation();
 
 -- Provider payment evidence and blockchain command/event records are durable;
 -- ChainEvent reorg occurrence detail is represented only by its durable summary.
@@ -3279,6 +3220,5 @@ CREATE INDEX ix_notifications_delivery ON notifications (delivery_status, next_a
     WHERE delivery_status IN ('PENDING', 'RETRYABLE_FAILED');
 CREATE INDEX ix_notifications_inbox ON notifications (user_id, is_read, created_at DESC);
 CREATE INDEX ix_mobile_push_tokens_user ON mobile_push_tokens (user_id, status);
-CREATE INDEX ix_audit_logs_search ON audit_logs (created_at DESC, action, target_type);
 
 COMMIT;

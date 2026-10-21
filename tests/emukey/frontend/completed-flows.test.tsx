@@ -5,6 +5,12 @@ import { App } from '../../../EmuKey/frontend/src/presentation/app/App';
 afterEach(cleanup);
 
 describe('completed API-backed flows', () => {
+  it('opens the overview for the removed audit URL without fetching audit data', async () => {
+    render(<App initialEntries={['/system/console?view=audit']} />);
+    expect(await screen.findByRole('heading', { name: 'Tổng quan hệ thống' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Nhật ký', exact: true })).toBeNull();
+    expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes('/operations/audit-logs'))).toBe(false);
+  });
   it('loads closed conversations from history instead of the active queue', async () => {
     const original = vi.mocked(fetch).getMockImplementation()!;
     vi.mocked(fetch).mockImplementation((input, init) => {
@@ -20,52 +26,42 @@ describe('completed API-backed flows', () => {
     } finally { vi.mocked(fetch).mockImplementation(original); }
   });
 
-  it('uses isCurrent for published knowledge and sends publish for a ready document', async () => {
+  it('keeps provider guides awaiting approval without offering self-publication', async () => {
     const original = vi.mocked(fetch).getMockImplementation()!;
-    let published = false;
-    let publishBody: unknown;
+    let publishRequested = false;
     vi.mocked(fetch).mockImplementation((input, init) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-      if (url.endsWith('/knowledge/documents')) return Promise.resolve(Response.json([{ id: 'doc', title: 'Hướng dẫn', logicalDocumentKey: 'guide', version: 1, status: 'READY', isCurrent: published }]));
-      if (url.endsWith('/knowledge/documents/doc/publish')) { publishBody = JSON.parse(typeof init?.body === 'string' ? init.body : '{}'); published = true; return Promise.resolve(Response.json({ id: 'doc' })); }
+      if (url.endsWith('/knowledge/documents')) return Promise.resolve(Response.json([{ id: 'doc', title: 'Hướng dẫn', logicalDocumentKey: 'guide', version: 1, status: 'READY', isCurrent: false }]));
+      if (url.endsWith('/knowledge/documents/doc/publish')) { publishRequested = true; return Promise.resolve(Response.json({ id: 'doc' })); }
       return original(input, init);
     });
     try {
       render(<App initialEntries={['/provider/knowledge']} />);
-      fireEvent.click(await screen.findByRole('button', { name: 'Công bố' }));
-      expect(await screen.findByText('Đã công bố')).toBeTruthy();
+      expect(await screen.findByText('Chờ duyệt', { selector: '.status-chip' })).toBeTruthy();
       expect(screen.queryByRole('button', { name: 'Công bố' })).toBeNull();
-      expect(publishBody).toEqual({ expectedCurrentVersion: 0 });
+      expect(publishRequested).toBe(false);
     } finally { vi.mocked(fetch).mockImplementation(original); }
   });
 
-  it('sends the observed current version and exposes conflict recovery', async () => {
+  it('keeps the approved version visible while a newer guide awaits administrator approval', async () => {
     const original = vi.mocked(fetch).getMockImplementation()!;
-    let observed: unknown;
-    let reads = 0;
     vi.mocked(fetch).mockImplementation((input, init) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
       if (url.endsWith('/knowledge/documents')) {
-        reads++;
         return Promise.resolve(Response.json([
           { id: 'old', title: 'Bản cũ', logicalDocumentKey: 'guide', version: 3, status: 'READY', isCurrent: true },
           { id: 'doc', title: 'Bản mới', logicalDocumentKey: 'guide', version: 4, status: 'READY', isCurrent: false },
         ]));
       }
-      if (url.endsWith('/knowledge/documents/doc/publish')) {
-        observed = JSON.parse(typeof init?.body === 'string' ? init.body : '{}');
-        return Promise.resolve(Response.json({ error: { code: 'KNOWLEDGE_VERSION_CONFLICT', message: 'Phiên bản đã thay đổi.' } }, { status: 409 }));
-      }
       return original(input, init);
     });
     try {
       render(<App initialEntries={['/provider/knowledge']} />);
-      fireEvent.click(await screen.findByRole('button', { name: 'Công bố' }));
-      expect(await screen.findByText(/Phiên bản đã thay đổi/)).toBeTruthy();
-      expect(observed).toEqual({ expectedCurrentVersion: 3 });
-      const previousReads = reads;
-      fireEvent.click(screen.getByRole('button', { name: 'Tải lại danh sách' }));
-      await waitFor(() => expect(reads).toBeGreaterThan(previousReads));
+      expect(await screen.findByText('Đã công bố', { selector: '.status-chip' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Bản cũ' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Bản mới' })).toBeTruthy();
+      expect(screen.getByText('Chờ duyệt', { selector: '.status-chip' })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Công bố' })).toBeNull();
     } finally { vi.mocked(fetch).mockImplementation(original); }
   });
 
@@ -77,22 +73,27 @@ describe('completed API-backed flows', () => {
     expect(await screen.findByText('Không đủ nguồn chính thức để trả lời câu hỏi này.')).toBeTruthy();
   });
 
-  it('retries loading audit entries after a temporary failure', async () => {
+  it('lets the administrator approve a provider guide using its own observed version', async () => {
     const original = vi.mocked(fetch).getMockImplementation()!;
-    let fail = true;
+    let submitted: unknown;
     vi.mocked(fetch).mockImplementation((input, init) => {
-      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-      if (fail && url.includes('/operations/audit-logs?')) { fail = false; return Promise.resolve(Response.json({ message: 'Unavailable' }, { status: 500 })); }
-      if (url.includes('/operations/audit-logs?')) return Promise.resolve(Response.json({ items: [], page: 1, hasMore: false }));
+      const url = String(input);
+      if (url.endsWith('/knowledge/documents')) return Promise.resolve(Response.json([
+        { id: 'other', providerUserId: 'other-provider', title: 'Tài liệu nhà cung cấp khác', logicalDocumentKey: 'guide', version: 9, status: 'READY', isCurrent: true },
+        { id: 'current', providerUserId: 'provider', title: 'Bản đang dùng', logicalDocumentKey: 'guide', version: 3, status: 'READY', isCurrent: true },
+        { id: 'next', providerUserId: 'provider', title: 'Bản cần duyệt', logicalDocumentKey: 'guide', version: 4, status: 'READY', isCurrent: Boolean(submitted) },
+      ]));
+      if (url.endsWith('/knowledge/documents/next/publish')) { submitted = JSON.parse(String(init?.body)); return Promise.resolve(Response.json({ id: 'next' })); }
       return original(input, init);
     });
     try {
-      render(<App initialEntries={['/system/console?view=audit']} />);
-      expect(await screen.findByText('Không thể tải nhật ký. Vui lòng thử lại.')).toBeTruthy();
-      fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
-      expect(await screen.findByText('Trang 1')).toBeTruthy();
+      render(<App initialEntries={['/system/console/knowledge']} />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Công bố' }, { timeout: 15000 }));
+      await waitFor(() => expect(submitted).toEqual({ expectedCurrentVersion: 3 }));
+      expect(screen.queryByRole('button', { name: 'Tải tài liệu lên' })).toBeNull();
     } finally { vi.mocked(fetch).mockImplementation(original); }
   });
+
 
   it('retries loading comparison data after a temporary failure', async () => {
     const original = vi.mocked(fetch).getMockImplementation()!;
@@ -113,21 +114,6 @@ describe('completed API-backed flows', () => {
     } finally { vi.mocked(fetch).mockImplementation(original); }
   });
 
-  it('reads audit entries and opens the selected detail', async () => {
-    const original = vi.mocked(fetch).getMockImplementation()!;
-    vi.mocked(fetch).mockImplementation((input, init) => {
-      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-      if (url.includes('/operations/audit-logs?')) return Promise.resolve(Response.json({ items: [{ id: '1', internalToken: 'DO_NOT_RENDER_SECRET', action: 'ACCOUNT_LOCKED', outcome: 'SUCCESS', actorRole: 'SYSTEM_ADMIN', actorUserId: 'admin', targetType: 'USER', targetId: 'user', reason: 'Kiểm tra an toàn', createdAt: '2026-09-27T00:00:00Z' }], page: 1, hasMore: false }));
-      return original(input, init);
-    });
-    try {
-      render(<App initialEntries={['/system/console?view=audit']} />);
-      fireEvent.click(await screen.findByRole('button', { name: 'Chi tiết nhật ký' }));
-      expect(screen.queryByText('DO_NOT_RENDER_SECRET')).toBeNull();
-      expect(screen.queryByText('internalToken')).toBeNull();
-      expect(await screen.findByText('Kiểm tra an toàn')).toBeTruthy();
-    } finally { vi.mocked(fetch).mockImplementation(original); }
-  });
 
   it('submits a review only with a reason and refreshes the review queue', async () => {
     const original = vi.mocked(fetch).getMockImplementation()!;
@@ -140,7 +126,7 @@ describe('completed API-backed flows', () => {
     });
     try {
       render(<App initialEntries={['/system/console?view=payments']} />);
-      fireEvent.click(await screen.findByRole('button', { name: 'Kiểm tra giao dịch' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Kiểm tra giao dịch' }, { timeout: 15000 }));
       expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Lưu kết quả' }).disabled).toBe(true);
       fireEvent.change(screen.getByLabelText('Lý do xử lý thanh toán'), { target: { value: 'Đã kiểm tra chứng từ' } });
       fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }));

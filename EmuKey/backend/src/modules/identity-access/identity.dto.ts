@@ -163,10 +163,3 @@ export class ProfileDto {
   @Length(0, 255)
   organizationName?: string;
 }
-
-export class StateDto {
-  @ApiProperty()
-  @IsString()
-  @Length(3, 2_000)
-  reason!: string;
-}

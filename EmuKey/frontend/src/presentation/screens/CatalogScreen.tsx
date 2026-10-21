@@ -1,3 +1,4 @@
+import { paginationTextControls } from '../theme';
 import { PageLoading, useDebouncedValue } from '../components/WorkspacePrimitives';
 import { Alert, Button, Card, Empty, Input, Pagination, Select } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
@@ -120,7 +121,7 @@ export function CatalogScreen({ authenticated = false }: { readonly authenticate
             <Empty description="Không tìm thấy sản phẩm phù hợp" />
           ) : null}
         </section>
-        {!isLoading && !isError ? <Pagination current={currentPage} pageSize={12} total={visibleProducts.length} onChange={setPage} hideOnSinglePage showSizeChanger={false} /> : null}
+        {!isLoading && !isError ? <Pagination {...paginationTextControls} current={currentPage} pageSize={12} total={visibleProducts.length} onChange={setPage} hideOnSinglePage showSizeChanger={false} /> : null}
       </main>
       {purchase ? (
         <PurchaseFlowModal

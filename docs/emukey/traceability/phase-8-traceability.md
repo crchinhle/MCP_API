@@ -1,5 +1,7 @@
 # Phase 8 Traceability Matrix
 
+> Current scope (2026-10-20): user activity audit (`OPS-02`) is removed. The current matrix has 34 capabilities and 18 tables. Prior verification rows below describe their recorded release, not evidence that the removal has been applied to a deployed database.
+
 This matrix is the release-hardening index for the existing Phase 1-7 baseline.
 It does not add business capability or replace the canonical owners documented in
 `context/current/APP_IMPLEMENTATION_PLAN.md`.

@@ -11,8 +11,9 @@ describe('API-backed workspace screens', () => {
 
     expect(await screen.findByText('Chưa có tài liệu kiến thức phù hợp.')).toBeTruthy();
     expect(screen.queryByLabelText('Sản phẩm của tài liệu')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Tải tài liệu' }));
-    expect(await screen.findByRole('dialog', { name: 'Tải tài liệu kiến thức' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Tải tài liệu lên' }));
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+    expect(screen.getByText('Tải tài liệu sản phẩm')).toBeTruthy();
     expect(screen.getByLabelText('Sản phẩm của tài liệu')).toBeTruthy();
   });
 

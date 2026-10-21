@@ -1,10 +1,6 @@
 import { ForbiddenException } from '@nestjs/common';
 
 import { BlockchainReconciliationService } from '../../../../EmuKey/backend/src/modules/blockchain/application/blockchain-reconciliation.service.js';
-import type {
-  AuditEvent,
-  TransactionClient,
-} from '../../../../EmuKey/backend/src/platform/audit/audit-writer.js';
 
 function fixture() {
   const client = {
@@ -44,13 +40,8 @@ function fixture() {
       remainingMismatches: 0,
     }),
   };
-  const audit = {
-    write: vi
-      .fn<(client: TransactionClient, event: AuditEvent) => Promise<void>>()
-      .mockResolvedValue(undefined),
-  };
   return {
-    audit,
+
     client,
     commands,
     indexer,
@@ -61,7 +52,7 @@ function fixture() {
       commands as never,
       indexer,
       projections,
-      audit,
+
     ),
   };
 }
@@ -94,12 +85,6 @@ describe('BlockchainReconciliationService', () => {
     expect(setup.projections.deriveExpiredFromCanonicalChain).toHaveBeenCalledWith(
       new Date('2026-09-17T00:00:00.000Z'),
     );
-    expect(setup.audit.write).toHaveBeenCalledWith(
-      setup.client,
-      expect.objectContaining({
-        action: 'BLOCKCHAIN_RECONCILIATION_COMPLETED',
-      }),
-    );
   });
 
   it('rejects non-operations roles before touching chain state', async () => {
@@ -117,7 +102,7 @@ describe('BlockchainReconciliationService', () => {
     expect(setup.indexer.poll).not.toHaveBeenCalled();
   });
 
-  it('does not create one audit row per idle worker tick', async () => {
+  it('returns idle without opening an extra transaction', async () => {
     const setup = fixture();
     setup.commands.reconcileUnknown.mockReset().mockResolvedValue(null);
     setup.indexer.poll.mockReset().mockResolvedValue(null);
@@ -132,25 +117,14 @@ describe('BlockchainReconciliationService', () => {
       processed: false,
     });
 
-    expect(setup.audit.write).not.toHaveBeenCalled();
     expect(setup.pool.connect).not.toHaveBeenCalled();
   });
 
-  it('records automatic reconciliation as a system source without a user role', async () => {
+  it('returns the outcome of automatic reconciliation without opening a separate transaction', async () => {
     const setup = fixture();
-
-    await setup.service.runAutomatic('worker-automatic');
-
-    expect(setup.audit.write).toHaveBeenCalledTimes(1);
-    const auditEvent = setup.audit.write.mock.calls[0]?.[1];
-    expect(auditEvent).toMatchObject({
-      action: 'BLOCKCHAIN_RECONCILIATION_COMPLETED',
-      metadata: {
-        source: 'SYSTEM_WORKER',
-        workerId: 'worker-automatic',
-      },
+    await expect(setup.service.runAutomatic('worker-automatic')).resolves.toMatchObject({
+      processed: true, indexedEvents: 2, projection: { licenseRepairs: 1, commandRepairs: 1 },
     });
-    expect(auditEvent).not.toHaveProperty('actorRole');
-    expect(auditEvent).not.toHaveProperty('actorUserId');
+    expect(setup.pool.connect).not.toHaveBeenCalled();
   });
 });

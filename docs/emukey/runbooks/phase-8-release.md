@@ -3,7 +3,7 @@
 ## Required inputs
 
 - Node 22 and Corepack with pnpm 11.
-- PostgreSQL with pgvector and Redis; staging uses separate instances from production.
+- PostgreSQL with `pgcrypto` and `citext`, plus Redis; staging uses separate instances from production. Knowledge retrieval uses full-text search and does not require pgvector.
 - A configured Sepolia V2 contract, deployment block, RPC primary/fallback, and relayer
   key injected by the deployment platform, never committed or baked into an image.
 - Sandbox provider credentials for SePay, Gemini, Cloudinary, Brevo, and FCM as needed.
@@ -38,7 +38,7 @@
 
 - `SUBMITTED_UNKNOWN`: query the same persisted transaction hash and receipt. Never
   generate a new nonce/raw transaction until the old command has definitive evidence.
-- `DEAD_LETTER`: satisfy the command precondition and use the audited recovery operation;
+- `DEAD_LETTER`: satisfy the command precondition and use the recovery operation;
   do not edit PostgreSQL rows directly.
 - RPC outage/indexer lag: restore RPC connectivity, then run BC-04 reconciliation.
 - Reorg: entitlement and activation-key dependent actions remain unavailable until the
@@ -54,7 +54,7 @@
    `DATABASE_URL` and store the redacted metadata under `docs/emukey/traceability/releases/<run-id>`.
 2. Restore into a separate disposable PostgreSQL database with `pg_restore`.
 3. Run schema verification and compare users, catalog, orders, payments, licenses,
-   chain commands/events, audit, knowledge, conversations, and notifications.
+   chain commands/events, knowledge, conversations, and notifications.
 4. Run BC-04/indexer reconciliation from the recorded canonical chain head.
 5. Record expected differences (cache, refresh sessions, queue wakeups) separately from
    durable business-state discrepancies.

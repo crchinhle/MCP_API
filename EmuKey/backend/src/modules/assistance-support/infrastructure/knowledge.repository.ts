@@ -5,7 +5,7 @@ import type { AuthPrincipal } from '../../identity-access/identity.types.js';
 import type { PrivateStoragePort } from '../../../platform/storage/private-storage.port.js';
 
 function mapDocument(row: Record<string, unknown>) {
-  return { id: String(row.id), title: String(row.title), logicalDocumentKey: String(row.logical_document_key), version: Number(row.version), status: String(row.status), isCurrent: row.is_current === true };
+  return { id: String(row.id), ...(typeof row.provider_user_id === 'string' ? { providerUserId: row.provider_user_id } : {}), ...(typeof row.product_id === 'string' ? { productId: row.product_id } : {}), title: String(row.title), logicalDocumentKey: String(row.logical_document_key), version: Number(row.version), status: String(row.status), isCurrent: row.is_current === true };
 }
 
 export class KnowledgeRepository {
@@ -35,9 +35,23 @@ export class KnowledgeRepository {
       return mapDocument({ ...document.rows[0], title: input.title, logical_document_key: input.logicalDocumentKey, version, status: 'READY', is_current: false });
     } catch (error) { await client.query('ROLLBACK'); if (storageKey) await this.storage?.delete(storageKey).catch(() => undefined); throw error; } finally { client.release(); }
   }
-  async list(actor: AuthPrincipal): Promise<Record<string, unknown>[]> { const result = await this.pool.query<Record<string, unknown>>(`SELECT * FROM knowledge_documents WHERE provider_user_id = $1 ORDER BY logical_document_key, version DESC`, [actor.sub]); return result.rows.map(mapDocument); }
+  async list(actor: AuthPrincipal): Promise<Record<string, unknown>[]> {
+    const result = await this.pool.query<Record<string, unknown>>(`
+      SELECT * FROM knowledge_documents
+      WHERE $2 = 'SYSTEM_ADMIN'
+         OR ($2 = 'PROVIDER_ADMIN' AND provider_user_id = $1)
+         OR ($2 = 'CUSTOMER' AND status = 'READY' AND is_current
+             AND product_id IN (SELECT product_id FROM licenses WHERE customer_user_id = $1))
+      ORDER BY provider_user_id, logical_document_key, version DESC`, [actor.sub, actor.role]);
+    return result.rows.map(mapDocument);
+  }
   async detail(actor: AuthPrincipal, id: string) {
-    const document = await this.pool.query<Record<string, unknown>>('SELECT * FROM knowledge_documents WHERE id = $1 AND provider_user_id = $2', [id, actor.sub]);
+    const document = await this.pool.query<Record<string, unknown>>(`
+      SELECT * FROM knowledge_documents WHERE id = $1 AND (
+        $3 = 'SYSTEM_ADMIN'
+        OR ($3 = 'PROVIDER_ADMIN' AND provider_user_id = $2)
+        OR ($3 = 'CUSTOMER' AND status = 'READY' AND is_current
+            AND product_id IN (SELECT product_id FROM licenses WHERE customer_user_id = $2)))`, [id, actor.sub, actor.role]);
     if (!document.rows[0]) throw new Error('KNOWLEDGE_DOCUMENT_NOT_FOUND');
     const chunks = await this.pool.query<{ content: string }>('SELECT content FROM knowledge_chunks WHERE document_id = $1 ORDER BY chunk_index', [id]);
     return { ...mapDocument(document.rows[0]), chunks: chunks.rows.map((row) => row.content) };
@@ -47,14 +61,15 @@ export class KnowledgeRepository {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      const target = await client.query<{ logical_document_key: string }>('SELECT logical_document_key FROM knowledge_documents WHERE id = $1 AND provider_user_id = $2', [id, actor.sub]);
+      const target = await client.query<{ logical_document_key: string; provider_user_id: string }>("SELECT logical_document_key, provider_user_id FROM knowledge_documents WHERE id = $1 AND (provider_user_id = $2 OR $3 = 'SYSTEM_ADMIN')", [id, actor.sub, actor.role]);
       if (!target.rows[0]) throw new Error('KNOWLEDGE_DOCUMENT_NOT_FOUND');
+      const providerId = target.rows[0].provider_user_id;
       // Serialize all versions, including the first publish where no current row exists.
-      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))', [`knowledge:${actor.sub}:${target.rows[0].logical_document_key}`]);
-      const current = await client.query<{ version: number }>('SELECT version FROM knowledge_documents WHERE provider_user_id = $1 AND logical_document_key = (SELECT logical_document_key FROM knowledge_documents WHERE id = $2 AND provider_user_id = $1) AND is_current FOR UPDATE', [actor.sub, id]);
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))', [`knowledge:${providerId}:${target.rows[0].logical_document_key}`]);
+      const current = await client.query<{ version: number }>('SELECT version FROM knowledge_documents WHERE provider_user_id = $1 AND logical_document_key = (SELECT logical_document_key FROM knowledge_documents WHERE id = $2 AND provider_user_id = $1) AND is_current FOR UPDATE', [providerId, id]);
       if (expectedCurrentVersion !== undefined && (current.rows[0]?.version ?? 0) !== expectedCurrentVersion) throw new Error('KNOWLEDGE_VERSION_CONFLICT');
-      await client.query(`UPDATE knowledge_documents SET is_current = FALSE, updated_at = now() WHERE provider_user_id = $1 AND logical_document_key = (SELECT logical_document_key FROM knowledge_documents WHERE id = $2 AND provider_user_id = $1)`, [actor.sub, id]);
-      const result = await client.query<Record<string, unknown>>(`UPDATE knowledge_documents SET is_current = TRUE, updated_at = now() WHERE id = $1 AND provider_user_id = $2 AND status = 'READY' RETURNING *`, [id, actor.sub]);
+      await client.query(`UPDATE knowledge_documents SET is_current = FALSE, updated_at = now() WHERE provider_user_id = $1 AND logical_document_key = (SELECT logical_document_key FROM knowledge_documents WHERE id = $2 AND provider_user_id = $1)`, [providerId, id]);
+      const result = await client.query<Record<string, unknown>>(`UPDATE knowledge_documents SET is_current = TRUE, updated_at = now() WHERE id = $1 AND provider_user_id = $2 AND status = 'READY' RETURNING *`, [id, providerId]);
       if (!result.rows[0]) throw new Error('KNOWLEDGE_DOCUMENT_NOT_FOUND');
       await client.query('COMMIT');
       return mapDocument(result.rows[0]);

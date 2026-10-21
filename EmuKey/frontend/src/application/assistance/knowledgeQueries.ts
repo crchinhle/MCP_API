@@ -1,12 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { KnowledgeDocumentDto, KnowledgeSourceDto } from '../../infrastructure/api/generated';
+import type { KnowledgeDocumentDetailDto, KnowledgeDocumentDto, KnowledgeSourceDto } from '../../infrastructure/api/generated';
 import { api, requestJson } from '../auth/authContext';
 
 export function useKnowledgeDocuments() {
   return useQuery({
     queryKey: ['knowledge', 'documents'],
     queryFn: () => requestJson<KnowledgeDocumentDto[]>('/knowledge/documents'),
+  });
+}
+
+export function useKnowledgeDocument(id: string | undefined) {
+  return useQuery({
+    queryKey: ['knowledge', 'documents', id],
+    enabled: Boolean(id),
+    queryFn: () => requestJson<KnowledgeDocumentDetailDto>(`/knowledge/documents/${encodeURIComponent(id!)}`),
   });
 }
 

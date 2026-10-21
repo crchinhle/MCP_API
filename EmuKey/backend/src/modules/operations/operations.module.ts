@@ -23,9 +23,6 @@ import { NotificationProcessor } from './worker/notification.processor.js';
 import { NotificationScheduler } from './worker/notification.scheduler.js';
 import { BullModule } from '@nestjs/bullmq';
 import { OperationsHealthController } from './presentation/operations-health.controller.js';
-import { AuditController } from './presentation/audit.controller.js';
-import { AuditService } from './application/audit.service.js';
-import { AuditRepository } from './infrastructure/audit.repository.js';
 
 const notificationQueueImports = process.env.NODE_ENV === 'test'
   ? []
@@ -33,10 +30,8 @@ const notificationQueueImports = process.env.NODE_ENV === 'test'
 
 @Module({
   imports: [forwardRef(() => IdentityModule), ...notificationQueueImports],
-  controllers: [NotificationController, OperationsHealthController, AuditController],
+  controllers: [NotificationController, OperationsHealthController],
   providers: [
-    { provide: AuditRepository, inject: [Pool], useFactory: (pool: Pool) => new AuditRepository(pool) },
-    { provide: AuditService, inject: [AuditRepository], useFactory: (repository: AuditRepository) => new AuditService(repository) },
     { provide: NotificationRepository, inject: [Pool], useFactory: (pool: Pool) => new NotificationRepository(pool) },
     { provide: NotificationService, inject: [NotificationRepository], useFactory: (repository: NotificationRepository) => new NotificationService(repository) },
     ...(process.env.NODE_ENV === 'test' ? [] : [NotificationProcessor, NotificationScheduler]),

@@ -4,6 +4,22 @@ import { KnowledgeRepository } from '../../../../EmuKey/backend/src/modules/assi
 import { KnowledgeService } from '../../../../EmuKey/backend/src/modules/assistance-support/knowledge.service.js';
 
 describe('knowledge public response', () => {
+  it('does not let providers approve their own guides', async () => {
+    const repository = new KnowledgeRepository({} as Pool);
+    const publish = vi.spyOn(repository, 'publish');
+    await expect(new KnowledgeService(repository).publish({ sub: 'provider', role: 'PROVIDER_ADMIN', sessionVersion: 1 }, 'document', 0)).rejects.toMatchObject({ status: 403 });
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it('lets customers list approved guides and read their content', async () => {
+    const repository = new KnowledgeRepository({} as Pool);
+    vi.spyOn(repository, 'list').mockResolvedValue([]);
+    vi.spyOn(repository, 'detail').mockResolvedValue({ id: 'guide', chunks: ['Instructions'] });
+    const service = new KnowledgeService(repository);
+    const customer = { sub: 'customer', role: 'CUSTOMER', sessionVersion: 1 } as const;
+    await expect(service.list(customer)).resolves.toEqual([]);
+    await expect(service.detail(customer, 'guide')).resolves.toMatchObject({ chunks: ['Instructions'] });
+  });
   it('returns a public 404 for an inaccessible document without leaking ownership', async () => {
     const repository = new KnowledgeRepository({} as Pool);
     vi.spyOn(repository, 'detail').mockRejectedValue(new Error('KNOWLEDGE_DOCUMENT_NOT_FOUND'));
@@ -13,7 +29,7 @@ describe('knowledge public response', () => {
     const repository = new KnowledgeRepository({} as Pool);
     vi.spyOn(repository, 'publish').mockRejectedValue(new Error('KNOWLEDGE_VERSION_CONFLICT'));
     const service = new KnowledgeService(repository);
-    await expect(service.publish({ sub: 'provider', role: 'PROVIDER_ADMIN', sessionVersion: 1 }, 'document', 1)).rejects.toMatchObject({ status: 409, response: { code: 'KNOWLEDGE_VERSION_CONFLICT' } });
+    await expect(service.publish({ sub: 'admin', role: 'SYSTEM_ADMIN', sessionVersion: 1 }, 'document', 1)).rejects.toMatchObject({ status: 409, response: { code: 'KNOWLEDGE_VERSION_CONFLICT' } });
   });
   it('creates a new version and returns a ready DTO', async () => {
     const query = vi.fn().mockImplementation((sql: string) => {

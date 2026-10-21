@@ -47,9 +47,25 @@ export class ApiExceptionFilter implements ExceptionFilter {
         ? exception.getStatus()
         : HttpStatus.INTERNAL_SERVER_ERROR;
     const incomingTraceId = request.header('x-request-id');
-    const traceId = incomingTraceId?.trim() || randomUUID();
+    const traceId = String(response.getHeader('x-request-id') ?? (incomingTraceId?.trim() || randomUUID()));
+    response.setHeader('x-request-id', traceId);
 
     const payload = exception instanceof HttpException ? errorPayload(exception) : {};
+    if (status >= 500) {
+      const route = request.route as { path?: unknown } | undefined;
+      // Allow only machine-readable codes; raw errors may contain credentials or vendor payloads.
+      const failureCode = exception instanceof Error && /^[A-Z][A-Z0-9_]{2,79}$/.test(exception.message)
+        ? exception.message : undefined;
+      request.log?.error({
+        event: 'http.request.failed',
+        traceId,
+        statusCode: status,
+        method: request.method,
+        route: typeof route?.path === 'string' ? route.path : 'unmatched',
+        code: payload.code ?? errorCode(status),
+        ...(failureCode ? { failureCode } : {}),
+      });
+    }
     if (status === 429 && exception instanceof HttpException) {
       const body = exception.getResponse();
       const retryAfter = typeof body === 'object' && body !== null

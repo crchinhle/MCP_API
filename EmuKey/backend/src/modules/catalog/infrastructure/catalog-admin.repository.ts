@@ -2,8 +2,6 @@ import { randomUUID } from 'node:crypto';
 
 import { Pool, type PoolClient } from 'pg';
 import type { Hex } from 'viem';
-
-import { AuditWriter } from '../../../platform/audit/audit-writer.js';
 import { planCommitment } from '../../../platform/crypto/license-crypto.js';
 import type { AuthPrincipal } from '../../identity-access/identity.types.js';
 import type { BillingCycle } from '../presentation/catalog.dto.js';
@@ -112,7 +110,6 @@ function mapPlan(row: Record<string, unknown>): PlanRecord {
 export class CatalogAdminRepository {
   constructor(
     private readonly pool: Pool,
-    private readonly audit = new AuditWriter(),
   ) {}
 
   async listProducts(actor: AuthPrincipal): Promise<ProductRecord[]> {
@@ -150,9 +147,6 @@ export class CatalogAdminRepository {
       const row = result.rows[0];
       if (!row) throw new Error('PRODUCT_CREATE_FAILED');
       const product = mapProduct(row);
-      await this.writeAudit(client, actor, 'PRODUCT_CREATED', 'PRODUCT', product.id, {
-        code: product.code,
-      });
       return product;
     });
   }
@@ -179,7 +173,6 @@ export class CatalogAdminRepository {
         ],
       );
       const product = mapProduct(result.rows[0] ?? {});
-      await this.writeAudit(client, actor, 'PRODUCT_UPDATED', 'PRODUCT', id, {});
       return product;
     });
   }
@@ -207,9 +200,6 @@ export class CatalogAdminRepository {
         [status, id, actor.sub],
       );
       const product = mapProduct(result.rows[0] ?? {});
-      await this.writeAudit(client, actor, `PRODUCT_${status}`, 'PRODUCT', id, {
-        previousStatus: current.status,
-      });
       return product;
     });
   }
@@ -229,7 +219,6 @@ export class CatalogAdminRepository {
         }
         throw error;
       }
-      await this.writeAudit(client, actor, 'PRODUCT_DELETED', 'PRODUCT', id, {});
     });
   }
 
@@ -314,10 +303,6 @@ export class CatalogAdminRepository {
         ],
       );
       const plan = mapPlan(result.rows[0] ?? {});
-      await this.writeAudit(client, actor, 'PLAN_CREATED', 'PLAN', plan.id, {
-        productId: plan.productId,
-        version,
-      });
       return plan;
     });
   }
@@ -372,7 +357,6 @@ export class CatalogAdminRepository {
         ],
       );
       const plan = mapPlan(result.rows[0] ?? {});
-      await this.writeAudit(client, actor, 'PLAN_UPDATED', 'PLAN', id, {});
       return plan;
     });
   }
@@ -392,7 +376,6 @@ export class CatalogAdminRepository {
         }
         throw error;
       }
-      await this.writeAudit(client, actor, 'PLAN_DELETED', 'PLAN', id, {});
     });
   }
 
@@ -433,9 +416,6 @@ export class CatalogAdminRepository {
         [status, id, actor.sub],
       );
       const plan = mapPlan(result.rows[0] ?? {});
-      await this.writeAudit(client, actor, `PLAN_${status}`, 'PLAN', id, {
-        previousStatus: current.status,
-      });
       return plan;
     });
   }
@@ -466,24 +446,6 @@ export class CatalogAdminRepository {
     );
     if (!result.rows[0]) throw new Error('PLAN_NOT_FOUND');
     return mapPlan(result.rows[0]);
-  }
-
-  private writeAudit(
-    client: PoolClient,
-    actor: AuthPrincipal,
-    action: string,
-    targetType: 'PLAN' | 'PRODUCT',
-    targetId: string,
-    metadata: Record<string, unknown>,
-  ): Promise<void> {
-    return this.audit.write(client, {
-      action,
-      actorRole: actor.role,
-      actorUserId: actor.sub,
-      metadata,
-      targetId,
-      targetType,
-    });
   }
 
   private async withTransaction<T>(

@@ -1,5 +1,12 @@
 import type { CSSProperties } from 'react';
-import type { ThemeConfig } from 'antd';
+import type { PaginationProps, ThemeConfig } from 'antd';
+
+export const paginationTextControls: Pick<PaginationProps, 'prevIcon' | 'nextIcon' | 'jumpPrevIcon' | 'jumpNextIcon'> = {
+  prevIcon: 'Trước',
+  nextIcon: 'Sau',
+  jumpPrevIcon: '…',
+  jumpNextIcon: '…',
+};
 
 export const colorPalette = {
   canvas: '#f7f9fb',

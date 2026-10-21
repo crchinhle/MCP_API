@@ -1,6 +1,4 @@
 import { Pool, type PoolClient } from 'pg';
-
-import { AuditWriter } from '../../../platform/audit/audit-writer.js';
 import type {
   ChainReceipt,
   PreparedChainTransaction,
@@ -67,7 +65,6 @@ function mapCommand(row: Record<string, unknown>): ChainCommandRecord {
 export class ChainCommandRepository {
   constructor(
     private readonly pool: Pool,
-    private readonly audit = new AuditWriter(),
   ) {}
 
   async claimNext(workerId: string): Promise<ChainCommandRecord | null> {
@@ -102,13 +99,7 @@ export class ChainCommandRepository {
          RETURNING id`,
         [id, workerId],
       );
-      if (result.rows[0]) {
-        await this.audit.write(client, {
-          action: 'CHAIN_COMMAND_REOPENED_FOR_RETRY',
-          targetId: id,
-          targetType: 'CHAIN_COMMAND',
-        });
-      } else {
+      if (!result.rows[0]) {
         throw new Error('CHAIN_RETRY_CLAIM_LOST');
       }
     });
@@ -119,7 +110,6 @@ export class ChainCommandRepository {
     mode: 'REQUEUE_NO_SUBMISSION' | 'RECONCILE_SAME_RAW' | 'ABANDON_REVERTED' | 'ABANDON_NO_EFFECT',
     reason: string,
     evidence?: Record<string, unknown>,
-    actor?: { userId: string; role: string },
   ): Promise<ChainCommandRecord> {
     return this.transaction(async (client) => {
       const locked = await client.query<Record<string, unknown>>(
@@ -190,14 +180,6 @@ export class ChainCommandRepository {
       }
       const updated = await client.query<Record<string, unknown>>(query, values);
       if (!updated.rows[0]) throw new Error('CHAIN_COMMAND_RECOVERY_CONFLICT');
-      await this.audit.write(client, {
-        action: 'CHAIN_COMMAND_DEAD_LETTER_RECOVERED',
-        ...(actor ? { actorRole: actor.role, actorUserId: actor.userId } : {}),
-        metadata: { mode, evidenceType: mode === 'ABANDON_REVERTED' ? 'RECEIPT_REVERTED' : mode === 'ABANDON_NO_EFFECT' ? 'RAW_TX_IRREVOCABLE_NO_EFFECT' : null },
-        reason,
-        targetId: commandId,
-        targetType: 'CHAIN_COMMAND',
-      });
       return mapCommand(updated.rows[0]);
     });
   }
@@ -303,12 +285,6 @@ export class ChainCommandRepository {
          WHERE id = $1 RETURNING *`,
         [command.commandId, JSON.stringify(payload), payloadHash.slice(2)],
       );
-      await this.audit.write(client, {
-        action: 'ACTIVATION_ENVELOPE_RECOVERED',
-        metadata: { keyVersion },
-        targetId: command.commandId,
-        targetType: 'CHAIN_COMMAND',
-      });
       return mapCommand(updated.rows[0]!);
     });
   }
@@ -408,7 +384,7 @@ export class ChainCommandRepository {
 
   async markSubmitted(id: string): Promise<void> {
     await this.transaction(async (client) => {
-      const result = await client.query<{
+      await client.query<{
         chain_id: number;
         network: string;
         transaction_hash: string;
@@ -421,18 +397,6 @@ export class ChainCommandRepository {
          RETURNING network, chain_id, transaction_hash`,
         [id],
       );
-      if (result.rows[0]) {
-        await this.audit.write(client, {
-          action: 'CHAIN_COMMAND_SUBMITTED',
-          metadata: {
-            chainId: Number(result.rows[0].chain_id),
-            network: result.rows[0].network,
-            transactionHash: result.rows[0].transaction_hash,
-          },
-          targetId: id,
-          targetType: 'CHAIN_COMMAND',
-        });
-      }
     });
   }
 
@@ -448,21 +412,13 @@ export class ChainCommandRepository {
            AND transaction_hash IS NOT NULL AND signed_transaction IS NOT NULL`,
         [id],
       );
-      const result = await client.query(
+      await client.query(
         `UPDATE chain_commands SET status = 'SUBMITTED_UNKNOWN',
            transaction_hash = COALESCE($2, transaction_hash), locked_by = NULL,
            locked_at = NULL, last_error = 'RPC response unknown', updated_at = now()
          WHERE id = $1 RETURNING id`,
         [id, transactionHash ?? null],
       );
-      if (result.rows[0]) {
-        await this.audit.write(client, {
-          action: 'CHAIN_COMMAND_SUBMISSION_UNKNOWN',
-          metadata: { transactionHash: transactionHash ?? null },
-          targetId: id,
-          targetType: 'CHAIN_COMMAND',
-        });
-      }
     });
   }
 
@@ -487,7 +443,7 @@ export class ChainCommandRepository {
 
   async markReverted(id: string, receipt: ChainReceipt): Promise<void> {
     await this.transaction(async (client) => {
-      const result = await client.query(
+      await client.query(
         `UPDATE chain_commands
          SET status = 'DEAD_LETTER', receipt_status = 'REVERTED',
              receipt_block_number = $2, receipt_block_hash = $3,
@@ -501,16 +457,6 @@ export class ChainCommandRepository {
           receipt.transactionHash,
         ],
       );
-      if (result.rows[0]) {
-        await this.audit.write(client, {
-          action: 'CHAIN_COMMAND_TRANSACTION_REVERTED',
-          metadata: { transactionHash: receipt.transactionHash },
-          outcome: 'FAILED',
-          reason: 'CHAIN_TRANSACTION_REVERTED',
-          targetId: id,
-          targetType: 'CHAIN_COMMAND',
-        });
-      }
     });
   }
 
@@ -523,7 +469,7 @@ export class ChainCommandRepository {
     const status = terminal ? 'DEAD_LETTER' : 'RETRYABLE_FAILED';
     const reason = message.slice(0, 500);
     await this.transaction(async (client) => {
-      const result = await client.query(
+      await client.query(
         `UPDATE chain_commands SET status = $2::varchar, last_error = $3,
            next_attempt_at = CASE WHEN $2::varchar = 'RETRYABLE_FAILED'
              THEN now() + make_interval(secs => LEAST(300, power(2, $4)::int)) END,
@@ -531,18 +477,6 @@ export class ChainCommandRepository {
          WHERE id = $1 RETURNING id`,
         [id, status, reason, attemptCount],
       );
-      if (result.rows[0]) {
-        await this.audit.write(client, {
-          action: terminal
-            ? 'CHAIN_COMMAND_DEAD_LETTERED'
-            : 'CHAIN_COMMAND_RETRY_SCHEDULED',
-          metadata: { attemptCount, status },
-          outcome: 'FAILED',
-          reason,
-          targetId: id,
-          targetType: 'CHAIN_COMMAND',
-        });
-      }
     });
   }
 

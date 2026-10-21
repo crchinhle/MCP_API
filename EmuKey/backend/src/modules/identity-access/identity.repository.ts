@@ -1,6 +1,4 @@
 import { Pool, type PoolClient } from 'pg';
-
-import { AuditWriter } from '../../platform/audit/audit-writer.js';
 import type { AuthPrincipal, IdentityUser, UserState, ProviderInvitation, ProviderInvitationInput } from './identity.types.js';
 
 function mapUser(value: unknown): IdentityUser {
@@ -36,7 +34,6 @@ function dateValue(value: unknown): Date {
 export class IdentityRepository {
   constructor(
     private readonly pool: Pool,
-    private readonly audit = new AuditWriter(),
   ) {}
 
   async createProviderInvitation(actor: AuthPrincipal, input: ProviderInvitationInput, tokenHash: string): Promise<ProviderInvitation> {
@@ -62,7 +59,6 @@ export class IdentityRepository {
       );
       if (!result.rows[0]) throw new Error('PROVIDER_IDENTITY_CONFLICT');
       const invitation = this.mapInvitation(result.rows[0]);
-      await this.audit.write(client, { action: 'PROVIDER_INVITED', actorUserId: actor.sub, actorRole: actor.role, targetId: invitation.id, targetType: 'PROVIDER_INVITATION' });
       return invitation;
     });
   }
@@ -98,7 +94,6 @@ export class IdentityRepository {
       );
       const user = mapUser(result.rows[0]);
       await client.query('UPDATE provider_invitations SET accepted_at = now(), accepted_user_id = $2, updated_at = now() WHERE id = $1', [invitation.id, user.id]);
-      await this.audit.write(client, { action: 'PROVIDER_INVITATION_ACCEPTED', actorUserId: user.id, actorRole: user.role, targetId: user.id, targetType: 'USER', metadata: { invitationId: invitation.id, invitedByUserId: invitation.invited_by_user_id } });
       return user;
     });
   }
@@ -147,13 +142,6 @@ export class IdentityRepository {
       );
       if (!result.rows[0]) return null;
       const user = mapUser(result.rows[0]);
-      await this.audit.write(client, {
-        action: 'CUSTOMER_REGISTERED',
-        actorRole: 'CUSTOMER',
-        actorUserId: user.id,
-        targetId: user.id,
-        targetType: 'USER',
-      });
       return user;
     });
   }
@@ -169,13 +157,6 @@ export class IdentityRepository {
         [id],
       );
       if (!result.rows[0]) return null;
-      await this.audit.write(client, {
-        action: 'CUSTOMER_EMAIL_VERIFIED',
-        actorRole: 'CUSTOMER',
-        actorUserId: id,
-        targetId: id,
-        targetType: 'USER',
-      });
       return mapUser(result.rows[0]);
     });
   }
@@ -215,13 +196,6 @@ export class IdentityRepository {
       );
       const row = result.rows[0];
       if (!row) throw new Error('USER_NOT_FOUND');
-      await this.audit.write(client, {
-        action: 'PASSWORD_CHANGED',
-        actorRole: row.role,
-        actorUserId: id,
-        targetId: id,
-        targetType: 'USER',
-      });
     });
   }
 
@@ -231,7 +205,7 @@ export class IdentityRepository {
     lockedUntil: Date,
   ): Promise<void> {
     await this.withTransaction(async (client) => {
-      const result = await client.query<{ id: string; role: string }>(
+      await client.query<{ id: string; role: string }>(
         `UPDATE users
          SET failed_login_count = failed_login_count + 1,
              status = CASE
@@ -247,17 +221,6 @@ export class IdentityRepository {
          RETURNING id, role`,
         [email.trim().toLowerCase(), threshold, lockedUntil],
       );
-      const user = result.rows[0];
-      if (user) {
-        await this.audit.write(client, {
-          action: 'LOGIN_FAILED',
-          actorRole: user.role,
-          actorUserId: user.id,
-          outcome: 'DENIED',
-          targetId: user.id,
-          targetType: 'USER',
-        });
-      }
     });
   }
 
@@ -275,51 +238,30 @@ export class IdentityRepository {
 
   async touchLogin(id: string): Promise<void> {
     await this.withTransaction(async (client) => {
-      const result = await client.query<{ role: string }>(
+      await client.query<{ role: string }>(
         `UPDATE users
          SET last_login_at = now(), failed_login_count = 0, locked_until = NULL,
              updated_at = now()
          WHERE id = $1 RETURNING role`,
         [id],
       );
-      if (result.rows[0]) {
-        await this.audit.write(client, {
-          action: 'LOGIN_SUCCEEDED',
-          actorRole: result.rows[0].role,
-          actorUserId: id,
-          targetId: id,
-          targetType: 'USER',
-        });
-      }
     });
   }
 
-  async bumpSessionVersion(id: string, action = 'SESSION_REVOKED'): Promise<void> {
+  async bumpSessionVersion(id: string): Promise<void> {
     await this.withTransaction(async (client) => {
-      const result = await client.query<{ role: string }>(
+      await client.query<{ role: string }>(
         `UPDATE users
          SET session_version = session_version + 1, updated_at = now()
          WHERE id = $1 RETURNING role`,
         [id],
       );
-      if (result.rows[0]) {
-        await this.audit.write(client, {
-          action,
-          actorRole: result.rows[0].role,
-          actorUserId: id,
-          targetId: id,
-          targetType: 'USER',
-        });
-      }
     });
   }
 
   async changeStateByAdmin(
     targetId: string,
     status: UserState,
-    actorId: string,
-    actorRole: string,
-    reason: string,
   ): Promise<IdentityUser> {
     return this.withTransaction(async (client) => {
       await client.query(
@@ -356,22 +298,12 @@ export class IdentityRepository {
          WHERE id = $1 RETURNING *`,
         [targetId, status],
       );
-      await this.audit.write(client, {
-        action: `USER_${status}`,
-        actorRole,
-        actorUserId: actorId,
-        metadata: { nextStatus: status, previousStatus: targetRow.status },
-        reason,
-        targetId,
-        targetType: 'USER',
-      });
       return mapUser(updated.rows[0]);
     });
   }
 
   async updateProfile(
     id: string,
-    actorRole: string,
     fields: Record<string, string | null>,
   ): Promise<IdentityUser | null> {
     const allowed = ['display_name', 'organization_name', 'phone', 'address'];
@@ -385,14 +317,6 @@ export class IdentityRepository {
         [id, ...entries.map(([, value]) => value)],
       );
       if (!result.rows[0]) return null;
-      await this.audit.write(client, {
-        action: 'PROFILE_UPDATED',
-        actorRole,
-        actorUserId: id,
-        metadata: { fields: entries.map(([key]) => key) },
-        targetId: id,
-        targetType: 'USER',
-      });
       return mapUser(result.rows[0]);
     });
   }

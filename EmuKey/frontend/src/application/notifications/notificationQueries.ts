@@ -64,9 +64,10 @@ export function useNotifications() {
     queryKey: ['notifications'],
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam }) => {
-      const params = new URLSearchParams({ limit: '20' });
+      // Use the API's default page size; its query DTO rejects a string limit.
+      const params = new URLSearchParams();
       if (pageParam) params.set('cursor', pageParam);
-      const page = await requestJson<NotificationPage>(`/notifications?${params.toString()}`);
+      const page = await requestJson<NotificationPage>(`/notifications${params.size ? `?${params.toString()}` : ''}`);
       return { items: page.items.map(mapNotificationRecord), nextCursor: page.nextCursor };
     },
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,

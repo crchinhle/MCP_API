@@ -93,7 +93,7 @@ describe('baseline validator', () => {
             expect.stringContaining(expectedError),
           );
         } else {
-          expect((await execution).stdout).toContain('35 capabilities');
+          expect((await execution).stdout).toContain('34 capabilities');
         }
       } finally {
         await rm(directory, { force: true, recursive: true });
@@ -108,8 +108,8 @@ describe('baseline validator', () => {
         cwd: process.cwd(),
       });
 
-      expect(result.stdout).toContain('35 capabilities');
-      expect(result.stdout).toContain('19 tables');
+      expect(result.stdout).toContain('34 capabilities');
+      expect(result.stdout).toContain('18 tables');
     },
     15_000,
   );

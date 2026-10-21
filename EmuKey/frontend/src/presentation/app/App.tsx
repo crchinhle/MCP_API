@@ -150,6 +150,7 @@ function AppRoutes() {
         path="/system/console"
       >
         <Route index element={<SystemConsoleScreen />} />
+        <Route element={<AiKnowledgeScreen />} path="knowledge" />
         <Route element={<AccountProfileScreen />} path="profile" />
       </Route>
       <Route element={<NotFoundPage />} path="*" />
@@ -174,7 +175,7 @@ export function App({ initialEntries }: AppProps) {
   return (
       <QueryClientProvider client={queryClient}>
       <AuthProvider {...(testUser === undefined ? {} : { initialUser: testUser })} skipBootstrap={initialEntries !== undefined}>
-      <ConfigProvider theme={antTheme}>
+      <ConfigProvider theme={antTheme} select={{ suffixIcon: null }} collapse={{ expandIcon: ({ isActive }) => isActive ? '−' : '+' }} rangePicker={{ separator: 'đến' }} tooltip={{ arrow: false }} popover={{ arrow: false }} popconfirm={{ arrow: false }}>
       <style>{themeRootCss}</style>
          <div className="app-theme" style={themeCssVariables}>
            <AppErrorBoundary>

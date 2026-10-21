@@ -121,7 +121,7 @@ async function restoreIntoDisposable() {
     }
     const verification = await run('docker', [
       'exec', containerName, 'psql', '-U', 'restore', '-d', 'restore_db', '-At', '-c',
-      "SELECT (SELECT count(*) FROM users), (SELECT count(*) FROM orders), (SELECT count(*) FROM licenses), (SELECT count(*) FROM chain_commands), (SELECT count(*) FROM chain_events), (SELECT count(*) FROM audit_logs)",
+      "SELECT (SELECT count(*) FROM users), (SELECT count(*) FROM orders), (SELECT count(*) FROM licenses), (SELECT count(*) FROM chain_commands), (SELECT count(*) FROM chain_events)",
     ], { capture: true });
     await writeMetadata('RESTORE_VERIFIED', {
       disposableDatabase: true,

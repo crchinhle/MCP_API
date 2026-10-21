@@ -345,17 +345,18 @@ const publicHomeStyles = `
   }
 
   .public-home-arrow {
-    width: 40px;
+    min-width: 48px;
+    padding-inline: 12px;
     height: 40px;
     flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     border: 1px solid var(--border);
-    border-radius: 50%;
+    border-radius: 6px;
     background: var(--surface);
     color: var(--text);
-    font-size: 20px;
+    font-size: 14px;
     cursor: pointer;
     transition: background 120ms ease, border-color 120ms ease;
   }
@@ -552,7 +553,7 @@ function FeaturedCarousel({ products }: { readonly products: readonly Product[] 
 
       {hasMorePages ? (
         <div className="public-home-nav">
-          <button aria-label="Trước" className="public-home-arrow" disabled={page === 0} onClick={goPrev} type="button">&#8249;</button>
+          <button aria-label="Trước" className="public-home-arrow" disabled={page === 0} onClick={goPrev} type="button">Trước</button>
           <div aria-label="Chọn trang sản phẩm" className="public-home-dots" role="tablist">
             {pages.map((_, pageIndex) => (
               <button
@@ -566,7 +567,7 @@ function FeaturedCarousel({ products }: { readonly products: readonly Product[] 
               />
             ))}
           </div>
-          <button aria-label="Sau" className="public-home-arrow" onClick={goNext} type="button">&#8250;</button>
+          <button aria-label="Sau" className="public-home-arrow" onClick={goNext} type="button">Sau</button>
         </div>
       ) : null}
     </div>

@@ -93,7 +93,6 @@ export function SiteHeader() {
               <button aria-label="Mở menu tài khoản" className="account-pill" type="button">
                 <UserAvatar name={user.displayName} />
                 <span className="account-name">{user.displayName}</span>
-                <span aria-hidden="true" className="account-chevron">⌄</span>
               </button>
             </Dropdown>
           </div>

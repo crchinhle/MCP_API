@@ -29,7 +29,7 @@ function expectedCapabilityIds() {
       { length: count },
       (_, index) => `${prefix}-${String(index + 1).padStart(2, '0')}`,
     ),
-  );
+  ).filter((id) => id !== 'OPS-02');
 }
 
 function sameMembers(actual, expected, label) {

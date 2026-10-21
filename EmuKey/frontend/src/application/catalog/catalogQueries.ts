@@ -65,8 +65,9 @@ export function useComparePlans(ids: readonly string[]) {
   });
 }
 
-export function useAdminProducts() {
+export function useAdminProducts(enabled = true) {
   return useQuery({
+    enabled,
     queryKey: ['products', 'admin'],
     queryFn: () => requestJson<AdminProduct[]>('/products/admin'),
   });

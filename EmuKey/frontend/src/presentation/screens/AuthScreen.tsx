@@ -108,7 +108,7 @@ export function AuthScreen() {
               onClick={() => selectMode('login')}
               type="text"
             >
-              ←
+              Quay lại
             </Button>
           ) : null}
           <h2>{copy.title}</h2>

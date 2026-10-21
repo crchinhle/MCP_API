@@ -24,7 +24,7 @@ try {
     ...expectedAbsent.filter((name) => columns[name]).map((name) => `${name}:unexpected`),
   ];
   const tableCount = await client.query("SELECT count(*)::int AS count FROM pg_tables WHERE schemaname='public'");
-  const output = { status: failures.length === 0 && tableCount.rows[0].count === 19 ? 'REAL_VERIFIED' : 'FAIL', tableCount: tableCount.rows[0].count, present: expectedPresent.filter((name) => columns[name]), absent: expectedAbsent.filter((name) => !columns[name]), failures };
+  const output = { status: failures.length === 0 && tableCount.rows[0].count === 18 ? 'REAL_VERIFIED' : 'FAIL', tableCount: tableCount.rows[0].count, present: expectedPresent.filter((name) => columns[name]), absent: expectedAbsent.filter((name) => !columns[name]), failures };
   console.log(JSON.stringify(output, null, 2));
   if (output.status !== 'REAL_VERIFIED') process.exitCode = 1;
 } finally {

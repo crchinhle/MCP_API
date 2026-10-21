@@ -1,7 +1,6 @@
 import type { Client, QueryResultRow } from 'pg';
 
 const EXPECTED_TABLES = [
-  'audit_logs',
   'chain_commands',
   'chain_events',
   'chain_indexer_checkpoints',
@@ -22,7 +21,7 @@ const EXPECTED_TABLES = [
   'users',
 ] as const;
 
-const EXPECTED_EXTENSIONS = ['citext', 'pgcrypto', 'vector'] as const;
+const EXPECTED_EXTENSIONS = ['citext', 'pgcrypto'] as const;
 
 const EXPECTED_CRITICAL_CONSTRAINTS = {
   ck_license_devices_ref:

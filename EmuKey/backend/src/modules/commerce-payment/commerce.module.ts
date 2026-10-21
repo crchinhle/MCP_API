@@ -1,8 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
-
-import { AuditWriter } from '../../platform/audit/audit-writer.js';
 import { ServiceTermsContent } from '../../platform/terms/service-terms-content.js';
 import {
   ACTIVATION_ENVELOPE,
@@ -37,16 +35,14 @@ const CHAIN_CONFIGURATION = Symbol('CHAIN_CONFIGURATION');
   providers: [
     {
       provide: CommerceRepository,
-      inject: [Pool, AuditWriter, ConfigService, NotificationRepository],
+      inject: [Pool, ConfigService, NotificationRepository],
       useFactory: (
         pool: Pool,
-        audit: AuditWriter,
         config: ConfigService,
         notifications: NotificationRepository,
       ) =>
         new CommerceRepository(
           pool,
-          audit,
           config.getOrThrow<number>('IPN_DELIVERY_GRACE_SECONDS'),
           notifications,
         ),

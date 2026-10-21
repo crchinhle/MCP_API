@@ -7,7 +7,6 @@ import { IdentityRepository } from './identity.repository.js';
 import { IdentityService } from './identity.service.js';
 import { AuthGuard, OptionalAuthGuard, RolesGuard } from './security.guards.js';
 import { Reflector } from '@nestjs/core';
-import { AuditWriter } from '../../platform/audit/audit-writer.js';
 import {
   EMAIL_DELIVERY,
   type EmailDeliveryPort,
@@ -21,9 +20,9 @@ import { IdentityEmailDelivery } from './infrastructure/identity-email-delivery.
   providers: [
     {
       provide: IdentityRepository,
-      inject: [Pool, AuditWriter],
-      useFactory: (pool: Pool, audit: AuditWriter) =>
-        new IdentityRepository(pool, audit),
+      inject: [Pool],
+      useFactory: (pool: Pool) =>
+        new IdentityRepository(pool),
     },
     {
       provide: IdentityService,

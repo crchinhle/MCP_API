@@ -1,11 +1,13 @@
 # APP IMPLEMENTATION PLAN — Account-linked Customer baseline v5.1-r4
 
+> Phạm vi cập nhật 20/10/2026: gỡ nhật ký hoạt động người dùng (`OPS-02`), schema còn 18 bảng và danh mục còn 34 capability. Giữ lịch sử nghiệp vụ và log lỗi kỹ thuật tối thiểu; không có màn hình/API audit tổng quát. Các kết quả có ngày của phiên bản cũ là dữ liệu lịch sử.
+
 > Current architecture (2026-10-04): application services, PostgreSQL and Redis may run locally; blockchain runtime/integration is Ethereum Sepolia (11155111) only. Hardhat is contract tooling. Local-chain results below are historical evidence, not current execution instructions. Current DB invariants: `tests/emukey/backend/integration/blockchain/license-db-invariants.integration.test.ts`; current external verification: `tooling/emukey/verification/verify-sepolia.mjs`.
 
 > **Đề tài:** Xây dựng hệ thống quản lý và phân phối bản quyền phần mềm ứng dụng Blockchain  
 > **Ngày cập nhật:** 17/09/2026  
 > **Trạng thái:** **Baseline v5.1-r4 + implementation audit — M1 còn OPEN; không Customer Controller/per-account key/KMS**  
-> **Mục tiêu:** Triển khai đủ end-to-end Blockchain licensing trong 35 capability canonical; activation key không dùng để xác thực danh tính người mua.
+> **Mục tiêu:** Triển khai đủ end-to-end Blockchain licensing trong 34 capability canonical; activation key không dùng để xác thực danh tính người mua.
 
 > Cập nhật kiến trúc 03/10/2026: Device chỉ có `ACTIVE`/`REVOKED`; PostgreSQL là source of truth. Activation/revoke/quota commit trong DB transaction. Blockchain nhận async `activeDeviceCount + deviceStateVersion`; entitlement không chờ aggregate finality. Public activation dùng bearer key và device proof, không cần purchaser session; private management vẫn kiểm tra owner.
 
@@ -52,7 +54,7 @@ Renew / Suspend / Resume / Revoke
 
 ### Supporting
 
-Identity/RBAC, Provider Product/Plan, public verification, audit, notification.
+Identity/RBAC, Provider Product/Plan, public verification, notification.
 
 ### Secondary — không được chặn core release
 
@@ -119,13 +121,13 @@ Không có `orders.payment_status`, `orders.rights_status`, Contract state, Lice
 
 Khi vẽ state diagram, tách ba chiều ở trên và không vẽ `EXPIRED` như một administrative transition on-chain độc lập. Renewal đưa temporal condition về `VALID` nhưng không tự resume. Device `REVOKED` được bind lại bằng generation mới theo cạnh `REVOKED -> ACTIVE`.
 
-`ABANDONED`/`SUPERSEDED` là terminal resolution có reason/audit/typed evidence; PostgreSQL statement-stamp `resolved_at`, rồi toàn bộ row ChainCommand bất biến. `SUPERSEDED` phải được tạo atomically cùng reciprocal replacement link. `DEAD_LETTER` là parked unresolved state, không phải terminal: command chưa có raw/hash được về `PENDING` và giữ nguyên reserved nonce/payload sau revalidation; nếu nonce-only không thể reopen thì `NONCE_RESERVATION_RELEASED` giải phóng reservation có audit để đúng nonce được reuse. Raw+hash còn uncertain phải qua `SUBMITTED_UNKNOWN` để same-raw reconcile; raw cũ immutable, definitive proof chỉ resolve command cũ rồi mới tạo reciprocal replacement nếu cần. `RAW_TX_IRREVOCABLE_NO_EFFECT` không được đi cùng receipt `SUCCESS/REVERTED`; mọi proof `checkedAt` phải là RFC3339 parse được và nằm trong biên evidence -> DB-stamped resolution. Forward-admission chỉ có một actionable command/License; deep reorg có thể tạo ordered recovery set gồm nhiều command lịch sử `SUBMITTED_UNKNOWN`, và set này chặn mọi command mới.
+`ABANDONED`/`SUPERSEDED` là terminal resolution có reason/typed evidence; PostgreSQL statement-stamp `resolved_at`, rồi toàn bộ row ChainCommand bất biến. `SUPERSEDED` phải được tạo atomically cùng reciprocal replacement link. `DEAD_LETTER` là parked unresolved state, không phải terminal: command chưa có raw/hash được về `PENDING` và giữ nguyên reserved nonce/payload sau revalidation; nếu nonce-only không thể reopen thì `NONCE_RESERVATION_RELEASED` giải phóng reservation để đúng nonce được reuse. Raw+hash còn uncertain phải qua `SUBMITTED_UNKNOWN` để same-raw reconcile; raw cũ immutable, definitive proof chỉ resolve command cũ rồi mới tạo reciprocal replacement nếu cần. `RAW_TX_IRREVOCABLE_NO_EFFECT` không được đi cùng receipt `SUCCESS/REVERTED`; mọi proof `checkedAt` phải là RFC3339 parse được và nằm trong biên evidence -> DB-stamped resolution. Forward-admission chỉ có một actionable command/License; deep reorg có thể tạo ordered recovery set gồm nhiều command lịch sử `SUBMITTED_UNKNOWN`, và set này chặn mọi command mới.
 
 ## 6. Database plan
 
 Canonical schema `EmuKey/backend/database/schema.sql` có **18 tables**. Backend dùng trực tiếp file này để build/delivery; mọi thay đổi schema cập nhật tại đây và migrations tương ứng:
 
-`users`, `products`, `plans`, `orders`, `payment_attempts`, `payment_transactions`, `licenses`, `license_devices`, `chain_commands`, `chain_events`, `chain_indexer_checkpoints`, `knowledge_documents`, `knowledge_chunks`, `conversations`, `messages`, `notifications`, `mobile_push_tokens`, `audit_logs`.
+`users`, `products`, `plans`, `orders`, `payment_attempts`, `payment_transactions`, `licenses`, `license_devices`, `chain_commands`, `chain_events`, `chain_indexer_checkpoints`, `knowledge_documents`, `knowledge_chunks`, `conversations`, `messages`, `notifications`, `mobile_push_tokens`.
 
 Quy tắc:
 
@@ -134,7 +136,7 @@ Quy tắc:
 - Bảng mới phải có lifecycle/query/business rule độc lập + capability ID trực tiếp.
 - Critical transaction test bằng PostgreSQL thật; thay đổi schema bằng SQL được review; không ORM synchronize.
 - Không tự suy việc sửa authority SQL đồng nghĩa database đang chạy đã được apply/reset; thao tác dữ liệu thật là gate vận hành riêng.
-- Redis được phép giữ cache, lock, rate limit, refresh/session token, one-time challenge/action token, encrypted activation envelope và BullMQ scheduling vì đây là operational/ephemeral state. Redis không được là nguồn duy nhất của durable business authority như Order, Payment, License/Device projection, ChainCommand/Event hoặc Audit; mất Redis không được tự thay đổi rights canonical.
+- Redis được phép giữ cache, lock, rate limit, refresh/session token, one-time challenge/action token, encrypted activation envelope và BullMQ scheduling vì đây là operational/ephemeral state. Redis không được là nguồn duy nhất của durable business authority như Order, Payment, License/Device projection, ChainCommand/Event; mất Redis không được tự thay đổi rights canonical.
 - SQL target bắt Order mới vào `WAITING_TERMS_ACCEPTANCE`; DB statement-stamp Order/Attempt lifecycle và IPN receive time; guard immutable cutoff, late-correction provenance và exact Order↔Attempt↔effect amount/time/status hai chiều theo thứ tự effect -> late-correct Attempt -> `PAYMENT_ACCEPTED`; review `NONE -> OPEN -> terminal` với terminal/effect tuple bất biến. License purchase phải có exact accepted durable effect, `period_start = provider_occurred_at`, quota snapshot và ISSUE cùng transaction; ISSUE/RENEW command phải trỏ Order có exact paid effect. Projection/command↔confirmed-event pointer hai chiều, trỏ latest canonical event đúng loại và tối đa một confirmed event/command; Individual Device chỉ có ACTIVE/REVOKED và không có canonical event pointer. Expiry chỉ đổi một lần theo exact renewal pointer transition và chỉ giảm khi exact renewal reorg rollback. Contiguous predecessor, latest-confirmed basis cho non-ISSUE, reciprocal replacement cùng operation/subject và ISSUE replacement-only; per-License admission; terminal command row bất biến hoàn toàn; typed resolution proof có bounded valid RFC3339 `checkedAt`, no-effect proof loại receipt definitive. ChainEvent insert-`PENDING`, identity/decoded key evidence bất biến, timestamp chronological, re-inclusion sau prior reorg và monotonic reorg summary; ISSUE re-confirm sau deep reorg atomically phục hồi earliest unresolved ROTATE pending pointer/key nhưng giữ `UNTRUSTED_REORG`. No-delete durable evidence và Message idempotency key. Application vẫn phải có cùng transaction/race/negative tests, không dựa riêng vào trigger.
 
 ## 7. Service Terms và commitment
@@ -161,10 +163,10 @@ Quy tắc:
 | Self-revoke Device | Owner + key + fresh device proof + action token; DB transaction đổi Device sang REVOKED và cập nhật quota | Aggregate sync async, entitlement bị vô hiệu theo DB state |
 | Remote-revoke Device | Owner + password re-auth + action token; không yêu cầu proof từ thiết bị bị mất; DB transaction đổi Device sang REVOKED | Aggregate sync async, không chờ blockchain finality |
 | Owner key-recovery | Verify owner session + recent password re-auth + action token bind `KEY_RECOVERY`; không yêu cầu current key; serialize License + next ROTATE | chỉ tạo sau command/finality cũ đã resolve; same envelope/finality/one-time delivery, không mutate commitment cũ |
-| License state request | Command + audit | projection sau finality |
+| License state request | Command | projection sau finality |
 | Chain apply | Event mới luôn vào `PENDING`; event phải khớp command/subject/type/network/chain/contract/tx và decoded key evidence khi là ISSUE/ROTATE; tối đa một confirmed event/command; finality + latest reciprocal projection pointer đúng loại + command/projection state trong transaction | Event identity/decoded evidence bất biến; reinclusion được thay occurrence evidence có kiểm soát và giữ monotonic summary latest timestamps/count, không phải full ledger; notify sau commit; rebuild theo command sequence/dependency |
 | Entitlement issue/refresh/verify | Fresh device proof cho issue/refresh, kh?ng c?n purchaser session; verify signed token rồi re-read canonical projection/version | token TTL tối đa 5 phút; state/version change invalidates token cũ |
-| Conversation | CAS + message + assignment audit | **TARGET Phase 7:** Socket emit sau commit; runtime hiện dùng HTTP/polling |
+| Conversation | CAS + message | **TARGET Phase 7:** Socket emit sau commit; runtime hiện dùng HTTP/polling |
 
 ## 9. Phase plan
 
@@ -190,11 +192,11 @@ Quy tắc:
 - Verify phần matrix còn lại cho composite integrity: exact Order price/time/cutoff↔PaymentAttempt↔effect transaction; immutable terminal review/effect linkage; RenewalOrder↔License owner; Product↔Plan↔Order/License; projection/confirmation pointer↔duy nhất một CONFIRMED ChainEvent đúng subject/decoded key evidence; contiguous predecessor/basis, reciprocal replacement và ChainCommand provider/order subject; pending ROTATE pointer↔pending key tuple.
 - Seed đủ 4 role, gồm demo Customer/Provider account và Product/Plan.
 - Redis/session/config/log redaction.
-- Audit plumbing (`OPS-02`) cho auth/security/mutation từ foundation; dashboard để Phase 7.
+- Log lỗi kỹ thuật tối thiểu và redaction; không có nhật ký hoạt động người dùng.
 - Ports/fakes cho SePay, EVM, Storage, AI và Notification.
 - OpenAPI contract/snapshot + generated TypeScript types cho Web/Mobile; HTTP runtime hiện dùng wrappers viết tay, không được gọi là generated client hoàn chỉnh.
 
-**Gate:** SQL schema clean-room + seed idempotent; deliberate cross-subject FK fixtures phải fail; no secret in repo/log; audit baseline hoạt động.
+**Gate:** SQL schema clean-room + seed idempotent; deliberate cross-subject FK fixtures phải fail; no secret in repo/log; log lỗi kỹ thuật hoạt động.
 
 ### Phase 3 — Identity + Catalog + Terms
 
@@ -244,7 +246,7 @@ Capability: `COM-01..06`.
 Capability: `LIC-01..03`, `BC-01..05` minimum for issue/read; public verify thuộc `BC-05`.
 
 - Smart Contract Registry.
-- `chain_commands` submit/idempotency/per-License sequence+dependency/latest-confirmed basis cho non-ISSUE/nonce/unknown/retry/manual resolution (`ABANDONED`, `SUPERSEDED`); ISSUE luôn basis `NULL`. Replacement phải là reciprocal one-to-one link, có sequence lớn hơn và cùng operation/subject/provider/network/chain/contract; ISSUE sequence > 1 chỉ là replacement. Terminal resolution ghi typed JSON với bounded valid RFC3339 `checkedAt`; nonce-only có audited release/reuse, còn raw đã broadcast luôn immutable và chỉ same-raw reconcile cho đến receipt `REVERTED` hoặc finalized nonce-consumption + canonical no-effect proof resolve command cũ. No-effect proof loại receipt `SUCCESS/REVERTED`; khi `ABANDONED/SUPERSEDED`, toàn row immutable.
+- `chain_commands` submit/idempotency/per-License sequence+dependency/latest-confirmed basis cho non-ISSUE/nonce/unknown/retry/manual resolution (`ABANDONED`, `SUPERSEDED`); ISSUE luôn basis `NULL`. Replacement phải là reciprocal one-to-one link, có sequence lớn hơn và cùng operation/subject/provider/network/chain/contract; ISSUE sequence > 1 chỉ là replacement. Terminal resolution ghi typed JSON với bounded valid RFC3339 `checkedAt`; nonce-only có release/reuse, còn raw đã broadcast luôn immutable và chỉ same-raw reconcile cho đến receipt `REVERTED` hoặc finalized nonce-consumption + canonical no-effect proof resolve command cũ. No-effect proof loại receipt `SUCCESS/REVERTED`; khi `ABANDONED/SUPERSEDED`, toàn row immutable.
 - `chain_events` mới vào `PENDING`; indexing/finality + summarized reorg evidence; identity/decoded evidence bất biến, timestamp chronological, reinclusion chỉ theo state graph cho phép sau prior reorg và update monotonic latest timestamps/count, tối đa một event `CONFIRMED` mỗi command. Event apply phải khớp command/subject/type/network/chain/contract/transaction; License projection pointer phải trỏ latest `CONFIRMED` đúng loại; individual Device do PostgreSQL quản lý, không có confirmed event riêng. Expiry chỉ tăng một lần khi pointer sang exact renewal confirmation và chỉ giảm khi pointer rời exact renewal reorg.
 - NEW_PURCHASE -> ISSUE_LICENSE.
 - Activation secret/commitment + encrypted envelope preparation; ISSUE relayer hard-precondition kiểm tra envelope tồn tại và commitment khớp trước submit.
@@ -274,10 +276,10 @@ Capability: `LIC-02`, `LIC-04..08`.
 - Normal rotate dùng owner JWT + current activation key + recent password re-auth + one-time token `ROTATE_KEY`; current commitment/version/trust không đổi trước finality, pending next key thuộc exact `pending_activation_command_id`/envelope; `KEY_ROTATED` decoded evidence phải khớp previous/current và new/pending tuple; chain command chỉ do relayer được phép gửi.
 - Device activation: backend verify bearer secret và protocol/domain-separated device proof; lưu lowercase signer address, secret/private key không lên chain; contract enforce state/expiry/current key-version/PostgreSQL-enforced individual Device uniqueness/quota.
 - Self-revoke dùng owner JWT + token `SELF_REVOKE_DEVICE` bind exact Device/generation + current key + fresh target-device proof, không yêu cầu password re-auth riêng. Remote revoke dùng token `REMOTE_REVOKE_DEVICE` bind exact Device/generation + owner JWT + recent password re-auth + current key nhưng không target-device proof; token không dùng chéo action/Device/generation. Nếu current key mất thì owner recovery trước.
-- Owner key-recovery không yêu cầu key đã mất: session + recent password re-auth + email token bind `KEY_RECOVERY`, strong rate-limit/audit, rồi tạo ROTATE mới sau khi command/finality cũ đã resolve.
+- Owner key-recovery không yêu cầu key đã mất: session + recent password re-auth + email token bind `KEY_RECOVERY`, strong rate-limit, rồi tạo ROTATE mới sau khi command/finality cũ đã resolve.
 - Signed entitlement issue/refresh dùng fresh device proof; verify re-check License projection/finality, PostgreSQL Device state/keyVersion/entitlementVersion và TTL tối đa 5 phút.
 - Renewal apply, suspend/resume/revoke; expiry worker chỉ derive `EXPIRED` từ on-chain `expiresAt` và timestamp của latest finalized block, fail closed khi finalized head stale/unavailable.
-- Race/retry/reorg/replay tests; rollback từ fork point giữ durable summarized finality/reorg evidence. Chỉ command mất matching canonical confirmation của chính nó demote `SUBMITTED_UNKNOWN`; command còn canonical event giữ `CONFIRMED`. Descendant chưa submit dựa orphaned basis park `DEAD_LETTER`; non-ISSUE reopen/submit phải recheck latest-confirmed basis. Nonce-only có thể audited release nếu basis không trở lại; raw đã broadcast không được rewrite, chỉ same-raw reconcile rồi resolve command cũ bằng typed definitive proof trước khi tạo reciprocal replacement. Không mở command mới khi suffix chưa resolve.
+- Race/retry/reorg/replay tests; rollback từ fork point giữ durable summarized finality/reorg evidence. Chỉ command mất matching canonical confirmation của chính nó demote `SUBMITTED_UNKNOWN`; command còn canonical event giữ `CONFIRMED`. Descendant chưa submit dựa orphaned basis park `DEAD_LETTER`; non-ISSUE reopen/submit phải recheck latest-confirmed basis. Nonce-only có thể release nếu basis không trở lại; raw đã broadcast không được rewrite, chỉ same-raw reconcile rồi resolve command cũ bằng typed definitive proof trước khi tạo reciprocal replacement. Không mở command mới khi suffix chưa resolve.
 - Idempotency phải request-scoped; không reuse command `CONFIRMED` cũ cho chu kỳ suspend→resume→suspend hoặc activate→revoke→activate.
 - Có compatibility/serialization matrix cho mọi command chưa resolve cùng License (`RENEW`, `ROTATE`, activate/revoke Device, suspend/resume/revoke License); sequence/predecessor/basis event không cho command dùng stale state/key version.
 - Rebind cùng Device sau revoke phải tăng `binding_generation`; command chỉ deduplicate trong cùng logical request/generation.
@@ -286,18 +288,18 @@ Capability: `LIC-02`, `LIC-04..08`.
 - Envelope chỉ regenerate trước nonce/raw tx/hash. Sau submit nhưng trước finality chỉ key-unavailable + reconcile; payload/commitment đã chuẩn bị là immutable. Sau resolution, response-loss/Customer mất key hoặc `KEY_ROTATED` đã giao bị mất canonical dùng owner-recovery ROTATE. Nếu `LICENSE_ISSUED` mất canonical thì same-raw reconcile/rebroadcast trước; chỉ khi transaction cũ chắc chắn không thể áp dụng mới atomically link replacement ISSUE với commitment đã chốt hoặc refund, không ROTATE License chưa tồn tại canonical.
 - ISSUE proposal dùng `PENDING_FINALITY -> TRUSTED`; proposal immutable ngay khi bất kỳ ISSUE lineage command đã có nonce/raw/hash. Rotate giữ current key `TRUSTED` và next key + exact pending-command pointer cho đến khi matching `KEY_ROTATED` decoded evidence finality atomically promote. Reorg sau delivery rollback đúng previous/new evidence, chuyển `UNTRUSTED_REORG` và chặn activation-key-dependent action/entitlement đến re-confirm; deep ISSUE reorg clear pending ROTATE projection pointer nhưng vẫn giữ ordered unresolved ROTATE command/evidence suffix. Khi ISSUE confirm lại, cùng transaction phục hồi exact pending pointer/key của earliest unresolved ROTATE và vẫn `UNTRUSTED_REORG` cho đến khi suffix canonical hết. Chỉ `KEY_ROTATED` orphan trên License còn canonical mới đi owner recovery; ISSUE orphan đi same-raw issue-recovery rồi replacement/refund.
 
-**Gate:** chain controls License rights; PostgreSQL controls individual Device state v? transactional quota; stale key-version, duplicate command/nonce, incompatible concurrent command, cross-action/replayed proof, over-quota device và backend-only License ACTIVE/EXPIRED mutation đều bị từ chối; remote revoke/key recovery có deterministic audited path.
+**Gate:** chain controls License rights; PostgreSQL controls individual Device state v? transactional quota; stale key-version, duplicate command/nonce, incompatible concurrent command, cross-action/replayed proof, over-quota device và backend-only License ACTIVE/EXPIRED mutation đều bị từ chối; remote revoke/key recovery có deterministic path.
 
 ### Phase 7 — Assistance + Operations
 
-**Trạng thái:** `OPEN` — Phase 7 bao phủ 7 ID (`AST-01..04`, `OPS-01..03`): 6 capability hoàn toàn chưa hoàn tất, còn `OPS-02` mới có foundation plumbing ở Phase 2 nhưng chưa đạt Phase 7 end-to-end. Không thuộc phạm vi hoàn tất Phase 1–6.
+**Phạm vi Phase 7:** 6 ID (`AST-01..04`, `OPS-01`, `OPS-03`); chức năng audit `OPS-02` đã được gỡ khỏi phạm vi hiện tại.
 
-Capability: `AST-01..04`, `OPS-01..03` (`OPS-02` plumbing đã bắt đầu từ Phase 2).
+Capability: `AST-01..04`, `OPS-01`, `OPS-03`.
 
 - Minimal Knowledge/RAG + source/refusal; AI Plan advisory chỉ reuse `CAT-05`.
 - Unified AI/Support Conversation; mọi Customer/Support append dùng stable client UUID, AI/System dùng stable event/job UUID để retry không tạo Message/server sequence mới.
 - Notification/push.
-- Hoàn thiện audit/dashboard/health; Provider chỉ xem aggregate của mình, còn manual `BC-04` chỉ System Admin có audit; Operations UI không implement engine riêng.
+- Hoàn thiện dashboard/health; Provider chỉ xem aggregate của mình, còn manual `BC-04` chỉ System Admin; Operations UI không implement engine riêng.
 
 **Gate:** AI read-only, Support boundaries, Message append idempotent cho mọi sender, notification failures không rollback business; không có duplicate ComparePlans/Reconcile/PublicVerify implementation.
 
@@ -324,9 +326,9 @@ Capability: `AST-01..04`, `OPS-01..03` (`OPS-02` plumbing đã bắt đầu từ
 | Licensing | `LIC-01..08` | 5–6 |
 | Blockchain | `BC-01..05` | 5–6 |
 | Assistance | `AST-01..04` | 7 |
-| Operations | `OPS-02` foundation ở 2; `OPS-01/03` hoàn thiện ở 7 | 2, 7 |
+| Operations | `OPS-01/03` | 7 |
 
-**35/35 capability hiện có capability row và phase mapping; ma trận per-capability `API/use case/table/test owner` vẫn OPEN ở Phase 1, nên chưa được gọi là traceability complete.** Có 28 core ID nằm ở Phase 1–6; cộng `OPS-02` foundation tạo 29 phase assignments nhưng không biến `OPS-02` thành Phase 7 complete. Phase 7 bao phủ 7 ID (`AST-01..04`, `OPS-01..03`): 6 ID hoàn toàn chưa hoàn tất, `OPS-02` mới partial foundation. Các executable Phase 7 path/test-owner paths cho end-to-end behavior vẫn thiếu hoặc chưa được chứng minh. Android/Web coverage không tạo thêm capability ID.
+**34/34 capability có owner và phase mapping trong ma trận hiện tại.** Giữ nguyên ID các chức năng còn lại; `OPS-02` đã gỡ. Các mốc kiểm chứng lịch sử bên dưới không thay thế kết quả kiểm thử phiên bản mới.
 
 ## 11. Owner và dependency bắt buộc
 
@@ -353,7 +355,7 @@ Không module/surface nào được tạo implementation thứ hai cho các conc
 | Provider profile, Product/Plan, Orders/Payments, License lifecycle | API/UI có ở mức Phase 1–6 |
 | Provider Knowledge/dashboard | Screen/placeholder có; Knowledge/Operations backend Phase 7 OPEN |
 | Support queue/conversation | UI mock; Phase 7 OPEN |
-| System users/payment review/chain health/reconcile | API/UI một phần; audit/integration-job views chưa phải full Operations flow |
+| System users/payment review/chain health/reconcile | API/UI một phần; integration-job views chưa phải full Operations flow |
 
 ### Android
 
@@ -417,10 +419,10 @@ Không tạo task kiểu “build mobile feature X” nếu backend capability �
 | `GAP-P2-SCHEMA-V73` | PARTIAL, acceptance blocking | Disposable create + 18-table inventory + canonical schema validation + representative invariant fixtures + reset/apply Neon thật đã pass; còn toàn bộ FK/check/index negative fixtures |
 | `GAP-P2-EVM-CANONICAL` | OPEN | Enforce/test EVM network/address/hash lowercase và provider namespace case-insensitive; checksum/case variant không được tạo identity thứ hai |
 | `GAP-P4-RENEWAL` | OPEN | Renewal phải cùng Plan/commitment và expiry dùng `addPlanDuration(max(canonical expiresAt, verified provider_occurred_at), duration_months)`; không biến renewal thành upgrade/downgrade |
-| `GAP-P4-RENEWAL-SINGLE-FLIGHT` | OPEN, race blocking | End-to-end admission phải chặn open Renewal Order, actionable command, mọi `SUBMITTED_UNKNOWN` và unresolved `DEAD_LETTER`. Sequence/predecessor/basis event điều khiển dependency; trước nonce được recompute payload/commitment atomically có audit, nonce-only retry cùng payload hoặc typed release/reuse nếu basis không thể trở lại, signed raw+hash phải same-raw reconcile cho đến definitive proof |
+| `GAP-P4-RENEWAL-SINGLE-FLIGHT` | OPEN, race blocking | End-to-end admission phải chặn open Renewal Order, actionable command, mọi `SUBMITTED_UNKNOWN` và unresolved `DEAD_LETTER`. Sequence/predecessor/basis event điều khiển dependency; trước nonce được recompute payload/commitment atomically, nonce-only retry cùng payload hoặc typed release/reuse nếu basis không thể trở lại, signed raw+hash phải same-raw reconcile cho đến definitive proof |
 | `GAP-P4-LIFECYCLE` | OPEN | Representative SQL fixture đã pass thứ tự durable effect -> late-correct exact Attempt -> Order `PAYMENT_ACCEPTED` và paid-origin License/ISSUE/RENEW; còn implementation/full acceptance cho DB-stamped half-open boundaries, concurrent correction, atomic supersede attempt khác, callback-only Order cutoff và terminal Order không hồi sinh |
 | `GAP-P4-PAYMENT-TEST` | OPEN | Authentication/normalization, replay/duplicate/out-of-order/concurrent/late/mismatch IPN và review/receipt authorization matrix |
-| `GAP-P4-PAYMENT-TIME` | OPEN | SQL đã statement-stamp `received_at`/lifecycle và enforce exact half-open interval cùng supersede/callback cutoff; còn application/runtime và full acceptance test cho các boundary đó, bounded provider skew, initial period/expiry và renewal formula. Receive time tại/ngoài cutoff chỉ audit/review, không fulfillment |
+| `GAP-P4-PAYMENT-TIME` | OPEN | SQL đã statement-stamp `received_at`/lifecycle và enforce exact half-open interval cùng supersede/callback cutoff; còn application/runtime và full acceptance test cho các boundary đó, bounded provider skew, initial period/expiry và renewal formula. Receive time tại/ngoài cutoff chỉ review, không fulfillment |
 | `GAP-P4-CHECKOUT-REFERENCE` | OPEN | Persist deterministic provider reference trước external checkout để crash không biến IPN hợp lệ thành UNMATCHED |
 | `GAP-P4-PAYMENT-REVIEW-OUTCOME` | OPEN | Implement/test immutable provider evidence/classification, graph `NONE -> OPEN -> RESOLVED|CLOSED_NO_ACTION`, terminal review và durable effect tuple/link bất biến. `REMATCHED/ACCEPT_AND_FULFILL` chỉ từ `WAITING_PAYMENT` đã accept exact Terms, exact amount/time/cutoff; AMOUNT_MISMATCH không accept trực tiếp; MATCHED fulfillment failure/terminal Order chỉ refund/no-action |
 | `GAP-P5-BC05` | OPEN | Endpoint đã có; bổ sung direct conformance test matrix cho public verify allowlist/no PII/rate-limit/finality/pending/reorg/stale/not-found |
@@ -459,7 +461,7 @@ Fake/local adapter được phép trước gate; **không** được giả produ
 4. `[M1]` Entitlement chỉ cấp/refresh cho License+Device chain-confirmed.
 5. `[M1]` Renewal không kéo dài expiry trước finality.
 6. `[M1]` Suspend/revoke/expiry từ canonical chain state làm entitlement refresh fail theo SLA/token TTL; backend không tự đặt expiry khác on-chain.
-7. `[M1]` RPC uncertain/reorg không tạo command/License/device trùng; rollback từ fork point giữ durable summarized reorg evidence, non-ISSUE latest-confirmed basis và reconcile ordered recovery suffix trước mutation mới. Nonce-only retry hoặc audited release/reuse; raw đã broadcast immutable, same-raw reconcile rồi typed-resolve command cũ trước reciprocal replacement.
+7. `[M1]` RPC uncertain/reorg không tạo command/License/device trùng; rollback từ fork point giữ durable summarized reorg evidence, non-ISSUE latest-confirmed basis và reconcile ordered recovery suffix trước mutation mới. Nonce-only retry hoặc release/reuse; raw đã broadcast immutable, same-raw reconcile rồi typed-resolve command cũ trước reciprocal replacement.
 8. `[M1]` Provider isolation negative test pass.
 9. `[M1]` Public verify commitment/finality đúng, không PII và pass direct `BC-05` conformance matrix.
 10. `[M1]` SQL v7.3 canonical schema; schema/seed clean-room, reset/import Neon thật, baseline verify và seed-twice idempotency đã pass.
@@ -473,11 +475,11 @@ Fake/local adapter được phép trước gate; **không** được giả produ
 18. `[M1]` Mọi private License mutation/key delivery/entitlement enforce Customer owner độc lập với bearer activation key/device proof; sensitive action có recent re-auth khi quy định và action token one-time/TTL bind đúng owner/license/action, riêng device action bind thêm exact deviceRef/generation và không dùng chéo self/remote.
 19. `[M1]` Lifecycle lặp tạo command mới theo logical request; không reuse một command `CONFIRMED` của chu kỳ trước.
 20. `[M1]` Device rebind sau revoke tăng generation; generation cũ không thể xác nhận/ghi đè generation mới.
-21. `[M1]` Envelope/key-unavailable branch deterministic/audited; current và pending key tách biệt bằng exact pending ROTATE pointer, decoded previous/new event evidence và atomic promote/rollback/reconfirm; ISSUE lineage proposal không đổi sau nonce/raw/hash. Sau deep ISSUE reorg, ISSUE re-confirm phải atomically khôi phục exact earliest unresolved ROTATE pending pointer/key và giữ `UNTRUSTED_REORG` đến canonical suffix resolution. Sau resolution, mất key hoặc `KEY_ROTATED` reorg dùng owner-recovery ROTATE; `LICENSE_ISSUED` reorg same-raw reconcile rồi reciprocal replacement ISSUE/refund.
+21. `[M1]` Envelope/key-unavailable branch deterministic; current và pending key tách biệt bằng exact pending ROTATE pointer, decoded previous/new event evidence và atomic promote/rollback/reconfirm; ISSUE lineage proposal không đổi sau nonce/raw/hash. Sau deep ISSUE reorg, ISSUE re-confirm phải atomically khôi phục exact earliest unresolved ROTATE pending pointer/key và giữ `UNTRUSTED_REORG` đến canonical suffix resolution. Sau resolution, mất key hoặc `KEY_ROTATED` reorg dùng owner-recovery ROTATE; `LICENSE_ISSUED` reorg same-raw reconcile rồi reciprocal replacement ISSUE/refund.
 22. `[M1]` Renewal single-flight khóa xuyên Order/forward command/recovery set; sequence/predecessor/basis event làm canonical dependency reorg không tạo stale payload/projection.
 23. `[M1]` DB statement-stamp lifecycle/receive time; PaymentAttempt/Order expiry + immutable `ipn_accept_until` callback-only half-open boundary đúng. Fulfillment yêu cầu WAITING_PAYMENT + exact Terms/amount, provider time trong `[max(terms_accepted_at, attempt.created_at), min(attempt.expires_at, payment_due_at))`, nếu superseded còn `< superseded_at`, và receive trước cutoff. Cùng transaction phải ghi durable effect trước, late-correct exact Attempt `EXPIRED|SUPERSEDED -> SUCCEEDED` nếu cần, rồi mới project Order `PAYMENT_ACCEPTED`; correction giữ immutable provenance và atomically supersede mọi attempt khác còn `PENDING`. License purchase bind exact effect, provider occurred time, quota snapshot và ISSUE cùng transaction; ISSUE/RENEW command đều có paid effect. Durable effect ↔ exact Attempt `SUCCEEDED` ↔ Order `PAYMENT_ACCEPTED` đồng nhất hai chiều tại commit. Review theo `NONE -> OPEN -> terminal`, giữ immutable evidence/classification/terminal effect tuple, đúng resolution matrix, authorized/idempotent và phân biệt payment đúng hạn với webhook/payment sau hạn.
 24. `[M1]` Per-License forward-admission/compatibility và ordered reorg recovery matrix loại race giữa rotate/renew/lifecycle/device operation và stale key/state.
-25. `[M1]` Owner có remote revoke không cần target-device proof và deterministic key-recovery không cần key đã mất; nếu mất cả key thì recovery hoàn tất trước remote revoke. Self/remote token tách action, bind exact Device/generation; self dùng fresh target proof không yêu cầu password re-auth riêng, remote/recovery dùng recent password re-auth; mọi nhánh có audit phù hợp.
+25. `[M1]` Owner có remote revoke không cần target-device proof và deterministic key-recovery không cần key đã mất; nếu mất cả key thì recovery hoàn tất trước remote revoke. Self/remote token tách action, bind exact Device/generation; self dùng fresh target proof không yêu cầu password re-auth riêng, remote/recovery dùng recent password re-auth; mọi nhánh phù hợp.
 26. `[M1]` Device challenge bind đầy đủ protocol/domain/action/subject/generation/version/nonce/expiry; action token device bind owner/license/device/generation/action; cả hai consume atomically và pass replay/cross-action/cross-device negative tests.
 27. `[M1]` Email verification resend/reissue/cleanup làm `PENDING_EMAIL_VERIFICATION` không mắc kẹt khi token mất/hết hạn.
 28. `[M1]` License expiry/finality dùng latest-finalized-block authority; commerce cutoff dùng trusted PostgreSQL statement clock (`statement_timestamp()`); payment effective time dùng verified provider time với bounded skew; UTC/EOM `addPlanDuration`, purchase và renewal đều có boundary vectors.
@@ -488,7 +490,7 @@ Fake/local adapter được phép trước gate; **không** được giả produ
 - Code + SQL schema change + API + tests + observability + runbook khi cần.
 - Happy path + negative authorization + idempotency/concurrency.
 - Không silent fallback từ Sepolia sang local hoặc ngược lại cho cùng command.
-- No durable business authority in Redis only. Redis-only được phép cho cache/lock/rate-limit/session-refresh, one-time challenge/action token, encrypted activation envelope và queue scheduling; mất Redis chỉ được ảnh hưởng availability/session, không tự đổi durable payment/rights/chain/audit state.
+- No durable business authority in Redis only. Redis-only được phép cho cache/lock/rate-limit/session-refresh, one-time challenge/action token, encrypted activation envelope và queue scheduling; mất Redis chỉ được ảnh hưởng availability/session, không tự đổi durable payment/rights/chain state.
 - No direct repository cross-module mutation.
 - No duplicated state source (`Order` không copy payment/rights status).
 - No duplicated capability implementation cho ComparePlans/PublicVerify/Reconcile.
@@ -511,7 +513,7 @@ Fake/local adapter được phép trước gate; **không** được giả produ
 | Bearer key bị hiểu nhầm là ownership | Bắt buộc Customer JWT ownership trước private mutation; key/proof/action token là các factor bổ sung |
 | Renewal đổi Plan nhưng chain chỉ đổi expiry | Composite same-plan/commitment DB constraint + application negative test |
 | Command cũ chặn lifecycle lặp | Request-scoped idempotency key; chỉ reuse cùng logical request, không reuse theo subject/type vĩnh viễn |
-| Envelope mất sau submit/TTL | Durable operational policy, audit + owner recovery design; commitment đã submit bất biến |
+| Envelope mất sau submit/TTL | Durable operational policy, owner recovery design; commitment đã submit bất biến |
 | Renewal mới chồng lên command cũ hoặc dependency bị reorg | Open-Order/forward/recovery-set admission + sequence/predecessor/basis event + pre/post-prepare rule |
 | Hai command khác loại cùng License chạy đua | Forward unique guard + application per-License lock + ordered reorg recovery; stale state/key version bị từ chối |
 | Payment đúng hạn nhưng webhook đến muộn | Occurred/received time + delivery grace; đúng bốn review resolution và terminal Order không hồi sinh |

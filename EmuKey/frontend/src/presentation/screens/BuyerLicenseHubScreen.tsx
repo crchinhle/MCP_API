@@ -1,3 +1,4 @@
+import { paginationTextControls } from '../theme';
 import { LoadingOverlay } from '../components/WorkspacePrimitives';
 import { CopyableId, PageLoading, useDebouncedValue } from '../components/WorkspacePrimitives';
 import { Alert, Button, Empty, Input, Modal, Table } from 'antd';
@@ -74,7 +75,7 @@ export function BuyerLicenseHubScreen() {
         <section className="buyer-license-table" aria-label="Danh sách bản quyền">
           <Input.Search aria-label="Tìm bản quyền" placeholder="Tìm sản phẩm, gói, mã tra cứu hoặc 4 ký tự cuối" allowClear value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} />
           <Table<LicenseProjectionDto> rowKey="id" dataSource={visibleRows} scroll={{ x: 1100 }}
-            pagination={{ current: Math.min(page, Math.max(1, Math.ceil(visibleRows.length / 10))), pageSize: 10, onChange: setPage, showSizeChanger: false, hideOnSinglePage: true }}
+            pagination={{ ...paginationTextControls, current: Math.min(page, Math.max(1, Math.ceil(visibleRows.length / 10))), pageSize: 10, onChange: setPage, showSizeChanger: false, hideOnSinglePage: true }}
             locale={{ emptyText: 'Không có bản quyền phù hợp bộ lọc.' }} columns={[
               { title: 'Sản phẩm / Gói', key: 'product', width: 260, render: (_, row) => <><strong>{row.productName}</strong><div>{row.plan.name}</div><CopyableId value={row.publicLicenseId} /></> },
               { title: 'Mã bản quyền', dataIndex: 'activationKeyLast4', width: 180, render: (value: string | null | undefined) => value ? <code>•••• {value}</code> : 'Không có thông tin' },
@@ -129,7 +130,7 @@ export function BuyerLicenseHubScreen() {
               <p>Đang sử dụng {devices.data ? activeDevices : '—'}/{selected.maxActiveDevices} thiết bị.</p>
               <LoadingOverlay active={devices.isPending} label="Đang tải thiết bị" />
               {!devices.isError && !devices.isPending ? <Table rowKey="id" dataSource={devices.data ?? []} scroll={{ x: 650 }}
-                pagination={{ pageSize: 5, showSizeChanger: false, hideOnSinglePage: true }} locale={{ emptyText: 'Chưa có thiết bị.' }} columns={[
+                pagination={{ ...paginationTextControls, pageSize: 5, showSizeChanger: false, hideOnSinglePage: true }} locale={{ emptyText: 'Chưa có thiết bị.' }} columns={[
                   { title: 'Mã thiết bị', dataIndex: 'deviceRef', ellipsis: true },
                   { title: 'Trạng thái', dataIndex: 'status', width: 140, render: (value: string) => statusLabel(value) },
                   { title: 'Ngày kích hoạt', dataIndex: 'activatedAt', width: 150, render: (value: string | null) => value ? dateLabel(value) : '—' },

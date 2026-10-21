@@ -2,8 +2,6 @@ import { randomUUID } from 'node:crypto';
 
 import { keccak256, stringToHex, type Hex } from 'viem';
 import { Pool, type PoolClient } from 'pg';
-
-import { AuditWriter } from '../../../platform/audit/audit-writer.js';
 import { canonicalizeEntitlements } from '../../../platform/crypto/license-crypto.js';
 import type { LicenseLifecycleCommand } from '../licensing.types.js';
 
@@ -56,7 +54,6 @@ function mapCommand(row: Record<string, unknown>): LicenseCommandResult {
 export class LicensingRepository {
   constructor(
     private readonly pool: Pool,
-    private readonly audit = new AuditWriter(),
   ) {}
 
   async commandStatus(actorUserId: string, commandId: string) {
@@ -227,13 +224,6 @@ export class LicensingRepository {
         protocolVersion: 2,
       };
       const command = await this.insertCommand(client, commandId, 'SYNC_DEVICE_COUNT', license, null, payload, config);
-      await this.audit.write(client, {
-        action: 'DEVICE_ACTIVATION_REQUESTED',
-        ...(actorUserId ? { actorRole: 'CUSTOMER', actorUserId } : {}),
-        metadata: { deviceRef, keyVersion: license.activationKeyVersion, authorization: 'ACTIVATION_KEY_AND_DEVICE_PROOF' },
-        targetId: licenseId,
-        targetType: 'LICENSE',
-      });
       return { commandId: command.commandId, deviceId: storedDeviceId, licenseId, status: command.status };
     });
   }
@@ -278,14 +268,6 @@ export class LicensingRepository {
         protocolVersion: 2,
       };
       const command = await this.insertCommand(client, commandId, 'SYNC_DEVICE_COUNT', license, null, payload, config);
-      await this.audit.write(client, {
-        action: 'DEVICE_REVOCATION_REQUESTED',
-        actorRole: 'CUSTOMER',
-        actorUserId,
-        metadata: { deviceRef },
-        targetId: licenseId,
-        targetType: 'LICENSE',
-      });
       return { commandId: command.commandId, deviceId: String(row.id), licenseId, status: command.status };
     });
   }
@@ -328,14 +310,6 @@ export class LicensingRepository {
            updated_at=now() WHERE id=$1`,
         [licenseId, commitment.slice(2), nextVersion, commandId],
       );
-      await this.audit.write(client, {
-        action: 'ACTIVATION_KEY_ROTATION_REQUESTED',
-        actorRole: 'CUSTOMER',
-        actorUserId,
-        metadata: { keyVersion: nextVersion },
-        targetId: licenseId,
-        targetType: 'LICENSE',
-      });
       return command;
     });
   }
@@ -364,14 +338,6 @@ export class LicensingRepository {
       const commandId = randomUUID();
       const payload = { commandId, licenseId, protocolVersion: 1, ...(reason ? { reason } : {}) };
       const command = await this.insertCommand(client, commandId, commandType, license, null, payload, config);
-      await this.audit.write(client, {
-        action: 'LICENSE_LIFECYCLE_REQUESTED',
-        actorRole: 'PROVIDER_ADMIN',
-        actorUserId,
-        metadata: { commandType, reason: reason ?? null },
-        targetId: licenseId,
-        targetType: 'LICENSE',
-      });
       return command;
     });
   }

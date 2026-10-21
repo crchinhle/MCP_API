@@ -184,7 +184,6 @@ const ACTIVATION_FIXTURES = Array.from(
   },
 );
 const TABLE_EXPECTATIONS = {
-  audit_logs: BUSINESS_ROW_COUNT,
   chain_commands: BUSINESS_ROW_COUNT,
   chain_events: BUSINESS_ROW_COUNT,
   chain_indexer_checkpoints: CHECKPOINT_ROW_COUNT,
@@ -217,7 +216,7 @@ SELECT
     'Công ty TNHH Dữ liệu Minh Tâm',
     'Công ty Cổ phần Nền tảng Tiên Phong'
   ])[i] AS organization_name,
-  (ARRAY['Nguyễn Minh Anh', 'Trần Quốc Bảo', 'Lê Hoài Nam', 'Phạm Thu Hà', 'Võ Gia Huy'])[i] AS representative_name
+  (ARRAY['Nguyễn Minh Anh', 'Trần Quốc Bảo', 'Lê Hoài Nam', 'Phạm Thu Hà', 'Võ Gia Huy'])[i] AS display_name
 FROM generate_series(1, 5) AS series(i);
 
 CREATE TEMP TABLE _demo_support ON COMMIT DROP AS
@@ -259,14 +258,13 @@ UNION ALL SELECT id FROM _demo_customers;
 
 INSERT INTO users (
   id, email, password_hash, display_name, role, status,
-  organization_name, representative_name, tax_code, phone, address,
+  organization_name, phone, address,
   provider_chain_address, provider_chain_namespace, customer_type,
   email_verified_at
 )
 SELECT id, email, current_setting('emukey.seed_password_hash'),
-       representative_name, 'PROVIDER_ADMIN', 'ACTIVE',
-       organization_name, representative_name,
-       'DEMO-TAX-' || lpad(i::text, 3, '0'), '028' || lpad((1000000 + i)::text, 7, '0'),
+       display_name, 'PROVIDER_ADMIN', 'ACTIVE',
+       organization_name, '028' || lpad((1000000 + i)::text, 7, '0'),
        (ARRAY['Quận 1, TP. Hồ Chí Minh', 'Quận Cầu Giấy, Hà Nội', 'Quận Hải Châu, Đà Nẵng', 'TP. Thủ Đức, TP. Hồ Chí Minh', 'Quận Ninh Kiều, Cần Thơ'])[i],
        '0x' || substr(md5(current_setting('emukey.seed_namespace') || ':provider-address-a:' || i) || md5(current_setting('emukey.seed_namespace') || ':provider-address-b:' || i), 1, 40),
        'demo-provider-' || substr(md5(current_setting('emukey.seed_namespace') || ':provider-namespace:' || i), 1, 12),
@@ -275,17 +273,17 @@ FROM _demo_providers
 UNION ALL
 SELECT id, email, current_setting('emukey.seed_password_hash'),
        display_name, 'SUPPORT_STAFF', 'ACTIVE',
-       NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
+       NULL, NULL, NULL, NULL, NULL, NULL, NULL
 FROM _demo_support
 UNION ALL
 SELECT id, email, current_setting('emukey.seed_password_hash'),
        display_name, 'SYSTEM_ADMIN', 'ACTIVE',
-       NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
+       NULL, NULL, NULL, NULL, NULL, NULL, NULL
 FROM _demo_admins
 UNION ALL
 SELECT id, email, current_setting('emukey.seed_password_hash'),
        display_name, 'CUSTOMER', 'ACTIVE',
-       NULL, NULL, NULL, '09' || lpad((10000000 + i)::text, 8, '0'),
+       NULL, '09' || lpad((10000000 + i)::text, 8, '0'),
        (ARRAY['TP. Hồ Chí Minh', 'Hà Nội', 'Đà Nẵng', 'Cần Thơ', 'Hải Phòng'])[((i - 1) % 5) + 1], NULL, NULL,
        customer_type, now() - interval '30 days'
 FROM _demo_customers
@@ -294,8 +292,6 @@ ON CONFLICT (id) DO UPDATE SET
   password_hash = EXCLUDED.password_hash,
   display_name = EXCLUDED.display_name,
   organization_name = EXCLUDED.organization_name,
-  representative_name = EXCLUDED.representative_name,
-  tax_code = EXCLUDED.tax_code,
   phone = EXCLUDED.phone,
   address = EXCLUDED.address,
   status = 'ACTIVE',
@@ -680,14 +676,13 @@ FROM _demo_documents
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO knowledge_chunks (
-  id, document_id, chunk_index, content, token_count, source_metadata
+  id, document_id, chunk_index, content, token_count
 )
 SELECT
   md5(current_setting('emukey.seed_namespace') || ':knowledge-chunk:' || i)::uuid,
   id, 0,
   'Nội dung minh họa cho ' || product_name || ': cài đặt, kích hoạt và quản lý license.',
-  24,
-  jsonb_build_object('seedNamespace', current_setting('emukey.seed_namespace'), 'page', 1)
+  24
 FROM _demo_documents
 ON CONFLICT (id) DO NOTHING;
 
@@ -750,21 +745,6 @@ FROM (
 ) AS demo_users
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO audit_logs (
-  actor_user_id, actor_role, action, target_type,
-  target_id, outcome, metadata
-)
-SELECT
-  customer.id, 'CUSTOMER', 'DEMO_DATA_CREATED', 'ORDER',
-  md5(current_setting('emukey.seed_namespace') || ':order:' || demo_row.i)::uuid, 'SUCCESS',
-  jsonb_build_object('seedNamespace', current_setting('emukey.seed_namespace'), 'index', demo_row.i)
-FROM generate_series(1, ${BUSINESS_ROW_COUNT}) AS demo_row(i)
-JOIN _demo_customers AS customer ON customer.i = ((demo_row.i - 1) % ${CUSTOMER_COUNT}) + 1
-WHERE NOT EXISTS (
-  SELECT 1 FROM audit_logs AS audit
-  WHERE audit.metadata ->> 'seedNamespace' = current_setting('emukey.seed_namespace')
-    AND audit.metadata ->> 'index' = demo_row.i::text
-);
 `;
 
 const COUNT_SQL = String.raw`
@@ -799,7 +779,9 @@ FROM (
   UNION ALL SELECT 'conversations', count(*)
   FROM conversations AS row JOIN _demo_conversations AS seed ON seed.id = row.id
   UNION ALL SELECT 'messages', count(*)
-  FROM messages AS row JOIN _demo_conversations AS seed ON seed.id = row.conversation_id
+  FROM messages AS row JOIN _demo_conversations AS seed
+    ON row.id = md5(current_setting('emukey.seed_namespace') || ':message:' || seed.i)::uuid
+    AND seed.id = row.conversation_id
   UNION ALL SELECT 'notifications', count(*)
   FROM notifications AS row
   JOIN generate_series(1, ${BUSINESS_ROW_COUNT}) AS seed(i)
@@ -808,9 +790,6 @@ FROM (
   FROM mobile_push_tokens AS row
   JOIN generate_series(1, ${BUSINESS_ROW_COUNT}) AS seed(i)
     ON row.id = md5(current_setting('emukey.seed_namespace') || ':push-token:' || seed.i)::uuid
-  UNION ALL SELECT 'audit_logs', count(*)
-  FROM audit_logs AS row JOIN _demo_orders AS seed ON seed.id = row.target_id
-  WHERE row.metadata ->> 'seedNamespace' = current_setting('emukey.seed_namespace')
 ) AS counts
 ORDER BY table_name;
 `;
@@ -936,7 +915,7 @@ async function run() {
         ) AS has_image_url
     `);
     const target = preflight.rows[0];
-    if (Number(target?.tables) !== 19 || target?.has_image_url !== true) {
+    if (Number(target?.tables) !== 18 || target?.has_image_url !== true) {
       throw new Error(
         "Database does not match the current EmuKey schema; run db:verify first",
       );

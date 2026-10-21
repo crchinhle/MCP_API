@@ -1,5 +1,7 @@
 # Import dữ liệu demo
 
+> Phạm vi cập nhật 20/10/2026: gỡ nhật ký hoạt động người dùng (`OPS-02`), schema còn 18 bảng và danh mục còn 34 capability. Giữ lịch sử nghiệp vụ và log lỗi kỹ thuật tối thiểu; không có màn hình/API audit tổng quát. Các kết quả có ngày của phiên bản cũ là dữ liệu lịch sử.
+
 Chạy từ thư mục `D:\TLHT\KLTN\UY\EmuKey`:
 
 ```powershell
@@ -41,7 +43,7 @@ corepack pnpm reconcile:payment:sandbox --confirm-sandbox --transaction <transac
 ```
 
 Đối soát giữ nguyên payload, thời gian gốc, mã sự kiện và phân loại `UNMATCHED`;
-ghi `RESOLVED / ACCEPT_AND_FULFILL` cùng người thực hiện và audit log. Chỉ nhận
+ghi `RESOLVED / ACCEPT_AND_FULFILL` cùng người thực hiện. Chỉ nhận
 `PAYMENT_OUTSIDE_ACCEPTED_WINDOW` trên đơn còn `WAITING_PAYMENT`, đúng số tiền,
 đúng attempt và thời điểm nhận ban đầu nằm trong hạn. Gọi lại không cấp trùng.
 Đơn khách chủ động hủy/hết hạn hoặc sai số tiền phải xử lý riêng, không ép thành đã thanh toán.
@@ -69,7 +71,7 @@ Có thể mở file trên bằng Neon SQL Editor hoặc migration runner của m
 ## Tự hủy đơn sau 30 phút
 
 - Thời hạn tính từ lúc tạo đơn, không gia hạn lại khi mở cổng thanh toán.
-- Worker kiểm tra mỗi 15 giây và tự chuyển đơn chưa chấp nhận thanh toán sang `CANCELLED`, ghi audit `ORDER_AUTO_CANCELLED`. API đọc đơn cũng đồng bộ các đơn quá hạn của khách.
+- Worker kiểm tra mỗi 15 giây và tự chuyển đơn chưa chấp nhận thanh toán sang `CANCELLED`. API đọc đơn cũng đồng bộ các đơn quá hạn của khách.
 - Đơn đã chấp nhận thanh toán, kể cả đang chờ blockchain, không bị hủy.
 - Đơn tự hủy có dấu `auto_cancelled`; vẫn chấp nhận webhook hợp lệ của giao dịch thực hiện trước hạn, trong cửa sổ nhận IPN đã cấu hình. Đơn khách chủ động hủy không được tự khôi phục. Thời điểm hủy được giữ lại kể cả khi sau đó chấp nhận thanh toán.
 - Sandbox dùng `SANDBOX_RECEIPT` vẫn lấy thời điểm backend nhận làm căn cứ; không dùng đồng hồ Sandbox lệch để tự kết luận giao dịch đúng hạn.
@@ -120,7 +122,17 @@ docker compose up -d
 
 ## Công bố tài liệu tri thức
 
+Nhà cung cấp vào **Tài liệu sản phẩm** tại `/provider/knowledge` để tải hướng dẫn PDF/TXT (tối đa 10 MB), chọn sản phẩm, xem nội dung và lọc theo sản phẩm hoặc trạng thái. Tải lại cùng tên cho cùng sản phẩm tạo phiên bản mới. Nhà cung cấp không tự duyệt tài liệu.
+
+Quản trị viên vào **Duyệt tài liệu** tại `/system/console/knowledge`, đọc nội dung rồi chọn **Công bố**. Bản đã công bố vẫn được dùng trong khi bản mới chờ duyệt; bản cũ và bản chờ duyệt được hiển thị riêng. Khách hàng có bản quyền của sản phẩm và trợ lý AI chỉ sử dụng tài liệu đã công bố trong phạm vi sản phẩm đó.
+
 Khi bấm **Công bố**, hệ thống kiểm tra phiên bản đang được sử dụng. Nếu phiên bản đã thay đổi do thao tác khác, màn hình hiển thị lỗi xung đột. Chọn **Tải lại danh sách**, xem lại phiên bản rồi chủ động công bố; hệ thống không tự ghi đè bằng thao tác thử lại.
+
+## Giao diện nhà cung cấp
+
+Menu chính gồm **Tổng quan**, **Sản phẩm & gói**, **Bản quyền**, **Thanh toán & đối soát** và **Tài liệu sản phẩm**. Bấm khối tên tài khoản ở cuối menu để mở hồ sơ, đổi mật khẩu hoặc đăng xuất. Trên điện thoại, mở **Điều hướng** để truy cập menu và hồ sơ.
+
+Các liên kết từ Tổng quan mở danh sách với bộ lọc tương ứng. Chọn tên sản phẩm để xem các gói; chỉ sản phẩm và gói nháp mới có thao tác xóa, kèm xác nhận. Tên sản phẩm trong danh sách bản quyền mở phần chi tiết. Giao dịch đã giải quyết hoặc đóng được giữ trong lịch sử nhưng không còn tính vào số giao dịch cần kiểm tra.
 
 ## Điều khoản khi mua và gia hạn
 

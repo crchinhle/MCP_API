@@ -76,6 +76,48 @@ docker compose --env-file .env.example --profile maintenance run --rm database-i
 
 The maintenance service reads `DATABASE_URL` from `backend/.env`. EmuKey uses version-controlled PostgreSQL SQL directly through `pg`; no ORM or automatic schema mutation is part of the backend.
 
+### Existing databases: remove unused columns (2026-10-20)
+
+Fresh databases use the reduced `database/schema.sql`. Existing databases require
+`database/migrations/20261020-remove-unused-columns.sql`; initialization does not
+apply migrations. From `backend`, with `DATABASE_URL` set to the intended database:
+
+```powershell
+psql --dbname "$env:DATABASE_URL" --set ON_ERROR_STOP=1 --file database/migrations/20261020-remove-unused-columns.sql
+psql --dbname "$env:DATABASE_URL" --set ON_ERROR_STOP=1 --file database/migrations/20261020-remove-user-audit.sql
+corepack pnpm build
+corepack pnpm db:verify
+```
+
+This migration removes `users.representative_name`, `users.tax_code`,
+`knowledge_chunks.embedding`, `embedding_model`, `embedding_dimension`,
+`source_metadata`, `messages.model_name`, and `audit_logs.actor_email_snapshot`,
+including any values in those columns. Guide text, document files and their storage
+metadata, message content, citations, and remaining business data are retained.
+The separate audit-removal migration below deletes the user activity audit table.
+It is transactional and can run again. Unexpected external dependencies cause an
+error instead of being removed with `CASCADE`.
+
+Knowledge retrieval continues to use PostgreSQL full-text search on guide chunks;
+AI answers use the retrieved sources. New databases require only `pgcrypto` and
+`citext`. The migration leaves an existing `vector` extension installed so it does
+not affect other database objects that may use it.
+
+### Existing databases: remove user activity audit (2026-10-20)
+
+Stop the old API and worker before applying `20261020-remove-user-audit.sql`.
+Apply earlier migrations first, then this migration, then start the new API/worker
+and run `db:verify` and readiness checks. New databases use `schema.sql` directly
+and have 18 tables; do not replay historical migrations on a fresh baseline.
+
+The audit migration deletes `audit_logs` and its private trigger function. It is
+transactional and can run twice. It preserves payment review actors/reasons,
+order/payment history, license state, blockchain commands/events/evidence and
+notification retry state. User activity history and the audit API/UI are removed.
+Reverting code alone cannot restore deleted audit data; restoring an older release
+requires its schema and an appropriate database backup. Runtime logging retains
+technical errors and startup information without logging successful user actions.
+
 Development seed data is separate from schema initialization and is never run automatically:
 
 ```powershell

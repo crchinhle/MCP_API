@@ -1,5 +1,5 @@
-import { SettingOutlined } from '@ant-design/icons';
-import { Button } from 'antd';
+import { SettingOutlined, LockOutlined } from '@ant-design/icons';
+import { Button, Dropdown } from 'antd';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
 
@@ -26,8 +26,7 @@ export const providerShell: RoleShellConfig = {
     { label: 'Sản phẩm & gói', to: '/provider/catalog' },
     { label: 'Bản quyền', to: '/provider/licenses' },
     { label: 'Thanh toán & đối soát', to: '/provider/operations' },
-    { label: 'Kho tri thức AI', to: '/provider/knowledge' },
-    { label: 'Hồ sơ', to: '/provider/profile' },
+    { label: 'Tài liệu sản phẩm', to: '/provider/knowledge' },
   ],
 };
 
@@ -48,14 +47,14 @@ export const systemShell: RoleShellConfig = {
     { label: 'Người dùng', to: '/system/console?view=users' },
     { label: 'Thanh toán', to: '/system/console?view=payments' },
     { label: 'Blockchain', to: '/system/console?view=blockchain' },
-     { label: 'Nhật ký', to: '/system/console?view=audit' },
+    { label: 'Duyệt tài liệu', to: '/system/console/knowledge' },
      { label: 'Hồ sơ', to: '/system/console/profile' },
   ],
 };
 
 const roleLabels: Record<RoleShellConfig['role'], string> = {
   CUSTOMER: 'NGƯỜI MUA',
-  PROVIDER_ADMIN: 'PROVIDER',
+  PROVIDER_ADMIN: 'NHÀ CUNG CẤP',
   SUPPORT_STAFF: 'SUPPORT',
   SYSTEM_ADMIN: 'SYSTEM',
 };
@@ -66,6 +65,7 @@ export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
   const current = `${location.pathname}${location.search}`;
 
   useEffect(() => {
@@ -74,10 +74,19 @@ export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
 
   useEffect(() => {
     if (!menuOpen) return;
+    const focusable = () => Array.from(mobileMenuRef.current?.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), [tabindex="0"]') ?? []);
+    focusable()[0]?.focus();
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setMenuOpen(false);
         menuButtonRef.current?.focus();
+      }
+      if (event.key === 'Tab') {
+        const elements = focusable();
+        const first = elements[0];
+        const last = elements.at(-1);
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
       }
     };
     document.addEventListener('keydown', closeOnEscape);
@@ -91,7 +100,7 @@ export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
 
   const navigation = (
     <nav aria-label={`Điều hướng ${config.role}`} className="role-nav">
-      <Link onClick={() => setMenuOpen(false)} to="/catalog">Mua sắm</Link>
+      {config.role === 'CUSTOMER' ? <Link onClick={() => setMenuOpen(false)} to="/catalog">Mua sắm</Link> : null}
       {config.items.map((item) => item.to.includes('?') ? (
         <Link
           className={current === item.to ? 'active' : ''}
@@ -118,7 +127,7 @@ export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
   );
 
   return (
-    <div className="role-shell">
+    <div className={`role-shell${config.role === 'PROVIDER_ADMIN' ? ' role-shell--provider' : ''}`}>
       <aside className="role-sidebar">
         <div className="role-brand"><Brand /></div>
         <span className="role-label">{roleLabels[config.role]}</span>
@@ -135,14 +144,31 @@ export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
           <span>Điều hướng</span>
         </button>
         <div className="role-desktop-nav">{navigation}</div>
-        <div className="role-account-footer">
-          {auth?.user ? <NotificationCenter /> : null}
+        {auth?.user && config.role === 'PROVIDER_ADMIN' ? <div className="role-account-footer">
+          <Dropdown placement="topLeft" trigger={['click']} autoFocus menu={{ items: [
+            { key: 'email', label: auth.user.email, disabled: true },
+            { type: 'divider' },
+            { key: 'profile', label: 'Hồ sơ tài khoản', icon: <SettingOutlined /> },
+            { key: 'password', label: 'Đổi mật khẩu', icon: <LockOutlined /> },
+            { type: 'divider' },
+            { key: 'logout', label: 'Đăng xuất', danger: true },
+          ], onClick: ({ key }) => {
+            if (key === 'logout') void auth.logout();
+            else void navigate(`${roleSettingsPath(auth.user!.role)}${key === 'password' ? '?password=change' : ''}`);
+          } }}>
+            <button type="button" className="provider-account-trigger" aria-label={`Mở menu tài khoản ${auth.user.displayName}`}>
+              <span className="provider-account-avatar" aria-hidden="true">{auth.user.displayName.trim().split(/\s+/).slice(-2).map((part) => part[0]).join('').toLocaleUpperCase('vi')}</span>
+              <span className="role-account-identity"><strong title={auth.user.displayName}>{auth.user.displayName}</strong><small>Nhà cung cấp</small></span>
+            </button>
+          </Dropdown>
+        </div> : auth?.user ? <div className="role-account-footer">
+          <div className="role-account-identity"><strong title={auth.user.displayName}>{auth.user.displayName}</strong><small title={auth.user.email}>{auth.user.email}</small></div>
           <div className="role-account-row">
-            {auth?.user ? <div className="role-account-identity"><strong>{auth.user.displayName}</strong><small>{auth.user.email}</small></div> : null}
-            {auth?.user ? <Button type="text" onClick={() => void auth.logout()}>Đăng xuất</Button> : null}
-            {auth?.user ? <Button aria-label="Cài đặt tài khoản" icon={<SettingOutlined />} onClick={() => void navigate(roleSettingsPath(auth.user!.role))} type="text" /> : null}
+            <Button icon={<SettingOutlined />} onClick={() => void navigate(roleSettingsPath(auth.user!.role))}>Hồ sơ</Button>
+            <NotificationCenter />
+            <Button aria-label="Đăng xuất" title="Đăng xuất" onClick={() => void auth.logout()}>Đăng xuất</Button>
           </div>
-        </div>
+        </div> : null}
       </aside>
       {menuOpen ? (
         <>
@@ -152,9 +178,10 @@ export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
             onClick={() => setMenuOpen(false)}
             type="button"
           />
-          <div className="mobile-menu-panel role-mobile-menu" id="role-mobile-menu" role="dialog" aria-label={`Menu ${roleLabels[config.role]}`}>
+          <div ref={mobileMenuRef} className="mobile-menu-panel role-mobile-menu" id="role-mobile-menu" role="dialog" aria-modal="true" aria-label={`Menu ${roleLabels[config.role]}`}>
+            <Button onClick={() => { setMenuOpen(false); menuButtonRef.current?.focus(); }}>Đóng menu</Button>
             {navigation}
-            {auth?.user ? <div className="mobile-menu-actions"><NotificationCenter /><Button onClick={() => { setMenuOpen(false); void navigate(roleSettingsPath(auth.user!.role)); }}>Hồ sơ tài khoản</Button><Button onClick={() => { setMenuOpen(false); void auth.logout(); }}>Đăng xuất</Button></div> : null}
+            {auth?.user ? <div className="mobile-menu-actions">{config.role !== 'PROVIDER_ADMIN' ? <NotificationCenter /> : null}<Button onClick={() => { setMenuOpen(false); void navigate(roleSettingsPath(auth.user!.role)); }}>Hồ sơ tài khoản</Button><Button onClick={() => { setMenuOpen(false); void auth.logout(); }}>Đăng xuất</Button></div> : null}
           </div>
         </>
       ) : null}

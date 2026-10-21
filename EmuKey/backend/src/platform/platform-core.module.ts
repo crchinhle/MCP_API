@@ -6,7 +6,6 @@ import { Pool } from 'pg';
 import { Redis } from 'ioredis';
 
 import { validateEnvironment } from './config/environment.js';
-import { AuditWriter } from './audit/audit-writer.js';
 import { DatabasePool } from './database/database-pool.js';
 import { REDACTED_LOG_PATHS } from './observability/log-redaction.js';
 import { RedisClient } from './redis/redis-client.js';
@@ -44,13 +43,14 @@ const queueImports =
       useFactory: (config: ConfigService) => ({
         pinoHttp: {
           level: config.getOrThrow<string>('LOG_LEVEL'),
+          autoLogging: false,
+          quietReqLogger: true,
           redact: { paths: [...REDACTED_LOG_PATHS], censor: '[REDACTED]' },
         },
       }),
     }),
   ],
   providers: [
-    AuditWriter,
     ServiceTermsContent,
     DatabasePool,
     RedisClient,
@@ -72,6 +72,6 @@ const queueImports =
     { provide: Pool, useExisting: DatabasePool },
     { provide: Redis, useExisting: RedisClient },
   ],
-  exports: [AuditWriter, ConfigModule, Pool, Redis, PRIVATE_STORAGE, ServiceTermsContent],
+  exports: [ConfigModule, Pool, Redis, PRIVATE_STORAGE, ServiceTermsContent],
 })
 export class PlatformCoreModule {}

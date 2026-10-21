@@ -362,26 +362,37 @@ describe('customer durable license and device invariants without a local blockch
 
   });
 
-  it('rolls back device changes and their projected count together when audit persistence fails', async () => {
+  it('rolls back device changes and their projected count together when device-sync persistence fails', async () => {
     const projection = new LicenseProjectionRepository(pool);
-    const failAudit = { write: async () => { throw new Error('AUDIT_UNAVAILABLE'); } };
-    const failing = new LicensingRepository(pool, failAudit);
-    const working = new LicensingRepository(pool);
+    const repository = new LicensingRepository(pool);
     const deviceId = randomUUID();
     const deviceRef = 'rollback-device';
     const account = privateKeyToAccount(`0x${'55'.repeat(32)}`);
-    await expect(failing.createDeviceCommand(null, licenseId, deviceRef, account.address, deviceId, 1, chainConfig))
-      .rejects.toThrow('AUDIT_UNAVAILABLE');
-    await expect(projection.findCustomer(customer.sub, licenseId)).resolves.toMatchObject({ activeDeviceCount: 0 });
-    await expect(projection.listCustomerDevices(customer.sub, licenseId)).resolves.toEqual([]);
-
-    await working.createDeviceCommand(null, licenseId, deviceRef, account.address, deviceId, 1, chainConfig);
-    await expect(failing.createDeviceRevokeCommand(customer.sub, licenseId, deviceRef, deviceId, 1, chainConfig))
-      .rejects.toThrow('AUDIT_UNAVAILABLE');
-    await expect(projection.findCustomer(customer.sub, licenseId)).resolves.toMatchObject({ activeDeviceCount: 1 });
-    await expect(projection.listCustomerDevices(customer.sub, licenseId)).resolves.toEqual([
-      expect.objectContaining({ id: deviceId, status: 'ACTIVE' }),
-    ]);
+    await pool.query(`CREATE FUNCTION test_fail_device_sync() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RAISE EXCEPTION 'SYNC_UNAVAILABLE'; END; $$`);
+    const failSync = () => pool.query(`CREATE TRIGGER test_fail_device_sync
+      BEFORE INSERT OR UPDATE ON chain_commands FOR EACH ROW
+      WHEN (NEW.command_type = 'SYNC_DEVICE_COUNT' AND NEW.license_id = '${licenseId}'::uuid)
+      EXECUTE FUNCTION test_fail_device_sync()`);
+    try {
+      await failSync();
+      await expect(repository.createDeviceCommand(null, licenseId, deviceRef, account.address, deviceId, 1, chainConfig))
+        .rejects.toThrow('SYNC_UNAVAILABLE');
+      await expect(projection.findCustomer(customer.sub, licenseId)).resolves.toMatchObject({ activeDeviceCount: 0 });
+      await expect(projection.listCustomerDevices(customer.sub, licenseId)).resolves.toEqual([]);
+      await pool.query('DROP TRIGGER test_fail_device_sync ON chain_commands');
+      await repository.createDeviceCommand(null, licenseId, deviceRef, account.address, deviceId, 1, chainConfig);
+      await failSync();
+      await expect(repository.createDeviceRevokeCommand(customer.sub, licenseId, deviceRef, deviceId, 1, chainConfig))
+        .rejects.toThrow('SYNC_UNAVAILABLE');
+      await expect(projection.findCustomer(customer.sub, licenseId)).resolves.toMatchObject({ activeDeviceCount: 1 });
+      await expect(projection.listCustomerDevices(customer.sub, licenseId)).resolves.toEqual([
+        expect.objectContaining({ id: deviceId, status: 'ACTIVE' }),
+      ]);
+    } finally {
+      await pool.query('DROP TRIGGER IF EXISTS test_fail_device_sync ON chain_commands');
+      await pool.query('DROP FUNCTION test_fail_device_sync()');
+    }
   });
 
   it('repairs persisted canonical projection drift without a chain node', async () => {

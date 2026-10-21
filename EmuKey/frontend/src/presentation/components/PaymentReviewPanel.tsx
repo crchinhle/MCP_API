@@ -1,3 +1,4 @@
+import { paginationTextControls } from '../theme';
 import { LoadingOverlay } from './WorkspacePrimitives';
 import { Alert, Button, Input, Modal, Select, Table } from 'antd';
 import { useState } from 'react';
@@ -14,7 +15,7 @@ export function PaymentReviewPanel() {
     <h2>Thanh toán cần kiểm tra</h2>
     <p>Ghi nhận kết quả kiểm tra chứng từ. Thao tác này không tự hoàn tiền, nhận thanh toán hoặc cấp bản quyền.</p>
     {reviews.isError ? <Alert type="error" title="Không thể tải giao dịch cần kiểm tra" action={<Button onClick={() => void reviews.refetch()}>Thử lại</Button>} /> : null}
-    <><Table rowKey="id"  dataSource={reviews.data ?? []} scroll={{ x: 700 }} columns={[
+    <><Table pagination={paginationTextControls} rowKey="id"  dataSource={reviews.data ?? []} scroll={{ x: 700 }} columns={[
       { title: 'Sự kiện', dataIndex: 'providerEventId' },
       { title: 'Phân loại', dataIndex: 'classification' },
       { title: 'Số tiền', dataIndex: 'amountVnd', render: (value: number) => `${value.toLocaleString('vi-VN')} ₫` },

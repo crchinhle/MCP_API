@@ -85,6 +85,8 @@ export type RequestSupportDto = {
 
 export type KnowledgeDocumentDto = {
   id: string;
+  providerUserId?: string;
+  productId?: string;
   title: string;
   logicalDocumentKey: string;
   version: number;
@@ -103,6 +105,8 @@ export type CreateKnowledgeDocumentDto = {
 
 export type KnowledgeDocumentDetailDto = {
   id: string;
+  providerUserId?: string;
+  productId?: string;
   title: string;
   logicalDocumentKey: string;
   version: number;
@@ -198,10 +202,6 @@ export type ProfileDto = {
   organizationName?: string;
 };
 
-export type StateDto = {
-  reason: string;
-};
-
 export type NotificationDto = {
   id: string;
   title: string;
@@ -217,28 +217,6 @@ export type NotificationDto = {
 export type RegisterPushTokenDto = {
   token: string;
   provider: 'FCM' | 'EXPO';
-};
-
-export type Object = {
-  [key: string]: unknown;
-};
-
-export type AuditEntryDto = {
-  id: string;
-  action: string;
-  outcome: string;
-  actorUserId: string | null;
-  actorRole: string | null;
-  targetType: string | null;
-  targetId: string | null;
-  reason: string | null;
-  createdAt: string;
-};
-
-export type AuditPageDto = {
-  items: Array<AuditEntryDto>;
-  hasMore: boolean;
-  page: number;
 };
 
 export type AdminProductDto = {
@@ -1285,7 +1263,7 @@ export type IdentityControllerChangePasswordResponses = {
 };
 
 export type IdentityControllerLockData = {
-  body: StateDto;
+  body?: never;
   path: {
     id: string;
   };
@@ -1298,7 +1276,7 @@ export type IdentityControllerLockResponses = {
 };
 
 export type IdentityControllerUnlockData = {
-  body: StateDto;
+  body?: never;
   path: {
     id: string;
   };
@@ -1311,7 +1289,7 @@ export type IdentityControllerUnlockResponses = {
 };
 
 export type IdentityControllerDisableData = {
-  body: StateDto;
+  body?: never;
   path: {
     id: string;
   };
@@ -1414,24 +1392,6 @@ export type OperationsHealthControllerAssistanceData = {
 export type OperationsHealthControllerAssistanceResponses = {
   200: unknown;
 };
-
-export type AuditControllerListData = {
-  body?: never;
-  path?: never;
-  query?: {
-    page?: Object;
-    action?: string;
-    outcome?: 'SUCCESS' | 'DENIED' | 'FAILED';
-  };
-  url: '/api/v1/operations/audit-logs';
-};
-
-export type AuditControllerListResponses = {
-  200: AuditPageDto;
-};
-
-export type AuditControllerListResponse =
-  AuditControllerListResponses[keyof AuditControllerListResponses];
 
 export type CatalogControllerListAdminData = {
   body?: never;

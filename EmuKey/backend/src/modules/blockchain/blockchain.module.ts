@@ -7,7 +7,6 @@ import { IdentityModule } from '../identity-access/identity.module.js';
 import { ChainCommandService } from './application/chain-command.service.js';
 import { ActivationEnvelopeRecoveryService } from './application/activation-envelope-recovery.service.js';
 import { BlockchainReconciliationService } from './application/blockchain-reconciliation.service.js';
-import { AuditWriter } from '../../platform/audit/audit-writer.js';
 import { ChainIndexerService } from './application/chain-indexer.service.js';
 import {
   CHAIN_RPC_INDEXER,
@@ -198,21 +197,18 @@ import {
         ChainCommandService,
         CHAIN_RPC_INDEXER,
         ChainEventRepository,
-        AuditWriter,
       ],
       useFactory: (
         pool: Pool,
         commands: ChainCommandService,
         indexer: ChainRpcIndexerPort,
         projections: ChainEventRepository,
-        audit: AuditWriter,
       ) =>
         new BlockchainReconciliationService(
           pool,
           commands,
           indexer,
           projections,
-          audit,
         ),
     },
   ],

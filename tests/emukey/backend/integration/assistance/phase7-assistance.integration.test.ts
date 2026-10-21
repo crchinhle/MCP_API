@@ -45,17 +45,22 @@ describe.skipIf(!runIntegration)('Phase 7 assistance PostgreSQL integration', ()
     const input = { productId: product.rows[0]!.id, logicalDocumentKey: 'guide', title: 'Guide', sourceType: 'FAQ', chunks: ['Help'] };
     const first = await knowledge.create(actor, input);
     const second = await knowledge.create(actor, input);
-    await expect(knowledge.publish(actor, first.id, 9)).rejects.toThrow('KNOWLEDGE_VERSION_CONFLICT');
-    const results = await Promise.allSettled([knowledge.publish(actor, first.id, 0), knowledge.publish(actor, second.id, 0)]);
+    const admin = { sub: supportId, role: 'SYSTEM_ADMIN' as const, sessionVersion: 1 };
+    expect((await knowledge.list(admin)).map((document) => document.id)).toEqual(expect.arrayContaining([first.id, second.id]));
+    await expect(knowledge.detail(admin, first.id)).resolves.toMatchObject({ providerUserId: providerId, chunks: ['Help'] });
+    expect(await knowledge.list({ ...actor, sub: customerId })).toEqual([]);
+    await expect(new KnowledgeService(knowledge).publish(actor, first.id, 0)).rejects.toMatchObject({ status: 403 });
+    await expect(knowledge.publish(admin, first.id, 9)).rejects.toThrow('KNOWLEDGE_VERSION_CONFLICT');
+    const results = await Promise.allSettled([knowledge.publish(admin, first.id, 0), knowledge.publish(admin, second.id, 0)]);
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
     expect(results.find((result) => result.status === 'rejected')).toMatchObject({ reason: new Error('KNOWLEDGE_VERSION_CONFLICT') });
     const current = (await knowledge.list(actor)).find((document) => document.isCurrent);
     const loser = current?.id === first.id ? second : first;
-    await expect(knowledge.publish(actor, loser.id, 0)).rejects.toThrow('KNOWLEDGE_VERSION_CONFLICT');
+    await expect(knowledge.publish(admin, loser.id, 0)).rejects.toThrow('KNOWLEDGE_VERSION_CONFLICT');
     await expect(knowledge.detail({ ...actor, sub: customerId }, first.id)).rejects.toThrow('KNOWLEDGE_DOCUMENT_NOT_FOUND');
     expect((await knowledge.list(actor)).filter((document) => document.isCurrent)).toHaveLength(1);
     const module = await Test.createTestingModule({ controllers: [KnowledgeController], providers: [{ provide: KnowledgeService, useValue: new KnowledgeService(knowledge) }] })
-      .overrideGuard(AuthGuard).useValue({ canActivate(context: ExecutionContext) { context.switchToHttp().getRequest<{ user: typeof actor }>().user = actor; return true; } }).compile();
+      .overrideGuard(AuthGuard).useValue({ canActivate(context: ExecutionContext) { context.switchToHttp().getRequest<{ user: { sub: string; role: string; sessionVersion: number } }>().user = { ...actor, role: actor.role === 'PROVIDER_ADMIN' ? 'SYSTEM_ADMIN' : actor.role }; return true; } }).compile();
     const app = module.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
     app.useGlobalFilters(new ApiExceptionFilter());
@@ -87,6 +92,9 @@ describe.skipIf(!runIntegration)('Phase 7 assistance PostgreSQL integration', ()
     const actor = { sub: providerId, role: 'PROVIDER_ADMIN' as const, sessionVersion: 1 };
     const document = await knowledge.create(actor, { productId, logicalDocumentKey: 'retrieval', title: 'Private guide', sourceType: 'FAQ', chunks: ['Activation instructions'] });
     await knowledge.publish(actor, document.id, 0);
+    const reader = { sub: customerId, role: 'CUSTOMER' as const, sessionVersion: 1 };
+    expect(await knowledge.list(reader)).toEqual([]);
+    await expect(knowledge.detail(reader, document.id)).rejects.toThrow('KNOWLEDGE_DOCUMENT_NOT_FOUND');
     const orderConversation = await repository.createConversation(customerId, { contextType: 'ORDER', contextId: orderId });
     const planConversation = await repository.createConversation(customerId, { contextType: 'PLAN', contextId: planId });
     const search = (conversationId: string, userId = customerId) => knowledge.searchForConversation({ conversationId, customerUserId: userId, question: 'Activation' });
@@ -101,6 +109,12 @@ describe.skipIf(!runIntegration)('Phase 7 assistance PostgreSQL integration', ()
       activationCommitment: `0x${'77'.repeat(32)}`, commandId: '00000000-0000-4000-8000-000000000085', licenseId: '00000000-0000-4000-8000-000000000086', payload: {}, payloadHash: `0x${'88'.repeat(32)}`,
     }, { chainId: 11155111, contractAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3', network: 'sepolia' });
     expect(await search(orderConversation.id)).toMatchObject([{ content: 'Activation instructions' }]);
+    expect((await knowledge.list(reader)).map((guide) => guide.id)).toContain(document.id);
+    await expect(knowledge.detail(reader, document.id)).resolves.toMatchObject({ chunks: ['Activation instructions'] });
+    const draft = await knowledge.create(actor, { productId, logicalDocumentKey: 'retrieval', title: 'New private guide', sourceType: 'FAQ', chunks: ['Unapproved instructions'] });
+    expect((await knowledge.list(reader)).map((guide) => guide.id)).not.toContain(draft.id);
+    await expect(knowledge.detail(reader, draft.id)).rejects.toThrow('KNOWLEDGE_DOCUMENT_NOT_FOUND');
+    await expect(knowledge.detail({ ...reader, sub: otherCustomerId }, document.id)).rejects.toThrow('KNOWLEDGE_DOCUMENT_NOT_FOUND');
     expect(await search(planConversation.id)).toMatchObject([{ content: 'Activation instructions' }]);
     expect(await search(orderConversation.id, otherCustomerId)).toEqual([]);
     await expect(repository.createConversation(otherCustomerId, { contextType: 'ORDER', contextId: orderId })).rejects.toThrow('CONVERSATION_CONTEXT_NOT_FOUND');
