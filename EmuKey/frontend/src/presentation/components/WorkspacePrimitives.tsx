@@ -79,6 +79,19 @@ export function formatMoney(value: number): string {
   return `${new Intl.NumberFormat('vi-VN').format(value)} ₫`;
 }
 
+export const paymentClassificationLabels: Record<string, string> = {
+  MATCHED: 'Đã khớp', DUPLICATE: 'Giao dịch trùng', UNMATCHED: 'Chưa khớp đơn hàng', AMOUNT_MISMATCH: 'Số tiền không khớp', INVALID: 'Không hợp lệ',
+};
+
+export function paymentClassificationTone(classification: string): StatusTone {
+  if (classification === 'MATCHED') return 'success';
+  if (classification === 'AMOUNT_MISMATCH' || classification === 'INVALID') return 'error';
+  if (classification === 'DUPLICATE' || classification === 'UNMATCHED') return 'warning';
+  return 'neutral';
+}
+
+export const paymentReviewLabels: Record<string, string> = { OPEN: 'Chờ kiểm tra', RESOLVED: 'Đã giải quyết', CLOSED_NO_ACTION: 'Đã đóng, không cần xử lý' };
+
 interface PageHeaderProps {
   readonly title: string;
   readonly description?: string;

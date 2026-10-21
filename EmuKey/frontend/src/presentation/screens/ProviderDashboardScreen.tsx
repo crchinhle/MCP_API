@@ -121,7 +121,7 @@ export function ProviderDashboardScreen() {
               </div>
             ) : (
               <Link to={to}>
-                {link} <span aria-hidden="true">→</span>
+                {link}
               </Link>
             )}
           </article>
@@ -160,7 +160,7 @@ export function ProviderDashboardScreen() {
               <p>Hoàn thiện thông tin và gói bán để sẵn sàng công bố.</p>
             </div>
             <Link to="/provider/catalog?status=DRAFT">
-              Xem sản phẩm nháp <span aria-hidden="true">→</span>
+              Xem sản phẩm nháp
             </Link>
           </div>
         </section>
@@ -188,7 +188,7 @@ export function ProviderDashboardScreen() {
             <p>Hệ thống đang xử lý xác nhận blockchain.</p>
           </div>
           <Link to="/provider/licenses?status=PENDING_ONCHAIN">
-            Xem tiến độ <span aria-hidden="true">→</span>
+            Xem tiến độ
           </Link>
         </section>
       ) : null}
@@ -201,7 +201,7 @@ export function ProviderDashboardScreen() {
           <div className="provider-dashboard-section-head">
             <h2 id="provider-recent-title">Bản quyền mới nhất</h2>
             <Link to="/provider/licenses">
-              Xem tất cả <span aria-hidden="true">→</span>
+              Xem tất cả
             </Link>
           </div>
           {licenses.isPending ? (
@@ -283,7 +283,7 @@ export function ProviderDashboardScreen() {
                         <Link
                           to={`/provider/licenses?licenseId=${encodeURIComponent(license.id)}`}
                         >
-                          Xem chi tiết <span aria-hidden="true">→</span>
+                          Xem chi tiết
                         </Link>
                       </td>
                     </tr>

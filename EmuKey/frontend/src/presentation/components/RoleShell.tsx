@@ -1,4 +1,4 @@
-import { SettingOutlined, LockOutlined } from '@ant-design/icons';
+import { SettingOutlined, LockOutlined, DownOutlined } from '@ant-design/icons';
 import { Button, Dropdown } from 'antd';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
@@ -67,6 +67,12 @@ export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const current = `${location.pathname}${location.search}`;
+  const isSystem = config.role === 'SYSTEM_ADMIN';
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const systemItemActive = (to: string) => {
+    const [pathname, search] = to.split('?');
+    return location.pathname === pathname && (new URLSearchParams(location.search).get('view') ?? '') === (new URLSearchParams(search).get('view') ?? '');
+  };
 
   useEffect(() => {
     setMenuOpen(false);
@@ -101,10 +107,10 @@ export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
   const navigation = (
     <nav aria-label={`Điều hướng ${config.role}`} className="role-nav">
       {config.role === 'CUSTOMER' ? <Link onClick={() => setMenuOpen(false)} to="/catalog">Mua sắm</Link> : null}
-      {config.items.map((item) => item.to.includes('?') ? (
+      {config.items.map((item) => isSystem || item.to.includes('?') ? (
         <Link
-          className={current === item.to ? 'active' : ''}
-          aria-current={current === item.to ? 'page' : undefined}
+          className={(isSystem ? systemItemActive(item.to) : current === item.to) ? 'active' : ''}
+          aria-current={(isSystem ? systemItemActive(item.to) : current === item.to) ? 'page' : undefined}
           key={`${item.to}-${item.label}`}
           onClick={() => setMenuOpen(false)}
           to={item.to}
@@ -127,7 +133,7 @@ export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
   );
 
   return (
-    <div className={`role-shell${config.role === 'PROVIDER_ADMIN' ? ' role-shell--provider' : ''}`}>
+    <div className={`role-shell${config.role === 'PROVIDER_ADMIN' ? ' role-shell--provider' : isSystem ? ' role-shell--system' : ''}`}>
       <aside className="role-sidebar">
         <div className="role-brand"><Brand /></div>
         <span className="role-label">{roleLabels[config.role]}</span>
@@ -144,7 +150,27 @@ export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
           <span>Điều hướng</span>
         </button>
         <div className="role-desktop-nav">{navigation}</div>
-        {auth?.user && config.role === 'PROVIDER_ADMIN' ? <div className="role-account-footer">
+        {auth?.user && isSystem ? <div className="role-account-footer">
+          <NotificationCenter />
+          <Dropdown placement="topLeft" trigger={['click']} autoFocus open={accountMenuOpen} onOpenChange={setAccountMenuOpen} menu={{ 'aria-label': 'Tài khoản quản trị', items: [
+            { key: 'email', label: auth.user.email, disabled: true },
+            { type: 'divider' },
+            { key: 'profile', label: 'Hồ sơ tài khoản', icon: <SettingOutlined /> },
+            { key: 'password', label: 'Đổi mật khẩu', icon: <LockOutlined /> },
+            { type: 'divider' },
+            { key: 'logout', label: 'Đăng xuất', danger: true },
+          ], onClick: ({ key }) => {
+            setAccountMenuOpen(false);
+            if (key === 'logout') void auth.logout();
+            else void navigate(`${roleSettingsPath(auth.user!.role)}${key === 'password' ? '?password=change' : ''}`);
+          } }}>
+            <button type="button" className="system-account-trigger" aria-label={`Mở menu tài khoản ${auth.user.displayName}`} aria-haspopup="menu" aria-expanded={accountMenuOpen} onKeyDown={(event) => { if (event.key === ' ') { event.preventDefault(); setAccountMenuOpen((open) => !open); } }}>
+              <span className="system-account-avatar" aria-hidden="true">{auth.user.displayName.trim().split(/\s+/).slice(-2).map((part) => part[0]).join('').toLocaleUpperCase('vi')}</span>
+              <span className="role-account-identity"><strong>{auth.user.displayName}</strong><small>Quản trị hệ thống</small></span>
+              <DownOutlined aria-hidden="true" />
+            </button>
+          </Dropdown>
+        </div> : auth?.user && config.role === 'PROVIDER_ADMIN' ? <div className="role-account-footer">
           <Dropdown placement="topLeft" trigger={['click']} autoFocus menu={{ items: [
             { key: 'email', label: auth.user.email, disabled: true },
             { type: 'divider' },

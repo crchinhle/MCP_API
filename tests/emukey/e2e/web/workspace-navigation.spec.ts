@@ -91,9 +91,9 @@ const workspaces = [
   { role: 'SYSTEM_ADMIN', routes: [
     ['/system/console', 'Tổng quan hệ thống'],
     ['/system/console?view=users', 'Quản lý người dùng'],
-    ['/system/console?view=payments', 'Lịch sử thanh toán'],
+    ['/system/console?view=payments', 'Thanh toán & đối soát'],
     ['/system/console?view=blockchain', 'Đối soát blockchain'],
-    ['/system/console/knowledge', 'Tài liệu sản phẩm'],
+    ['/system/console/knowledge', 'Duyệt tài liệu'],
     ['/system/console/profile', 'Hồ sơ tài khoản'],
   ] },
 ] as const;
@@ -110,7 +110,7 @@ for (const workspace of workspaces) {
           const next = new URL(route.request().url()).searchParams.has('cursor');
           return route.fulfill({ json: { items: Array.from({ length: next ? 1 : 8 }, (_, i) => ({ id: `notice-${next ? 8 : i}`, title: `Notice ${next ? 8 : i}`, content: `Content ${i}`, isRead: true })), nextCursor: next ? null : 'page-2' } });
         }
-        if (path.endsWith('/health/ready')) return route.fulfill({ json: { status: 'ready', dependencies: { postgres: 'up', redis: 'up' } } });
+        if (path.endsWith('/health/ready')) return route.fulfill({ json: { status: 'ok', dependencies: { postgres: 'up', redis: 'up' } } });
         if (path.endsWith('/operations/health/assistance')) return route.fulfill({ json: { conversations: { supportActive: 0, waitingSupport: 0 }, notifications: { deadLetter: 0, pending: 0, retryableFailed: 0 } } });
         await route.fulfill({ json: path.endsWith('/auth/refresh') ? {
           accessToken: 'workspace-test',

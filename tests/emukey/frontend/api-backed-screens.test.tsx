@@ -20,7 +20,7 @@ describe('API-backed workspace screens', () => {
   it('loads System readiness metrics from the API', async () => {
     render(<App initialEntries={['/system/console']} />);
 
-    expect((await screen.findAllByText('up')).length).toBeGreaterThanOrEqual(2);
-    expect(screen.getByText('Tình trạng dịch vụ')).toBeTruthy();
+    expect((await screen.findAllByText('Đã kết nối')).length).toBe(2);
+    expect(screen.getByText('Hoạt động')).toBeTruthy();
   });
 });

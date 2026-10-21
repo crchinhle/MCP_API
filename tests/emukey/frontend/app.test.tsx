@@ -13,7 +13,6 @@ afterEach(cleanup);
 describe('Emukey public web screens', () => {
   it.each([
     ['/buyer', 'Lối tắt'],
-    ['/system/console', 'Tổng quan hệ thống'],
   ])('hides unfinished page content while initial data loads at %s', async (path, heading) => {
     const original = vi.mocked(fetch).getMockImplementation()!;
     let release!: () => void;
@@ -30,6 +29,23 @@ describe('Emukey public web screens', () => {
       cleanup();
       vi.mocked(fetch).mockImplementation(original);
     }
+  });
+
+  it('keeps the System Admin heading visible and never reports zero work while queries are pending', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    vi.mocked(fetch).mockImplementation(async (input, init) => { await pending; return original(input, init); });
+    try {
+      render(<App initialEntries={['/system/console']} />);
+      expect(screen.getByRole('heading', { name: 'Tổng quan hệ thống' })).toBeTruthy();
+      expect(screen.getAllByText('Đang kiểm tra')).toHaveLength(3);
+      const work = screen.getByRole('region', { name: 'Công việc cần xử lý' });
+      expect(work.textContent).not.toMatch(/\b0\b/);
+      expect(screen.queryByRole('alert')).toBeNull();
+      await act(async () => { release(); });
+      expect(await screen.findByText('Hoạt động')).toBeTruthy();
+    } finally { cleanup(); release(); vi.mocked(fetch).mockImplementation(original); }
   });
 
   it('keeps the provider heading and skeletons visible without showing zero while data loads', async () => {

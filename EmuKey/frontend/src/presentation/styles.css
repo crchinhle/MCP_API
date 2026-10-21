@@ -3794,3 +3794,99 @@ body {
   .role-shell--provider .document-list .card-heading > * { width: 100%; min-width: 0; }
   .role-mobile-menu { max-height: calc(100dvh - 24px); overflow-y: auto; }
 }
+
+/* System administration: compact, scoped operational workspace. */
+.role-shell--system { grid-template-columns: 248px minmax(0, 1fr); }
+.role-shell--system .role-sidebar { width: 248px; padding: 24px 16px 16px; }
+.role-shell--system .role-label { margin: 20px 12px 12px; }
+.role-shell--system .role-main { min-width: 0; padding: 32px 32px 96px; font-size: 14px; }
+.role-shell--system .role-main > * { max-width: 1480px; margin-inline: auto; }
+.role-shell--system .workspace-page-header { min-height: 0; margin-bottom: 24px; gap: 16px; }
+.role-shell--system .workspace-page-header h1 { font-size: 24px; font-weight: 600; line-height: 32px; }
+.role-shell--system .workspace-page-header p { margin-top: 8px; font-size: 14px; }
+.role-shell--system h2 { margin: 0 0 16px; font-size: 18px; font-weight: 600; line-height: 26px; }
+.role-shell--system .system-screen { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.role-shell--system .system-screen > .workspace-page-header { margin: 0; }
+.role-shell--system .system-screen > h2 { margin: 0; }
+.role-shell--system .workspace-card { border-radius: 8px; box-shadow: none; min-width: 0; }
+.role-shell--system .system-section { padding: 20px 24px; margin: 0; }
+.role-shell--system .section-heading { margin-bottom: 16px; gap: 16px; }
+.role-shell--system .section-heading h2 { margin: 0; }
+.role-shell--system .system-section > p { margin: 0 0 16px; }
+.role-shell--system .system-section > p:last-child { margin-bottom: 0; }
+.role-shell--system .system-section > .ant-alert { margin-block: 12px; }
+.role-shell--system .system-toolbar { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+.role-shell--system .system-toolbar > .ant-input-affix-wrapper { flex: 1 1 240px; }
+.role-shell--system .system-toolbar > .ant-select { flex: 0 1 220px; min-width: 180px; }
+.role-shell--system .ant-table-cell { padding: 12px 16px; font-size: 14px; overflow-wrap: anywhere; }
+.role-shell--system .ant-table-cell small { display: block; color: var(--text-secondary); margin-top: 4px; }
+.role-shell--system .ant-table-thead > tr > th { background: var(--canvas); }
+.role-shell--system .ant-pagination { padding-right: 64px; }
+.role-shell--system .status-chip { min-height: 26px; padding: 3px 8px; font-size: 13px; }
+.system-health-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0; gap: 24px; }
+.system-health-list > div { padding-right: 16px; border-right: 1px solid var(--border); }
+.system-health-list > div:last-child { border: 0; }
+.system-health-list dt { margin-bottom: 8px; font-weight: 600; }
+.system-health-list dd { margin: 0; }
+.system-work-list { list-style: none; padding: 0; margin: 0; }
+.system-work-list li { display: grid; grid-template-columns: minmax(0, 1fr) 100px 180px; align-items: center; gap: 20px; padding: 16px 0; border-bottom: 1px solid var(--border); }
+.system-work-list li:first-child { padding-top: 0; }
+.system-work-list li:last-child { padding-bottom: 0; border: 0; }
+.system-work-list h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.system-work-list p { margin: 6px 0 0; }
+.system-work-list > li > strong { font-size: 20px; text-align: center; }
+.system-work-list a, .system-related-links a { color: var(--link); }
+.system-related-links { display: flex; gap: 24px; flex-wrap: wrap; }
+.system-inline-state { padding-block: 12px; color: var(--text-secondary); }
+.system-account-trigger { display: flex; width: 100%; align-items: center; gap: 10px; padding: 10px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--sidebar-text); text-align: left; cursor: pointer; }
+.system-account-trigger:hover { background: var(--sidebar-selected); }
+.system-account-trigger .role-account-identity { flex: 1; min-width: 0; }
+.system-account-trigger .role-account-identity strong { white-space: normal; overflow-wrap: anywhere; font-size: 14px; }
+.system-account-trigger .role-account-identity small { color: var(--sidebar-muted); font-size: 12px; }
+.system-account-avatar { display: grid; place-items: center; flex: 0 0 36px; height: 36px; background: var(--sidebar-selected); color: var(--sidebar-text); border: 1px solid var(--sidebar-muted); border-radius: 50%; font-weight: 600; }
+.role-shell--system .role-account-footer .notification-wrapper .ant-btn { color: var(--sidebar-text); background: transparent; border-color: var(--sidebar-muted); }
+.role-shell--system :is(a, button, input, textarea, .ant-select):focus-visible, .system-account-trigger:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.role-shell--system .role-sidebar :is(a, button):focus-visible { outline-color: var(--sidebar-text); }
+.role-shell--system .profile-layout { margin-top: 0; gap: 24px; grid-template-columns: minmax(0, 1.85fr) minmax(280px, 1fr); align-items: start; }
+.role-shell--system .profile-layout .section-card { padding: 24px; }
+.role-shell--system .profile-layout form { max-width: 640px; }
+.role-shell--system .profile-layout form > .ant-alert { margin-bottom: 16px; }
+.system-profile-aside { display: grid; gap: 24px; min-width: 0; }
+.role-shell--system .profile-summary h2 { margin-top: 0; }
+.role-shell--system .profile-summary small { display: block; font-size: 12px; }
+.role-shell--system .fact-list dd, .system-drawer .fact-list dd { overflow-wrap: anywhere; }
+.system-drawer .ant-drawer-body { overflow-wrap: anywhere; }
+.role-shell--system .inline-filter { padding: 0; margin: 0; justify-content: flex-start; flex-wrap: wrap; gap: 12px; }
+.role-shell--system .section-title { padding: 0; }
+.role-shell--system .inline-filter > * { min-width: 0; }
+.role-shell--system .inline-filter .ant-input-search { flex: 1 1 240px; }
+.role-shell--system .inline-filter .ant-select { min-width: 200px; }
+.role-shell--system .inline-filter .ant-picker-range { flex: 0 1 300px; min-width: 280px; }
+.role-shell--system .inline-filter :is(input, .ant-select-content) { font-size: 14px; }
+.role-shell--system .operations-card { padding: 0; border: 0; background: transparent; }
+.role-shell--system .ant-empty { margin-block: 24px; }
+.role-shell--system .document-list { margin: 0; padding: 20px 24px; }
+.role-shell--system .document-list .card-heading { gap: 12px; flex-wrap: wrap; }
+.role-shell--system .document-list .card-heading h2 { margin: 0 auto 0 0; }
+.role-shell--system .document-list .card-heading .ant-input-search { flex: 1 1 220px; max-width: 360px; }
+.role-shell--system .document-list .card-heading .ant-select { min-width: 180px; }
+@media (max-width: 1100px) {
+  .role-shell--system .role-main { padding: 24px 24px 96px; }
+  .role-shell--system .profile-layout { grid-template-columns: minmax(0, 1fr); }
+  .system-work-list li { grid-template-columns: minmax(0, 1fr) 80px; }
+  .system-work-list li > a, .system-work-list li > small { grid-column: 1 / -1; }
+}
+@media (max-width: 760px) {
+  .role-shell--system { grid-template-columns: minmax(0, 1fr); }
+  .role-shell--system .role-sidebar { width: 100%; padding: 12px 16px; }
+  .role-shell--system .role-label { display: none; }
+  .role-shell--system .role-main { padding: 24px 16px 96px; }
+  .role-shell--system .system-section, .role-shell--system .document-list, .role-shell--system .profile-layout .section-card { padding: 20px 16px; }
+  .role-shell--system .system-toolbar > *, .role-shell--system .inline-filter > *, .role-shell--system .document-list .card-heading > * { width: 100%; flex-basis: 100%; max-width: none; }
+  .role-shell--system .section-heading { flex-wrap: wrap; }
+  .system-health-list { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .system-health-list > div { display: flex; justify-content: space-between; align-items: center; border: 0; padding: 0; gap: 12px; }
+  .system-health-list dt { margin: 0; }
+  .system-drawer .ant-drawer-content-wrapper, .provider-payment-drawer .ant-drawer-content-wrapper { max-width: 100vw; }
+  .role-shell--system .ant-btn { min-height: 44px; }
+}

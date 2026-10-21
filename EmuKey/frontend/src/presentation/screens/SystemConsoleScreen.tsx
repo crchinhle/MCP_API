@@ -1,94 +1,59 @@
-import { paginationTextControls } from '../theme';
-import { LoadingOverlay } from '../components/WorkspacePrimitives';
-import { Alert, Button, Input, Popconfirm, Table } from 'antd';
-import { useState } from 'react';
+import { Alert, Button } from 'antd';
 import { Link, Navigate, useLocation } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { describeApiError, requestJson, useAuth, type AuthUser } from '../../application/auth/authContext';
-import { useAssistanceHealth, useBlockchainReconciliation, usePlatformReadiness } from '../../application/operations/operationsQueries';
-import { usePaymentHistory } from '../../application/orders/orderQueries';
+import { useAssistanceHealth, usePlatformReadiness } from '../../application/operations/operationsQueries';
+import { usePaymentReviews } from '../../application/orders/orderQueries';
+import { knowledgeDocumentState, useKnowledgeDocuments } from '../../application/assistance/knowledgeQueries';
+import { PageHeader, StatusChip } from '../components/WorkspacePrimitives';
+import { SystemUsersPanel } from '../components/SystemUsersPanel';
+import { SystemBlockchainPanel } from '../components/SystemBlockchainPanel';
+import { ProviderOperationsScreen } from './ProviderOperationsScreen';
 
-import { PaymentReviewPanel } from '../components/PaymentReviewPanel';
-import { ProviderInvitationsPanel } from '../components/ProviderInvitationsPanel';
-import { PageLoading, FactList, PageHeader } from '../components/WorkspacePrimitives';
+function SystemOverview() {
+  const readiness = usePlatformReadiness();
+  const assistance = useAssistanceHealth();
+  const reviews = usePaymentReviews();
+  const documents = useKnowledgeDocuments();
+  const pendingDocuments = documents.data?.filter((document) => knowledgeDocumentState(document, documents.data ?? []) === 'READY').length;
+  const work = [
+    { title: 'Tài liệu chờ duyệt', count: pendingDocuments, query: documents, to: '/system/console/knowledge', link: 'Duyệt tài liệu', description: 'Các phiên bản đã xử lý, đang chờ công bố.' },
+    { title: 'Thanh toán cần kiểm tra', count: reviews.data?.filter((review) => review.reviewStatus === 'OPEN').length, query: reviews, to: '/system/console?view=payments', link: 'Kiểm tra thanh toán', description: 'Các giao dịch chưa có kết luận rà soát.' },
+    { title: 'Yêu cầu hỗ trợ', count: assistance.data?.conversations.waitingSupport, query: assistance, description: 'Đang chờ nhân viên hỗ trợ tiếp nhận.' },
+  ];
+  return <div className="system-screen">
+    <PageHeader title="Tổng quan hệ thống" description="Theo dõi tình trạng dịch vụ và các công việc quản trị cần chú ý." />
+    <section className="workspace-card system-section" aria-label="Sức khỏe hệ thống">
+      <div className="section-heading"><h2>Tình trạng dịch vụ</h2><Button loading={readiness.isFetching} onClick={() => void readiness.refetch()}>Kiểm tra lại</Button></div>
+      <dl className="system-health-list">
+        {['API', 'PostgreSQL', 'Redis'].map((name) => {
+          const value = name === 'API' ? readiness.data?.status : readiness.data?.dependencies[name === 'PostgreSQL' ? 'postgres' : 'redis'];
+          const known = !readiness.isError && (name === 'API' ? value === 'ok' || value === 'degraded' : value === 'up' || value === 'down');
+          const healthy = value === 'ok' || value === 'up';
+          return <div key={name}><dt>{name}</dt><dd><StatusChip tone={known ? healthy ? 'success' : 'error' : 'neutral'}>{readiness.isLoading ? 'Đang kiểm tra' : !known ? 'Chưa xác định' : healthy ? name === 'API' ? 'Hoạt động' : 'Đã kết nối' : value === 'degraded' ? 'Có dịch vụ không khả dụng' : 'Không khả dụng'}</StatusChip></dd></div>;
+        })}
+      </dl>
+      {readiness.isError ? <Alert showIcon type="warning" title="Không thể truy vấn tình trạng dịch vụ." description="Chưa đủ thông tin để kết luận dịch vụ ngừng hoạt động." action={<Button disabled={readiness.isFetching} onClick={() => void readiness.refetch()}>Thử lại</Button>} /> : null}
+    </section>
+    <section className="workspace-card system-section" aria-label="Công việc cần xử lý">
+      <h2>Công việc cần xử lý</h2>
+      <ul className="system-work-list">{work.map((item) => <li key={item.title}>
+        <div><h3>{item.title}</h3><p className="muted-copy">{item.description}</p></div>
+        {item.query.isLoading ? <span role="status">Đang tải…</span> : item.query.isError ? <Button loading={item.query.isFetching} onClick={() => void item.query.refetch()}>Thử lại</Button> : <strong aria-label={`${item.title}: ${item.count ?? 'chưa xác định'}`}>{item.count ?? 'Chưa xác định'}</strong>}
+        {item.to ? <Link to={item.to}>{item.link}</Link> : <small className="muted-copy">Nhân viên hỗ trợ tiếp nhận</small>}
+      </li>)}</ul>
+      {documents.isError ? <Alert type="error" title="Không thể tải số tài liệu chờ duyệt." /> : null}
+      {reviews.isError ? <Alert type="error" title="Không thể tải số thanh toán cần kiểm tra." /> : null}
+      {assistance.isError ? <Alert type="error" title="Không thể tải tình trạng thông báo và hỗ trợ." /> : null}
+    </section>
+    {assistance.isSuccess && assistance.data.notifications.deadLetter > 0 ? <Alert showIcon type="warning" title={`${assistance.data.notifications.deadLetter} thông báo chưa thể gửi sau các lần thử.`} /> : null}
+    <div className="system-related-links"><Link to="/system/console?view=users">Quản lý người dùng</Link><Link to="/system/console?view=blockchain">Đối soát blockchain</Link></div>
+  </div>;
+}
 
 export function SystemConsoleScreen() {
-  const location = useLocation();
-  const { user } = useAuth();
-  const queryClient = useQueryClient();
-  const permitted = user?.role === 'SYSTEM_ADMIN';
-  const readiness = usePlatformReadiness();
-  const assistance = useAssistanceHealth(permitted);
-  const payments = usePaymentHistory();
-  const reconciliation = useBlockchainReconciliation();
-  const view = new URLSearchParams(location.search).get('view');
-  const [accountId, setAccountId] = useState<string | null>(null);
-  const [userQuery, setUserQuery] = useState('');
-  const accounts = useQuery({ queryKey: ['identity', 'users', userQuery], queryFn: () => requestJson<Array<{ id: string; email: string; displayName: string; role: string; status: string }>>(`/auth/users${userQuery.trim() ? `?q=${encodeURIComponent(userQuery.trim())}` : ''}`), enabled: permitted });
-  const detail = useQuery({ queryKey: ['identity', 'user', accountId], queryFn: () => requestJson<AuthUser>(`/auth/users/${accountId}`), enabled: permitted && Boolean(accountId) });
-  const stateMutation = useMutation({ mutationFn: async ({ id, action }: { id: string; action: 'lock' | 'unlock' | 'disable' }) => requestJson(`/auth/users/${id}/${action}`, { method: 'POST' }), onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['identity'] }); } });
-  const [refreshingAccountState, setRefreshingAccountState] = useState(false);
-  async function refreshAccountState() {
-    if (!stateMutation.variables?.id) return;
-    setRefreshingAccountState(true);
-    try {
-      await queryClient.invalidateQueries({ queryKey: ['identity', 'users'] });
-      await queryClient.refetchQueries({ queryKey: ['identity', 'users'], type: 'active' });
-      stateMutation.reset();
-    } finally {
-      setRefreshingAccountState(false);
-    }
-  }
+  const view = new URLSearchParams(useLocation().search).get('view');
   if (view === 'audit') return <Navigate to="/system/console" replace />;
-  if (readiness.isLoading || (permitted && assistance.isLoading) || (view === 'users' && accounts.isLoading) || (view === 'payments' && payments.isLoading)) return <PageLoading />;
-
-  return (
-    <>
-      <PageHeader
-        title={view === 'users' ? 'Quản lý người dùng' : view === 'payments' ? 'Lịch sử thanh toán' : view === 'blockchain' ? 'Đối soát blockchain' : 'Tổng quan hệ thống'}
-      />
-      <section aria-label="Sức khỏe hệ thống" className="metric-grid metric-grid--four">
-        <article className="metric-card"><span className="status-chip status-chip--info">API</span><strong>{readiness.data?.status ?? (readiness.isLoading ? '...' : '—')}</strong><small>Tình trạng dịch vụ</small></article>
-        <article className="metric-card"><span className="status-chip status-chip--success">PostgreSQL</span><strong>{readiness.data?.dependencies.postgres ?? '—'}</strong><small>Kết nối dịch vụ</small></article>
-        <article className="metric-card"><span className="status-chip status-chip--info">Redis</span><strong>{readiness.data?.dependencies.redis ?? '—'}</strong><small>Kết nối dịch vụ</small></article>
-        <article className="metric-card"><span className="status-chip status-chip--warning">Support</span><strong>{assistance.data?.conversations.waitingSupport ?? '—'}</strong><small>Đang chờ hỗ trợ</small></article>
-      </section>
-      {readiness.isError ? <Alert showIcon type="warning" title="Một số dịch vụ đang gián đoạn hoặc chưa thể kiểm tra." action={<Button disabled={readiness.isFetching} onClick={() => void readiness.refetch()}>Thử lại</Button>} /> : null}
-      {assistance.isError && permitted ? <Alert showIcon type="warning" title="Không thể tải tình trạng thông báo và hỗ trợ." action={<Button disabled={assistance.isFetching} onClick={() => void assistance.refetch()}>Thử lại</Button>} /> : null}
-      <nav aria-label="Điều hướng quản trị hệ thống" className="system-tabs">
-        {[
-          ['all', 'Tổng quan'],
-          ['users', 'Người dùng'],
-          ['payments', 'Thanh toán'],
-          ['blockchain', 'Blockchain'],
-        ].map(([value, label]) => (
-          <Link className={new URLSearchParams(location.search).get('view') === value || (value === 'all' && !new URLSearchParams(location.search).get('view')) ? 'active' : ''} to={value === 'all' ? '/system/console' : `/system/console?view=${value}`} key={value}>{label}</Link>
-        ))}
-      </nav>
-      <section className="workspace-card table-card spaced-card">
-        {view === 'users' ? <>
-          {permitted ? <ProviderInvitationsPanel /> : null}
-          {!permitted ? <Alert message="Bạn không có quyền quản lý tài khoản." type="warning" /> : null}
-           {accounts.isError ? <Alert title={describeApiError(accounts.error, 'Không thể tải danh sách tài khoản.')} type="error" action={<Button disabled={accounts.isFetching} onClick={() => void accounts.refetch()}>Thử lại</Button>} /> : null}
-           {stateMutation.isError ? <Alert message={describeApiError(stateMutation.error, 'Không thể cập nhật trạng thái tài khoản.')} type="error" description="Kết quả thao tác có thể chưa rõ. Hãy tải lại trạng thái tài khoản trước khi quyết định thao tác tiếp theo." action={<Button disabled={refreshingAccountState} onClick={() => void refreshAccountState()}>Làm mới trạng thái</Button>} /> : null}
-           <Input allowClear aria-label="Tìm người dùng" onChange={(event) => setUserQuery(event.target.value)} placeholder="Tìm theo tên hoặc email" style={{ marginBottom: 16, maxWidth: 420 }} value={userQuery} />
-          <><Table pagination={paginationTextControls} dataSource={accounts.data ?? []}  rowKey="id" scroll={{ x: 900 }} onRow={(record) => ({ onClick: () => setAccountId(record.id) })} columns={[{ title: 'Tên', dataIndex: 'displayName' }, { title: 'Email', dataIndex: 'email' }, { title: 'Vai trò', dataIndex: 'role' }, { title: 'Trạng thái', dataIndex: 'status' }, { title: 'Thao tác', render: (_: unknown, record) => <span className="table-actions"><Button disabled={!permitted || stateMutation.isPending || record.status === 'DISABLED'} onClick={(event) => { event.stopPropagation(); stateMutation.mutate({ id: record.id, action: record.status === 'LOCKED' ? 'unlock' : 'lock' }); }}>{record.status === 'LOCKED' ? 'Mở khóa' : record.status === 'DISABLED' ? 'Đã vô hiệu hóa' : 'Khóa'}</Button>{record.status !== 'DISABLED' ? <Popconfirm title="Vô hiệu hóa tài khoản?" description="Người dùng sẽ không thể tiếp tục sử dụng tài khoản." okText="Vô hiệu hóa" cancelText="Giữ lại" onConfirm={() => stateMutation.mutate({ id: record.id, action: 'disable' })}><Button danger disabled={!permitted || stateMutation.isPending} onClick={(event) => event.stopPropagation()}>Vô hiệu hóa</Button></Popconfirm> : null}</span> }]} /><LoadingOverlay active={accounts.isLoading} label="Đang tải dữ liệu" /></>
-          {accountId ? <div role="region" aria-label="Chi tiết tài khoản">{detail.isLoading ? <span>Đang tải chi tiết...</span> : detail.isError ? <Alert message="Không thể tải chi tiết tài khoản." type="error" action={<Button disabled={detail.isFetching} onClick={() => void detail.refetch()}>Thử lại</Button>} /> : <FactList facts={[{ label: 'Họ tên', value: String(detail.data?.displayName ?? '—') }, { label: 'Email', value: String(detail.data?.email ?? '—') }, { label: 'Vai trò', value: String(detail.data?.role ?? '—') }, { label: 'Trạng thái', value: String(detail.data?.status ?? '—') }]} />}</div> : null}
-        </> : view === 'payments' ? <>
-          {permitted ? <PaymentReviewPanel /> : null}
-          {payments.isError ? <Alert type="error" title="Không thể tải lịch sử thanh toán." action={<Button disabled={payments.isFetching} onClick={() => void payments.refetch()}>Thử lại</Button>} /> : null}
-          <><Table pagination={paginationTextControls} dataSource={payments.data ?? []}  rowKey="transactionId" scroll={{ x: 900 }} columns={[
-            { title: 'Mã đơn', dataIndex: 'orderNumber' },
-            { title: 'Sản phẩm', dataIndex: 'productNameSnapshot' },
-            { title: 'Số tiền', dataIndex: 'amountVnd', render: (value: number) => `${value.toLocaleString('vi-VN')} ₫` },
-            { title: 'Phân loại', dataIndex: 'classification' },
-          ]} /><LoadingOverlay active={payments.isLoading} label="Đang tải dữ liệu" /></>
-        </> : view === 'blockchain' ? <>
-          <div className="section-heading"><h2 className="section-title">Đối soát blockchain</h2><><Button  disabled={(!permitted) || (reconciliation.isPending)} onClick={() => reconciliation.mutate()}>Chạy đối soát</Button><LoadingOverlay active={reconciliation.isPending} label="Đang xử lý yêu cầu: Chạy đối soát" /></></div>
-          {reconciliation.isError ? <Alert type="error" title="Không thể chạy đối soát blockchain." action={<Button onClick={() => { reconciliation.reset(); reconciliation.mutate(); }}>Thử lại</Button>} /> : null}
-          {reconciliation.data ? <div className="stack-list"><p>Sự kiện đã ghi nhận: {reconciliation.data.indexedEvents}</p><p>Yêu cầu chưa rõ kết quả: {reconciliation.data.health.unknown_commands}</p><p>Sự kiện đang chờ: {reconciliation.data.health.pending_events}</p><p>Bản ghi đã đồng bộ lại: {reconciliation.data.projection.licenseRepairs + reconciliation.data.projection.commandRepairs}</p></div> : <div className="empty-state"><strong>Chưa chạy đối soát</strong><p>Đối chiếu dữ liệu hệ thống với các sự kiện blockchain để phát hiện và xử lý sai lệch.</p></div>}
-        </> : <div className="empty-state"><h2>Theo dõi hệ thống</h2><p>Xem tình trạng các dịch vụ phía trên. Chọn Người dùng, Thanh toán hoặc Blockchain để kiểm tra chi tiết.</p></div>}
-      </section>
-    </>
-  );
+  if (view === 'users') return <SystemUsersPanel />;
+  if (view === 'payments') return <div className="system-screen"><ProviderOperationsScreen /></div>;
+  if (view === 'blockchain') return <SystemBlockchainPanel />;
+  return <SystemOverview />;
 }

@@ -3,6 +3,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { KnowledgeDocumentDetailDto, KnowledgeDocumentDto, KnowledgeSourceDto } from '../../infrastructure/api/generated';
 import { api, requestJson } from '../auth/authContext';
 
+export function knowledgeDocumentState(document: KnowledgeDocumentDto, documents: readonly KnowledgeDocumentDto[]) {
+  if (document.isCurrent) return 'PUBLISHED';
+  if (documents.some((other) => other.providerUserId === document.providerUserId && other.logicalDocumentKey === document.logicalDocumentKey && other.isCurrent && other.version > document.version)) return 'PREVIOUS';
+  return document.status;
+}
+
 export function useKnowledgeDocuments() {
   return useQuery({
     queryKey: ['knowledge', 'documents'],

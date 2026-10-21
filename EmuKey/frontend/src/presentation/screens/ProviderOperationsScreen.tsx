@@ -5,22 +5,11 @@ import { useSearchParams } from 'react-router-dom';
 
 import { paymentNeedsReview, usePaymentHistory } from '../../application/orders/orderQueries';
 import type { PaymentHistoryDto } from '../../infrastructure/api/generated';
-import { PageLoading, PageHeader, StatusChip } from '../components/WorkspacePrimitives';
+import { paymentClassificationLabels, paymentClassificationTone, PageLoading, PageHeader, StatusChip } from '../components/WorkspacePrimitives';
+import { useAuth } from '../../application/auth/authContext';
+import { PaymentReviewPanel } from '../components/PaymentReviewPanel';
 
-export const paymentClassificationLabels: Record<string, string> = {
-  MATCHED: 'Đã khớp',
-  DUPLICATE: 'Giao dịch trùng',
-  UNMATCHED: 'Chưa khớp đơn hàng',
-  AMOUNT_MISMATCH: 'Số tiền không khớp',
-  INVALID: 'Không hợp lệ',
-};
-
-export function paymentClassificationTone(classification: string): 'success' | 'warning' | 'error' | 'neutral' {
-  if (classification === 'MATCHED') return 'success';
-  if (classification === 'AMOUNT_MISMATCH' || classification === 'INVALID') return 'error';
-  if (classification === 'DUPLICATE' || classification === 'UNMATCHED') return 'warning';
-  return 'neutral';
-}
+export { paymentClassificationLabels, paymentClassificationTone } from '../components/WorkspacePrimitives';
 
 function formatPaymentTime(value: string) {
   return Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString('vi-VN') : 'Chưa xác định';
@@ -29,6 +18,7 @@ function formatPaymentTime(value: string) {
 const reviewStatusLabels: Record<string, string> = { OPEN: 'Chờ kiểm tra', RESOLVED: 'Đã giải quyết', CLOSED_NO_ACTION: 'Đã đóng, không cần xử lý' };
 
 export function ProviderOperationsScreen() {
+  const isSystem = useAuth().user?.role === 'SYSTEM_ADMIN';
   const payments = usePaymentHistory();
   const [query, setQuery] = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
@@ -52,11 +42,13 @@ export function ProviderOperationsScreen() {
         .includes(normalized)),
     [normalized, payments.data, classification, range],
   );
-  if (payments.isLoading) return <PageLoading />;
+  if (payments.isLoading && !isSystem) return <PageLoading />;
 
   return (
     <>
-      <PageHeader title="Thanh toán & đối soát" />
+      <PageHeader title="Thanh toán & đối soát" {...(isSystem ? { description: 'Tra cứu giao dịch và kiểm tra các trường hợp đối soát bất thường.' } : {})} />
+      {isSystem ? <PaymentReviewPanel /> : null}
+      {isSystem ? <h2>Lịch sử thanh toán</h2> : null}
       <div className="inline-filter">
         <Input.Search
           aria-label="Tìm dữ liệu vận hành"
@@ -65,16 +57,17 @@ export function ProviderOperationsScreen() {
           value={query}
         />
         <Select aria-label="Lọc kết quả đối soát" value={classification} onChange={setClassification} options={[{ value: '', label: 'Tất cả giao dịch' }, { value: 'exceptions', label: 'Giao dịch cần kiểm tra' }, ...Object.entries(paymentClassificationLabels).map(([value, label]) => ({ value, label }))]} />
-        <DatePicker.RangePicker prevIcon="−" nextIcon="+" superPrevIcon="−−" superNextIcon="++" aria-label="Lọc khoảng thời gian" format="DD/MM/YYYY" onChange={(values) => setRange(values?.[0] && values[1] ? [values[0].startOf('day').valueOf(), values[1].endOf('day').valueOf()] : null)} />
+        <DatePicker.RangePicker {...(isSystem ? { placeholder: ['Từ ngày', 'Đến ngày'] as [string, string] } : {})} prevIcon="−" nextIcon="+" superPrevIcon="−−" superNextIcon="++" aria-label="Lọc khoảng thời gian" format="DD/MM/YYYY" onChange={(values) => setRange(values?.[0] && values[1] ? [values[0].startOf('day').valueOf(), values[1].endOf('day').valueOf()] : null)} />
       </div>
       <section className="workspace-card operations-card">
-        <p className="muted-copy">Đối chiếu giao dịch theo mã đơn, số tiền và thời gian ghi nhận. Liên hệ bộ phận hỗ trợ khi có giao dịch cần kiểm tra.</p>
+        {!isSystem ? <p className="muted-copy">Đối chiếu giao dịch theo mã đơn, số tiền và thời gian ghi nhận. Liên hệ bộ phận hỗ trợ khi có giao dịch cần kiểm tra.</p> : null}
         {payments.isError ? <Alert showIcon type="error" title="Không thể tải lịch sử thanh toán." action={<Button onClick={() => void payments.refetch()}>Thử lại</Button>} /> : null}
-        {!payments.isError && visiblePayments.length === 0 ? <Empty description="Không có giao dịch đối soát phù hợp." /> : null}
+        {payments.isLoading && isSystem ? <p role="status">Đang tải lịch sử thanh toán…</p> : null}
+        {!payments.isLoading && !payments.isError && visiblePayments.length === 0 ? <Empty description={isSystem && !query && !classification && !range ? 'Chưa có giao dịch thanh toán.' : 'Không có giao dịch đối soát phù hợp.'} /> : null}
         {!payments.isError && visiblePayments.length > 0 ? <Table<PaymentHistoryDto> rowKey="transactionId" dataSource={visiblePayments} scroll={{ x: 900 }} pagination={{ ...paginationTextControls, pageSize: 10, showSizeChanger: false }} columns={[
           { title: 'Đơn hàng', render: (_, item) => <><strong>{item.orderNumber ?? 'Chưa gắn đơn'}</strong><small>{item.orderType === 'RENEWAL' ? 'Gia hạn' : item.orderType === 'NEW_PURCHASE' ? 'Mua mới' : ''}</small></> },
           { title: 'Sản phẩm / gói', render: (_, item) => <>{item.productNameSnapshot ?? 'Chưa xác định'}<small>{item.planNameSnapshot ?? ''}</small></> },
-          { title: 'Số tiền', dataIndex: 'amountVnd', render: (value: number) => `${value.toLocaleString('vi-VN')} ₫` },
+          { title: 'Số tiền', align: 'right', dataIndex: 'amountVnd', render: (value: number) => `${value.toLocaleString('vi-VN')} ₫` },
           { title: 'Thời gian', dataIndex: 'providerOccurredAt', render: formatPaymentTime },
           { title: 'Đối soát', dataIndex: 'classification', render: (value: string) => <StatusChip tone={paymentClassificationTone(value)}>{paymentClassificationLabels[value] ?? value}</StatusChip> },
           { title: 'Chi tiết', render: (_, item) => <Button onClick={() => setSelected(item)}>Xem</Button> },

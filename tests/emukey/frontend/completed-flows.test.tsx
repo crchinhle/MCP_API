@@ -88,7 +88,11 @@ describe('completed API-backed flows', () => {
     });
     try {
       render(<App initialEntries={['/system/console/knowledge']} />);
+      expect(await screen.findByRole('heading', { name: 'Duyệt tài liệu', level: 1 })).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Bản đang dùng' })).toBeNull();
       fireEvent.click(await screen.findByRole('button', { name: 'Công bố' }, { timeout: 15000 }));
+      expect(submitted).toBeUndefined();
+      fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận công bố' }));
       await waitFor(() => expect(submitted).toEqual({ expectedCurrentVersion: 3 }));
       expect(screen.queryByRole('button', { name: 'Tải tài liệu lên' })).toBeNull();
     } finally { vi.mocked(fetch).mockImplementation(original); }
@@ -127,6 +131,7 @@ describe('completed API-backed flows', () => {
     try {
       render(<App initialEntries={['/system/console?view=payments']} />);
       fireEvent.click(await screen.findByRole('button', { name: 'Kiểm tra giao dịch' }, { timeout: 15000 }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Ghi kết quả kiểm tra' }));
       expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Lưu kết quả' }).disabled).toBe(true);
       fireEvent.change(screen.getByLabelText('Lý do xử lý thanh toán'), { target: { value: 'Đã kiểm tra chứng từ' } });
       fireEvent.click(screen.getByRole('button', { name: 'Lưu kết quả' }));

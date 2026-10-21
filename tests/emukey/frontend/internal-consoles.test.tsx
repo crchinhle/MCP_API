@@ -9,6 +9,46 @@ import { MemoryRouter } from 'react-router-dom';
 afterEach(cleanup);
 
 describe('W17-W18 Internal consoles', () => {
+  it.each(['users', 'payments', 'blockchain'])('keeps %s independent of health endpoints and duplicate navigation', async (view) => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    const healthRequests: string[] = [];
+    vi.mocked(fetch).mockImplementation((input, init) => {
+      const url = String(input);
+      if (url.includes('/health/')) { healthRequests.push(url); return new Promise(() => {}); }
+      return original(input, init);
+    });
+    try {
+      render(<App initialEntries={[`/system/console?view=${view}`]} />);
+      expect(await screen.findByRole('heading', { level: 1 })).toBeTruthy();
+      expect(screen.queryByRole('navigation', { name: 'Điều hướng quản trị hệ thống' })).toBeNull();
+      expect(screen.queryByRole('region', { name: 'Sức khỏe hệ thống' })).toBeNull();
+      expect(healthRequests).toEqual([]);
+    } finally { vi.mocked(fetch).mockImplementation(original); }
+  });
+
+  it('offers the system account actions in one accessible menu', async () => {
+    render(<App initialEntries={['/system/console']} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Mở menu tài khoản Test User' }));
+    expect(await screen.findByRole('menuitem', { name: /Hồ sơ tài khoản/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole('menuitem', { name: /Đổi mật khẩu/ }));
+    expect(await screen.findByRole('dialog', { name: 'Đổi mật khẩu' })).toBeTruthy();
+  });
+
+  it('does not submit an unchanged system profile and retains edits after failure', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation((input, init) => String(input).endsWith('/auth/profile') && init?.method === 'PUT'
+      ? Promise.resolve(Response.json({}, { status: 500 })) : original(input, init));
+    try {
+      render(<App initialEntries={['/system/console/profile']} />);
+      expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Lưu thay đổi' }).disabled).toBe(true);
+      fireEvent.change(screen.getByLabelText('Tên hiển thị'), { target: { value: 'Changed Admin' } });
+      await waitFor(() => expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Lưu thay đổi' }).disabled).toBe(false));
+      fireEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
+      expect(await screen.findByRole('alert')).toBeTruthy();
+      expect(screen.getByLabelText<HTMLInputElement>('Tên hiển thị').value).toBe('Changed Admin');
+      expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Lưu thay đổi' }).disabled).toBe(false);
+    } finally { vi.mocked(fetch).mockImplementation(original); }
+  });
   it('can switch from an existing admin session to provider login after activation', async () => {
     const original = vi.mocked(fetch).getMockImplementation()!;
     let signedOut = false;
@@ -86,6 +126,34 @@ describe('W17-W18 Internal consoles', () => {
     expect(screen.queryByText('BLOCKCHAIN_RETRY')).toBeNull();
   });
 
+  it('separates open payment work from closed review evidence on the overview', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation((input, init) => String(input).endsWith('/payments/review')
+      ? Promise.resolve(Response.json([{ id: 'open', reviewStatus: 'OPEN' }, { id: 'closed', reviewStatus: 'RESOLVED' }])) : original(input, init));
+    try {
+      render(<App initialEntries={['/system/console']} />);
+      const work = await screen.findByRole('region', { name: 'Công việc cần xử lý' });
+      await waitFor(() => expect(within(work).getByText('1')).toBeTruthy());
+      expect(within(work).getByRole('link', { name: 'Kiểm tra thanh toán' })).toHaveProperty('search', '?view=payments');
+      expect(screen.queryByText('ok')).toBeNull();
+      expect(screen.queryByText('up')).toBeNull();
+    } finally { vi.mocked(fetch).mockImplementation(original); }
+  });
+
+  it('keeps closed payment reviews available as evidence without presenting them as open work', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation((input, init) => String(input).endsWith('/payments/review')
+      ? Promise.resolve(Response.json([{ id: 'closed', providerEventId: 'CLOSED-EVENT', amountVnd: 10000, classification: 'AMOUNT_MISMATCH', reviewStatus: 'RESOLVED', reviewReason: 'Đã đối chiếu ngân hàng', receivedAt: '2026-10-21T00:00:00Z', providerOccurredAt: '2026-10-21T00:00:00Z' }])) : original(input, init));
+    try {
+      render(<App initialEntries={['/system/console?view=payments']} />);
+      expect(await screen.findByText('Không có giao dịch cần kiểm tra')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: 'Kiểm tra giao dịch' })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Lịch sử rà soát' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Xem chi tiết rà soát' }));
+      expect(await screen.findByText('Đã đối chiếu ngân hàng')).toBeTruthy();
+    } finally { vi.mocked(fetch).mockImplementation(original); }
+  });
+
   it('marks only the selected query-string section active', async () => {
     const { container } = render(<App initialEntries={['/system/console?view=users']} />);
     await screen.findByRole('heading', { name: 'Quản lý người dùng' });
@@ -135,10 +203,13 @@ describe('W17-W18 Internal consoles', () => {
     try {
       render(<App initialEntries={['/system/console?view=users']} />);
       const row = await screen.findByRole('row', { name: /buyer@example.com/ });
-      fireEvent.click(within(row).getByRole('button', { name: 'Khóa' }));
+      fireEvent.click(within(row).getByRole('button', { name: /Thao tác tài khoản/ }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Khóa' }));
+      expect(mutationAttempts).toBe(0);
+      fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Khóa', exact: true }));
       expect(await screen.findByText('Máy chủ đang gặp sự cố. Vui lòng thử lại sau.')).toBeTruthy();
       fireEvent.click(screen.getByRole('button', { name: 'Làm mới trạng thái' }));
-      await waitFor(() => expect(within(row).getByText('LOCKED')).toBeTruthy());
+      await waitFor(() => expect(within(row).getByText('Đã khóa')).toBeTruthy());
       expect(mutationAttempts).toBe(1);
     } finally {
       vi.mocked(fetch).mockImplementation(original);
@@ -164,10 +235,10 @@ describe('W17-W18 Internal consoles', () => {
     });
     try {
       render(<App initialEntries={['/system/console?view=users']} />);
-      fireEvent.click(await screen.findByRole('row', { name: /buyer@example.com/ }));
+      fireEvent.click(within(await screen.findByRole('row', { name: /buyer@example.com/ })).getByRole('button', { name: 'Xem chi tiết' }));
       expect(await screen.findByText('Không thể tải chi tiết tài khoản.')).toBeTruthy();
       fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
-      expect(await screen.findByText('Buyer One')).toBeTruthy();
+      expect(await within(screen.getByRole('dialog')).findByText('Buyer One')).toBeTruthy();
       expect(screen.getAllByText('buyer@example.com')).toHaveLength(2);
     } finally {
       vi.mocked(fetch).mockImplementation(original);
@@ -187,7 +258,7 @@ describe('W17-W18 Internal consoles', () => {
     });
     try {
       render(<App initialEntries={['/system/console']} />);
-      expect(await screen.findByText('Một số dịch vụ đang gián đoạn hoặc chưa thể kiểm tra.')).toBeTruthy();
+      expect(await screen.findByText('Không thể truy vấn tình trạng dịch vụ.')).toBeTruthy();
       fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
       expect(await screen.findByText('Tình trạng dịch vụ')).toBeTruthy();
     } finally {
@@ -208,10 +279,12 @@ describe('W17-W18 Internal consoles', () => {
     try {
       render(<App initialEntries={['/system/console?view=blockchain']} />);
       fireEvent.click(await screen.findByRole('button', { name: 'Chạy đối soát' }));
+      fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Chạy đối soát', exact: true }));
       expect(await screen.findByText('Không thể chạy đối soát blockchain.')).toBeTruthy();
       fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+      fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Chạy đối soát', exact: true }));
       await waitFor(() => expect(attempts).toBe(2));
-      expect(await screen.findByText('Sự kiện đã ghi nhận: 0')).toBeTruthy();
+      expect(await screen.findByRole('region', { name: 'Kết quả đối soát' })).toBeTruthy();
     } finally {
       vi.mocked(fetch).mockImplementation(original);
     }

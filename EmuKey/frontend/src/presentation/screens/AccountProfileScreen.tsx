@@ -9,7 +9,7 @@ import {
   type ProfileInput,
   useAuth,
 } from '../../application/auth/authContext';
-import { PageHeader } from '../components/WorkspacePrimitives';
+import { FactList, PageHeader } from '../components/WorkspacePrimitives';
 
 const roleLabels: Record<string, string> = {
   CUSTOMER: 'Người mua',
@@ -28,6 +28,7 @@ export function AccountProfileScreen() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { logout, updateProfile, user } = useAuth();
   const [form] = Form.useForm<ProfileInput>();
+  const profileValues = Form.useWatch([], form);
   const [passwordForm] = Form.useForm<{ currentPassword: string; password: string; confirm: string }>();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,8 +54,12 @@ export function AccountProfileScreen() {
   }, [form, user]);
 
   if (!user) return null;
+  const isSystem = user.role === 'SYSTEM_ADMIN';
+  const dirty = (['displayName', 'phone', 'address', ...(user.role === 'PROVIDER_ADMIN' ? ['organizationName'] : [])] as (keyof ProfileInput)[]).some((key) => (profileValues?.[key] ?? '').trim() !== (user[key] ?? '').trim());
+  const statusLabel = ({ ACTIVE: 'Đang hoạt động', LOCKED: 'Đã khóa', DISABLED: 'Đã vô hiệu hóa', PENDING_EMAIL_VERIFICATION: 'Chờ xác minh email' } as Record<string, string>)[user.status] ?? 'Chưa xác định';
 
   const submit = async (values: ProfileInput) => {
+    if (isSystem && (!dirty || saving)) return;
     setError(null);
     setSaved(false);
     setSaving(true);
@@ -102,12 +107,12 @@ export function AccountProfileScreen() {
     <>
       <PageHeader
         title="Hồ sơ tài khoản"
-        action={<Tag color={user.status === 'ACTIVE' ? 'green' : 'orange'}>{user.status === 'ACTIVE' ? 'Đang hoạt động' : user.status}</Tag>}
+        action={!isSystem ? <Tag color={user.status === 'ACTIVE' ? 'green' : 'orange'}>{statusLabel}</Tag> : undefined}
       />
       <div className="workspace-two-column profile-layout">
         <section className="workspace-card section-card">
-          <h2>Thông tin hồ sơ</h2>
-          <p className="muted-copy">Cập nhật thông tin liên hệ và tổ chức.</p>
+          <h2>{isSystem ? 'Thông tin cá nhân' : 'Thông tin hồ sơ'}</h2>
+          <p className="muted-copy">{isSystem ? 'Cập nhật thông tin cá nhân và liên hệ.' : 'Cập nhật thông tin liên hệ và tổ chức.'}</p>
           <Form
             form={form}
             initialValues={{
@@ -143,21 +148,24 @@ export function AccountProfileScreen() {
             ) : null}
             {saved ? <Alert showIcon type="success" message="Đã cập nhật hồ sơ." /> : null}
             {error ? <Alert showIcon role="alert" type="error" message={error} /> : null}
-            <><Button htmlType="submit" disabled={saving} type="primary">
+            <><Button htmlType="submit" loading={saving} disabled={saving || (isSystem && !dirty)} type="primary">
               Lưu thay đổi
             </Button><LoadingOverlay active={saving} label="Đang xử lý yêu cầu: Lưu thay đổi" /></>
           </Form>
         </section>
-        <aside className="workspace-card section-card profile-summary">
+        <aside className={isSystem ? 'system-profile-aside' : 'workspace-card section-card profile-summary'}>
+          <section className={isSystem ? 'workspace-card section-card profile-summary' : undefined}>
           <h2>Tài khoản</h2>
-          <p><strong>Email</strong><br />{user.email}</p>
-          <p><strong>Vai trò</strong><br />{roleLabels[user.role] ?? user.role}</p>
-          <p><strong>Trạng thái</strong><br />{user.status === 'ACTIVE' ? 'Đang hoạt động' : user.status}</p>
+          <FactList facts={[{ label: 'Email', value: user.email }, { label: 'Vai trò', value: roleLabels[user.role] ?? 'Chưa xác định' }, { label: 'Trạng thái', value: statusLabel }]} />
           <small>
             Email và vai trò được bảo vệ bởi hệ thống xác thực, không thay đổi tại màn hình này.
           </small>
-          <h3>Bảo mật</h3>
+          </section>
+          <section className={isSystem ? 'workspace-card section-card' : undefined}>
+          {isSystem ? <h2>Bảo mật</h2> : <h3>Bảo mật</h3>}
+          {isSystem ? <p className="muted-copy">Sau khi đổi mật khẩu, bạn cần đăng nhập lại.</p> : null}
           <Button onClick={() => { setPasswordError(null); setPasswordOpen(true); }} type="default">Đổi mật khẩu</Button>
+          </section>
           <Modal
             className="account-password-modal"
             destroyOnHidden

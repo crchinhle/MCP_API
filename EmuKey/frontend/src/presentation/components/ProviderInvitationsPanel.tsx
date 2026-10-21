@@ -8,9 +8,11 @@ import type { InviteProviderDto, ProviderInvitationDto } from '../../infrastruct
 
 const invitationKey = ['identity', 'provider-invitations'] as const;
 
-export function ProviderInvitationsPanel() {
+export function ProviderInvitationsPanel({ open: controlledOpen, onOpenChange }: { readonly open?: boolean; readonly onOpenChange?: (open: boolean) => void } = {}) {
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = controlledOpen ?? localOpen;
+  const setOpen = (value: boolean) => { setLocalOpen(value); onOpenChange?.(value); };
   const [form] = Form.useForm<InviteProviderDto>();
   const invitations = useQuery({ queryKey: invitationKey, queryFn: () => requestJson<ProviderInvitationDto[]>('/auth/provider-invitations') });
   const invite = useMutation({
@@ -25,12 +27,12 @@ export function ProviderInvitationsPanel() {
     ? 'Lời mời đã lưu nhưng chưa xác nhận gửi email thành công. Hãy kiểm tra danh sách và gửi lại.'
     : describeApiError(invite.error, 'Không thể gửi lời mời. Vui lòng thử lại.');
 
-  return <section aria-label="Lời mời nhà cung cấp" className="spaced-card">
+  return <section aria-label="Lời mời nhà cung cấp" className="workspace-card system-section spaced-card">
     <div className="section-heading">
       <h2 className="section-title">Lời mời nhà cung cấp</h2>
-      <Button type="primary" onClick={() => { invite.reset(); form.resetFields(); setOpen(true); }}>Mời nhà cung cấp</Button>
+      {controlledOpen === undefined ? <Button type="primary" onClick={() => { invite.reset(); form.resetFields(); setOpen(true); }}>Mời nhà cung cấp</Button> : null}
     </div>
-    <p>Provider tự đặt mật khẩu qua email. Liên kết có hiệu lực 24 giờ; gửi lại sẽ vô hiệu hóa liên kết cũ.</p>
+    <p className="muted-copy">Nhà cung cấp tự đặt mật khẩu qua email. Liên kết có hiệu lực 24 giờ; gửi lại sẽ vô hiệu hóa liên kết cũ.</p>
     {invite.isSuccess ? <Alert showIcon type="success" title="Đã gửi email mời nhà cung cấp." /> : null}
     {invite.isError && !open ? <Alert role="alert" showIcon type="error" title={error} /> : null}
     {invitations.isError ? <Alert type="error" title="Không thể tải lời mời." action={<Button onClick={() => void invitations.refetch()}>Thử lại</Button>} /> : null}
@@ -38,6 +40,7 @@ export function ProviderInvitationsPanel() {
       { title: 'Email', dataIndex: 'email' },
       { title: 'Tổ chức', dataIndex: 'organizationName' },
       { title: 'Trạng thái', render: (_, row) => row.status === 'ACCEPTED' ? 'Đã kích hoạt' : row.status === 'EXPIRED' ? 'Hết hạn' : row.sentAt ? 'Chờ chấp nhận' : 'Chưa xác nhận gửi email' },
+      { title: 'Ngày gửi', dataIndex: 'sentAt', render: (value: string | null) => value ? new Date(value).toLocaleString('vi-VN') : 'Chưa xác nhận' },
       { title: 'Hết hạn', dataIndex: 'expiresAt', render: (value: string) => new Date(value).toLocaleString('vi-VN') },
       { title: 'Thao tác', render: (_, row) => row.status !== 'ACCEPTED' ? <Button disabled={invite.isPending} onClick={() => {
         invite.reset();
