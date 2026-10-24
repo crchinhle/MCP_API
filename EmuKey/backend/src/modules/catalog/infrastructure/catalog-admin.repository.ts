@@ -88,7 +88,7 @@ function mapProduct(row: Record<string, unknown>): ProductRecord {
 
 function mapPlan(row: Record<string, unknown>): PlanRecord {
   return {
-    billingCycle: row.billing_cycle as BillingCycle,
+    billingCycle: Number(row.duration_months) === 12 ? 'YEARLY' : 'MONTHLY',
     code: String(row.code),
     createdAt: new Date(String(row.created_at)),
     durationMonths: Number(row.duration_months),
@@ -231,8 +231,8 @@ export class CatalogAdminRepository {
     const productFilter = productId ? ' AND product_id = $2' : '';
     if (productId) values.push(productId);
     const result = await this.pool.query<Record<string, unknown>>(
-      `SELECT * FROM plans
-       WHERE provider_user_id = $1${productFilter}
+      `SELECT plans.*, (SELECT provider_user_id FROM products WHERE id=plans.product_id) AS provider_user_id FROM plans
+       WHERE product_id IN (SELECT id FROM products WHERE provider_user_id = $1)${productFilter}
        ORDER BY created_at DESC`,
       values,
     );
@@ -241,7 +241,7 @@ export class CatalogAdminRepository {
 
   async findPlan(actor: AuthPrincipal, id: string): Promise<PlanRecord | null> {
     const result = await this.pool.query<Record<string, unknown>>(
-      'SELECT * FROM plans WHERE id = $1 AND provider_user_id = $2',
+      'SELECT plans.*, (SELECT provider_user_id FROM products WHERE id=plans.product_id) AS provider_user_id FROM plans WHERE id = $1 AND product_id IN (SELECT id FROM products WHERE provider_user_id = $2)',
       [id, actor.sub],
     );
     return result.rows[0] ? mapPlan(result.rows[0]) : null;
@@ -282,20 +282,18 @@ export class CatalogAdminRepository {
       });
       const result = await client.query<Record<string, unknown>>(
         `INSERT INTO plans
-          (id, product_id, provider_user_id, code, version, name, billing_cycle,
+          (id, product_id, code, version, name,
             duration_months, price_vnd, max_active_devices, entitlements,
             plan_commitment)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
-                  decode($12, 'hex'))
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
+                  decode($10, 'hex'))
          RETURNING *`,
         [
           id,
           input.productId,
-          actor.sub,
           input.code,
           version,
           input.name,
-          input.billingCycle,
           input.durationMonths,
           input.priceVnd,
           input.maxActiveDevices,
@@ -303,7 +301,7 @@ export class CatalogAdminRepository {
            commitment.slice(2),
         ],
       );
-      const plan = mapPlan(result.rows[0] ?? {});
+      const plan = mapPlan({ ...result.rows[0], provider_user_id: actor.sub });
       return plan;
     });
   }
@@ -339,15 +337,14 @@ export class CatalogAdminRepository {
       });
       const result = await client.query<Record<string, unknown>>(
         `UPDATE plans
-         SET name = $1, billing_cycle = $2, duration_months = $3,
-             price_vnd = $4, max_active_devices = $5, entitlements = $6,
-             plan_commitment = decode($7, 'hex'),
+         SET name = $1, duration_months = $2,
+             price_vnd = $3, max_active_devices = $4, entitlements = $5,
+             plan_commitment = decode($6, 'hex'),
              updated_at = now()
-         WHERE id = $8 AND provider_user_id = $9
+         WHERE id = $7 AND product_id IN (SELECT id FROM products WHERE provider_user_id = $8)
          RETURNING *`,
         [
           input.name ?? current.name,
-          input.billingCycle ?? current.billingCycle,
           nextDurationMonths,
           input.priceVnd ?? current.priceVnd,
           nextMaxActiveDevices,
@@ -357,7 +354,7 @@ export class CatalogAdminRepository {
           actor.sub,
         ],
       );
-      const plan = mapPlan(result.rows[0] ?? {});
+      const plan = mapPlan({ ...result.rows[0], provider_user_id: actor.sub });
       return plan;
     });
   }
@@ -368,7 +365,7 @@ export class CatalogAdminRepository {
       if (current.status !== 'DRAFT') throw new Error('PLAN_NOT_DRAFT');
       try {
         await client.query(
-          'DELETE FROM plans WHERE id = $1 AND provider_user_id = $2',
+          'DELETE FROM plans WHERE id = $1 AND product_id IN (SELECT id FROM products WHERE provider_user_id = $2)',
           [id, actor.sub],
         );
       } catch (error) {
@@ -387,12 +384,12 @@ export class CatalogAdminRepository {
   ): Promise<PlanRecord> {
     return this.withTransaction(async (client) => {
       const currentResult = await client.query<Record<string, unknown>>(
-        `SELECT pl.*, p.status AS product_status, u.provider_chain_address, u.provider_chain_namespace
+        `SELECT pl.*, p.provider_user_id, p.status AS product_status, u.provider_chain_address, u.provider_chain_namespace
          FROM plans pl
          JOIN products p
-           ON p.id = pl.product_id AND p.provider_user_id = pl.provider_user_id
-         JOIN users u ON u.id = pl.provider_user_id
-         WHERE pl.id = $1 AND pl.provider_user_id = $2
+           ON p.id = pl.product_id
+         JOIN users u ON u.id = p.provider_user_id
+         WHERE pl.id = $1 AND p.provider_user_id = $2
          FOR UPDATE OF pl`,
         [id, actor.sub],
       );
@@ -414,11 +411,11 @@ export class CatalogAdminRepository {
          SET status = $1,
              published_at = CASE WHEN $1::varchar = 'PUBLISHED' THEN now() ELSE published_at END,
              updated_at = now()
-         WHERE id = $2 AND provider_user_id = $3
+         WHERE id = $2 AND product_id IN (SELECT id FROM products WHERE provider_user_id = $3)
          RETURNING *`,
         [status, id, actor.sub],
       );
-      const plan = mapPlan(result.rows[0] ?? {});
+      const plan = mapPlan({ ...result.rows[0], provider_user_id: actor.sub });
       return plan;
     });
   }
@@ -457,8 +454,8 @@ export class CatalogAdminRepository {
     id: string,
   ): Promise<PlanRecord> {
     const result = await client.query<Record<string, unknown>>(
-      `SELECT * FROM plans
-       WHERE id = $1 AND provider_user_id = $2 FOR UPDATE`,
+      `SELECT plans.*, (SELECT provider_user_id FROM products WHERE id=plans.product_id) AS provider_user_id FROM plans
+       WHERE id = $1 AND product_id IN (SELECT id FROM products WHERE provider_user_id=$2) FOR UPDATE`,
       [id, actor.sub],
     );
     if (!result.rows[0]) throw new Error('PLAN_NOT_FOUND');

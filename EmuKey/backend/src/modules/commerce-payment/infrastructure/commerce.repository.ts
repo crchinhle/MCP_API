@@ -146,7 +146,7 @@ function mapOrder(row: Record<string, unknown>): OrderRecord {
   return {
     renewalStatus: typeof row.renewal_status === 'string' ? row.renewal_status : null,
     renewalExpiresAt: optionalDate(row.renewal_expires_at),
-    billingCycleSnapshot: String(row.billing_cycle_snapshot),
+    billingCycleSnapshot: Number(row.duration_months_snapshot) === 12 ? 'YEARLY' : 'MONTHLY',
     createdAt: date(row.created_at),
     currency: String(row.currency),
     customerUserId: String(row.customer_user_id),
@@ -275,16 +275,17 @@ export class CommerceRepository {
       }
 
       const selected = await client.query<Record<string, unknown>>(
-        `SELECT pl.*, p.name AS product_name,
+        `SELECT pl.*, p.provider_user_id, p.name AS product_name,
                 u.organization_name AS provider_name, u.provider_chain_address
          FROM plans pl
          JOIN products p
-           ON p.id = pl.product_id AND p.provider_user_id = pl.provider_user_id
-         JOIN users u ON u.id = pl.provider_user_id
-         WHERE pl.id = $1 AND pl.status = 'PUBLISHED'
-           AND p.status = 'PUBLISHED'
-         FOR SHARE OF pl, p`,
-        [planId],
+           ON p.id = pl.product_id
+         JOIN users u ON u.id = p.provider_user_id
+         WHERE pl.id = $1 AND u.status='ACTIVE'
+           AND (($2::uuid IS NULL AND pl.status='PUBLISHED' AND p.status='PUBLISHED')
+             OR ($2::uuid IS NOT NULL AND pl.status IN ('PUBLISHED','ARCHIVED') AND p.status IN ('PUBLISHED','ARCHIVED')))
+         FOR SHARE OF pl, p, u`,
+        [planId, targetLicenseId ?? null],
       );
       const plan = selected.rows[0];
       if (!plan) throw new Error('PLAN_NOT_FOUND');
@@ -316,18 +317,18 @@ export class CommerceRepository {
            product_id, plan_id, target_license_id,
            order_type, provider_name_snapshot, product_name_snapshot,
            plan_name_snapshot, plan_version_snapshot, price_vnd_snapshot,
-           billing_cycle_snapshot, duration_months_snapshot,
+           duration_months_snapshot,
             max_active_devices_snapshot, entitlements_snapshot,
             plan_commitment_snapshot, payment_due_at, ipn_accept_until,
             service_terms_version_snapshot, service_terms_hash_snapshot,
             service_terms_content_snapshot)
          VALUES
           ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-            $13, $14, $15, $16, $17, $18, decode($19, 'hex'),
+            $13, $14, $15, $16, $17, decode($18, 'hex'),
             statement_timestamp() + interval '30 minutes',
             statement_timestamp() + interval '30 minutes' +
-              ($20::integer * interval '1 second'),
-            $21, $22, $23)
+              ($19::integer * interval '1 second'),
+            $20, $21, $22)
          RETURNING *`,
         [
           id,
@@ -344,7 +345,6 @@ export class CommerceRepository {
           plan.name,
           plan.version,
           plan.price_vnd,
-          plan.billing_cycle,
           plan.duration_months,
           plan.max_active_devices,
             JSON.stringify(plan.entitlements),
@@ -368,10 +368,10 @@ export class CommerceRepository {
   async findRenewalOffer(customerUserId: string, licenseId: string) {
     const result = await this.pool.query<Record<string, unknown>>(`
       SELECT l.expires_at, l.status, l.plan_id, pl.name AS plan_name, pl.price_vnd,
-        pl.duration_months, pl.status = 'PUBLISHED' AS plan_published,
-        p.status = 'PUBLISHED' AS product_published, p.name AS product_name
+        pl.duration_months, pl.status IN ('PUBLISHED','ARCHIVED') AS plan_published,
+        (p.status IN ('PUBLISHED','ARCHIVED') AND provider.status='ACTIVE') AS product_published, p.name AS product_name
       FROM licenses l JOIN plans pl ON pl.id = l.plan_id
-      JOIN products p ON p.id = l.product_id
+      JOIN products p ON p.id = l.product_id JOIN users provider ON provider.id=p.provider_user_id
       WHERE l.id = $1 AND l.customer_user_id = $2`, [licenseId, customerUserId]);
     const row = result.rows[0];
     return row ? {

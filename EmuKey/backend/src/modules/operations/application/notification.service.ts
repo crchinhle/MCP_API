@@ -14,7 +14,7 @@ export interface NotificationCreateInput {
 }
 
 export interface NotificationRecord {
-  deliveryStatus: string;
+  deliveryStatus?: string;
   id: string;
   isRead: boolean;
   userId?: string;
@@ -55,6 +55,7 @@ export class NotificationService {
 
   registerPushToken(actor: AuthPrincipal, token: string, provider: 'FCM' | 'EXPO') {
     if (!['CUSTOMER', 'SUPPORT_STAFF', 'PROVIDER_ADMIN'].includes(actor.role)) throw new ForbiddenException();
+    if (provider !== 'FCM') throw new BadRequestException({ code: 'UNSUPPORTED_PUSH_PROVIDER' });
     return this.repository.registerPushToken(actor.sub, token, provider);
   }
 

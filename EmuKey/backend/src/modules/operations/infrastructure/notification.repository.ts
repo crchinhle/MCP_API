@@ -18,25 +18,36 @@ export class NotificationRepository {
   constructor(private readonly pool: Pool) {}
 
   async enqueueInTransaction(client: PoolClient, input: NotificationCreateInput): Promise<NotificationRecord> {
+    // Lock the logical event so retries never add devices registered after its creation.
+    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`notification:${input.userId}:${input.eventKey}`]);
+    const existing = await client.query<NotificationRecord>(`SELECT id, (read_at IS NOT NULL) AS "isRead" FROM notifications WHERE user_id=$1 AND event_key=$2`, [input.userId, input.eventKey]);
+    if (existing.rows[0]) return existing.rows[0];
     const result = await client.query<NotificationRecord>(
-      `INSERT INTO notifications (user_id, event_key, type, title, content, data, channel)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       ON CONFLICT (user_id, event_key, channel) DO UPDATE SET updated_at = notifications.updated_at
-       RETURNING id, user_id, event_key, type, title, content, data, channel, delivery_status, is_read, created_at`,
-      [input.userId, input.eventKey, input.type, input.title, input.content, JSON.stringify(input.data), input.channel],
+      `INSERT INTO notifications (user_id, event_key, type, title, content, data, inbox_visible)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, user_id AS "userId", FALSE AS "isRead"`,
+      [input.userId, input.eventKey, input.type, input.title, input.content, JSON.stringify(input.data), input.channel !== 'EMAIL'],
     );
-    return result.rows[0]!;
+    const notification = result.rows[0]!;
+    if (input.channel === 'EMAIL') {
+      await client.query(`INSERT INTO notification_deliveries (notification_id,channel,destination_key)
+        SELECT $1,'EMAIL',email FROM users WHERE id=$2`, [notification.id,input.userId]);
+    } else {
+      await client.query(`INSERT INTO notification_deliveries (notification_id,channel,push_token_id,token_generation,destination_key)
+        SELECT $1,'PUSH',id,generation,id::text || ':' || generation FROM mobile_push_tokens
+        WHERE user_id=$2 AND status='ACTIVE' AND provider='FCM'`, [notification.id,input.userId]);
+    }
+    return notification;
   }
 
   async create(input: NotificationCreateInput): Promise<NotificationRecord> {
-    const result = await this.pool.query<NotificationRecord>(
-      `INSERT INTO notifications (user_id, event_key, type, title, content, data, channel)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       ON CONFLICT (user_id, event_key, channel) DO UPDATE SET updated_at = notifications.updated_at
-       RETURNING id, user_id, event_key, type, title, content, data, channel, delivery_status, is_read, created_at`,
-      [input.userId, input.eventKey, input.type, input.title, input.content, JSON.stringify(input.data), input.channel],
-    );
-    return result.rows[0]!;
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await this.enqueueInTransaction(client, input);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) { await client.query('ROLLBACK'); throw error; }
+    finally { client.release(); }
   }
 
   async list(userId: string, options: { cursor?: string; limit: number }): Promise<{ items: ReturnType<typeof mapNotification>[]; nextCursor: string | null }> {
@@ -55,8 +66,8 @@ export class NotificationRepository {
     }
     values.push(options.limit + 1);
     const result = await this.pool.query<NotificationRow>(
-      `SELECT id, user_id, event_key, type, title, content, data, channel, delivery_status, is_read, created_at, read_at
-       FROM notifications WHERE user_id = $1${cursorClause}
+      `SELECT id, user_id, event_key, type, title, content, data, (read_at IS NOT NULL) AS is_read, created_at, read_at
+       FROM notifications WHERE user_id = $1 AND inbox_visible${cursorClause}
        ORDER BY created_at DESC, id DESC LIMIT $${values.length}`,
       values,
     );
@@ -71,8 +82,8 @@ export class NotificationRepository {
 
   async markRead(userId: string, notificationId: string): Promise<ReturnType<typeof mapNotification> | null> {
     const result = await this.pool.query<NotificationRow>(
-      `UPDATE notifications SET is_read = TRUE, read_at = COALESCE(read_at, now()), updated_at = now()
-       WHERE id = $1 AND user_id = $2 RETURNING id, type, title, content, is_read, created_at, read_at, data`,
+      `UPDATE notifications SET read_at = COALESCE(read_at, now()), updated_at = now()
+       WHERE id = $1 AND user_id = $2 AND inbox_visible RETURNING id, type, title, content, (read_at IS NOT NULL) AS is_read, created_at, read_at, data`,
       [notificationId, userId],
     );
     return result.rows[0] ? mapNotification(result.rows[0]) : null;
@@ -83,24 +94,29 @@ export class NotificationRepository {
       `INSERT INTO mobile_push_tokens (user_id, token, provider, status, last_seen_at, invalidated_at)
        VALUES ($1, $2, $3, 'ACTIVE', now(), NULL)
         ON CONFLICT (token) DO UPDATE SET provider = EXCLUDED.provider,
+          user_id = EXCLUDED.user_id,
+          generation = mobile_push_tokens.generation + CASE WHEN mobile_push_tokens.user_id <> EXCLUDED.user_id OR mobile_push_tokens.status <> 'ACTIVE' THEN 1 ELSE 0 END,
           status = 'ACTIVE', last_seen_at = now(), invalidated_at = NULL, updated_at = now()
        RETURNING id, provider, status, last_seen_at`,
       [userId, token, provider],
     );
+    await this.cancelStaleDeliveries();
     return result.rows[0]!;
   }
 
   async unregisterPushToken(userId: string, token: string) {
     const result = await this.pool.query<NotificationRecord>(
-      `UPDATE mobile_push_tokens SET status = 'INVALID', invalidated_at = now(), updated_at = now()
+      `UPDATE mobile_push_tokens SET status = 'INVALID', generation = generation + 1, invalidated_at = now(), updated_at = now()
        WHERE user_id = $1 AND token = $2 RETURNING id, status, invalidated_at`,
       [userId, token],
     );
+    await this.cancelStaleDeliveries();
     return result.rows[0] ?? null;
   }
 
-  async invalidatePushToken(token: string): Promise<void> {
-    await this.pool.query(`UPDATE mobile_push_tokens SET status = 'INVALID', invalidated_at = now(), updated_at = now() WHERE token = $1`, [token]);
+  async invalidatePushToken(token: string, generation: number): Promise<void> {
+    await this.pool.query(`UPDATE mobile_push_tokens SET status = 'INVALID', generation = generation + 1, invalidated_at = now(), updated_at = now() WHERE token = $1 AND generation = $2`, [token, generation]);
+    await this.cancelStaleDeliveries();
   }
 
   async healthSummary(): Promise<{ conversations: { supportActive: number; waitingSupport: number }; notifications: { deadLetter: number; pending: number; retryableFailed: number } }> {
@@ -108,9 +124,9 @@ export class NotificationRepository {
       `SELECT
          (SELECT count(*) FROM conversations WHERE status = 'WAITING_SUPPORT') AS waiting_support,
          (SELECT count(*) FROM conversations WHERE status = 'SUPPORT_ACTIVE') AS support_active,
-         (SELECT count(*) FROM notifications WHERE delivery_status = 'PENDING') AS notification_pending,
-         (SELECT count(*) FROM notifications WHERE delivery_status = 'RETRYABLE_FAILED') AS notification_retryable,
-         (SELECT count(*) FROM notifications WHERE delivery_status = 'DEAD_LETTER') AS notification_dead_letter`,
+         (SELECT count(*) FROM notification_deliveries WHERE delivery_status = 'PENDING') AS notification_pending,
+         (SELECT count(*) FROM notification_deliveries WHERE delivery_status = 'RETRYABLE_FAILED') AS notification_retryable,
+         (SELECT count(*) FROM notification_deliveries WHERE delivery_status = 'DEAD_LETTER') AS notification_dead_letter`,
     );
     const row = result.rows[0]!;
     return {
@@ -119,34 +135,52 @@ export class NotificationRepository {
     };
   }
 
-  async claimNext(workerId: string, leaseSeconds = 300): Promise<(NotificationRecord & { attemptCount: number; channel: 'EMAIL' | 'PUSH'; eventKey: string; title: string; content: string; data: Record<string, unknown>; type: string; userId: string; email: string; pushToken: string | null }) | null> {
-    const result = await this.pool.query<NotificationRecord & { attemptCount: number; channel: 'EMAIL' | 'PUSH'; eventKey: string; title: string; content: string; data: Record<string, unknown>; type: string; userId: string; email: string; pushToken: string | null }>(
+  private async cancelStaleDeliveries(): Promise<void> {
+    await this.pool.query(`UPDATE notification_deliveries d SET delivery_status='CANCELLED',
+      lease_owner=NULL, lease_expires_at=NULL, next_attempt_at=NULL, updated_at=now()
+      FROM notifications n, mobile_push_tokens t
+      WHERE d.notification_id=n.id AND d.push_token_id=t.id
+        AND d.delivery_status IN ('PENDING','RETRYABLE_FAILED')
+        AND (t.user_id<>n.user_id OR t.generation<>d.token_generation OR t.status<>'ACTIVE')`);
+  }
+
+  async claimNext(workerId: string, leaseSeconds = 300) {
+    await this.cancelStaleDeliveries();
+    const result = await this.pool.query<NotificationRecord & { notificationId: string; tokenGeneration: number; attemptCount: number; channel: 'EMAIL' | 'PUSH'; eventKey: string; title: string; content: string; data: Record<string, unknown>; type: string; userId: string; email: string; pushToken: string | null }>(
       `WITH candidate AS (
-         SELECT id FROM notifications
-          WHERE channel <> 'IN_APP' AND delivery_status IN ('PENDING', 'RETRYABLE_FAILED')
-            AND (next_attempt_at IS NULL OR next_attempt_at <= now() OR lease_expires_at <= now())
-         ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 1
-        ), claimed AS (
-        UPDATE notifications n SET delivery_status = 'RETRYABLE_FAILED', attempt_count = attempt_count + 1,
-          lease_owner = $1, lease_expires_at = now() + ($2 * interval '1 second'),
-          next_attempt_at = now() + ($2 * interval '1 second'), last_error = $3, updated_at = now()
-       FROM candidate WHERE n.id = candidate.id
-       RETURNING n.*
-       ) SELECT c.id, c.user_id AS "userId", u.email, token.token AS "pushToken", c.event_key AS "eventKey", c.type,
-          c.title, c.content, c.data, c.channel, c.attempt_count AS "attemptCount",
-          c.delivery_status AS "deliveryStatus", c.is_read AS "isRead"
-       FROM claimed c JOIN users u ON u.id = c.user_id
-       LEFT JOIN LATERAL (SELECT token FROM mobile_push_tokens WHERE user_id = c.user_id AND status = 'ACTIVE' ORDER BY updated_at DESC LIMIT 1) token ON TRUE`,
-       [`CLAIMED_BY:${workerId}`, leaseSeconds, `CLAIMED_BY:${workerId}`],
+        SELECT d.id FROM notification_deliveries d
+        WHERE d.delivery_status IN ('PENDING','RETRYABLE_FAILED')
+          AND (d.next_attempt_at IS NULL OR d.next_attempt_at<=now())
+          AND (d.lease_expires_at IS NULL OR d.lease_expires_at<=now())
+        ORDER BY d.created_at,d.id FOR UPDATE SKIP LOCKED LIMIT 1
+      ), claimed AS (
+        UPDATE notification_deliveries d SET delivery_status='RETRYABLE_FAILED',attempt_count=attempt_count+1,
+          lease_owner=$1,lease_expires_at=now()+($2*interval '1 second'),updated_at=now()
+        FROM candidate c WHERE d.id=c.id RETURNING d.*
+      ) SELECT d.id,n.id AS "notificationId",n.user_id AS "userId", d.destination_key AS email,
+        t.token AS "pushToken",d.token_generation AS "tokenGeneration", n.event_key AS "eventKey",n.type,
+        n.title,n.content,n.data,d.channel,d.attempt_count AS "attemptCount",
+        d.delivery_status AS "deliveryStatus",(n.read_at IS NOT NULL) AS "isRead"
+        FROM claimed d JOIN notifications n ON n.id=d.notification_id
+        LEFT JOIN mobile_push_tokens t ON t.id=d.push_token_id AND t.user_id=n.user_id
+          AND t.generation=d.token_generation AND t.status='ACTIVE'`,
+      [`CLAIMED_BY:${workerId}`,leaseSeconds],
     );
     return result.rows[0] ?? null;
   }
 
-  async markSent(id: string, workerId?: string): Promise<void> {
-    await this.pool.query(`UPDATE notifications SET delivery_status = 'SENT', sent_at = now(), next_attempt_at = NULL, lease_owner = NULL, lease_expires_at = NULL, last_error = NULL, updated_at = now() WHERE id = $1 AND ($2::text IS NULL OR lease_owner = $2)`, [id, workerId ?? null]);
+  async markSent(id: string, workerId: string): Promise<void> {
+    await this.cancelStaleDeliveries();
+    await this.pool.query(`UPDATE notification_deliveries SET delivery_status='SENT',sent_at=now(),
+      next_attempt_at=NULL,lease_owner=NULL,lease_expires_at=NULL,last_error=NULL,updated_at=now()
+      WHERE id=$1 AND lease_owner=$2 AND lease_expires_at>now() AND delivery_status='RETRYABLE_FAILED'`, [id,workerId]);
   }
 
-  async markDeliveryFailure(id: string, error: string, deadLetter: boolean, workerId?: string, retryBaseSeconds = 30): Promise<void> {
-    await this.pool.query(`UPDATE notifications SET delivery_status = $2, next_attempt_at = CASE WHEN $3 THEN NULL ELSE now() + (LEAST(3600, $5 * power(2, GREATEST(attempt_count - 1, 0))) * interval '1 second') END, lease_owner = NULL, lease_expires_at = NULL, last_error = $4, updated_at = now() WHERE id = $1 AND ($6::text IS NULL OR lease_owner = $6)`, [id, deadLetter ? 'DEAD_LETTER' : 'RETRYABLE_FAILED', deadLetter, error, retryBaseSeconds, workerId ?? null]);
+  async markDeliveryFailure(id: string, error: string, deadLetter: boolean, workerId: string, retryBaseSeconds = 30): Promise<void> {
+    await this.pool.query(`UPDATE notification_deliveries SET delivery_status=$2,
+      next_attempt_at=CASE WHEN $3 THEN NULL ELSE now()+(LEAST(3600,$5*power(2,GREATEST(attempt_count-1,0)))*interval '1 second') END,
+      lease_owner=NULL,lease_expires_at=NULL,last_error=$4,updated_at=now()
+      WHERE id=$1 AND lease_owner=$6 AND lease_expires_at>now() AND delivery_status='RETRYABLE_FAILED'`,
+      [id,deadLetter?'DEAD_LETTER':'RETRYABLE_FAILED',deadLetter,error,retryBaseSeconds,workerId]);
   }
 }

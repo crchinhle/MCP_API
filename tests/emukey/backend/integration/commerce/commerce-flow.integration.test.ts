@@ -62,19 +62,7 @@ describe('customer commerce and payment flow', () => {
     ]);
     pool = new Pool({ connectionString: postgres.getConnectionUri() });
     const schema = await readFile(resolve(process.cwd(), 'database/schema.sql'), 'utf8');
-    // Exercise upgrading the pre-policy schema, not only fresh installations.
-    const legacySchema = schema
-      .replace(/\x20{4}service_terms_version_snapshot VARCHAR\(40\),\r?\n\x20{4}service_terms_hash_snapshot CHAR\(64\),\r?\n\x20{4}service_terms_content_snapshot TEXT,\r?\n/, '')
-      .replace(/\x20{4}CONSTRAINT ck_orders_terms_snapshot CHECK \([\s\S]*?\r?\n\x20{4}\),\r?\n\x20{4}CONSTRAINT ck_orders_payment_gate/, '    CONSTRAINT ck_orders_payment_gate')
-      .replace(/\x20{11}NEW\.created_at,\r?\n\x20{11}NEW\.service_terms_version_snapshot, NEW\.service_terms_hash_snapshot,\r?\n\x20{11}NEW\.service_terms_content_snapshot\)\r?\n\x20{7}IS DISTINCT FROM\r?\n\x20{7}ROW\(([^]*?)\x20{11}OLD\.created_at,\r?\n\x20{11}OLD\.service_terms_version_snapshot, OLD\.service_terms_hash_snapshot,\r?\n\x20{11}OLD\.service_terms_content_snapshot\) THEN/, '           NEW.created_at)\n       IS DISTINCT FROM\n       ROW($1           OLD.created_at) THEN')
-      .replace(/\x20{4}timing_basis VARCHAR\(30\)[\s\S]*?CHECK \(timing_basis IN \('PROVIDER', 'SANDBOX_RECEIPT'\)\),\r?\n/, '')
-      .replace(/-- Sandbox receipt timing[\s\S]*?(?=-- Callers supply provider_occurred_at)/, '')
-      .replaceAll('payment_effective_time(pt)', 'pt.provider_occurred_at')
-      .replaceAll('payment_effective_time(NEW)', 'NEW.provider_occurred_at');
-    await pool.query(legacySchema);
-    await pool.query(await readFile(resolve(process.cwd(), 'database/migrations/20260928-sandbox-payment-timing.sql'), 'utf8'));
-    await pool.query(await readFile(resolve(process.cwd(), 'database/migrations/20260929-order-auto-cancellation.sql'), 'utf8'));
-    await pool.query(await readFile(resolve(process.cwd(), 'database/migrations/20260930-order-service-terms-snapshot.sql'), 'utf8'));
+    await pool.query(schema);
     await seedBaseline(pool, 'Commerce-test@123');
     redis = new Redis(redisContainer.getConnectionUrl());
     const envelopes = new RedisActivationEnvelope(redis, '00'.repeat(32));
@@ -128,6 +116,9 @@ describe('customer commerce and payment flow', () => {
     await events.confirm(event.id, 2, blockHash);
     await expect(service.createOrder(customer, randomUUID(), undefined, { planId: plan.id, targetLicenseId: payment.licenseId! })).rejects.toMatchObject({ response: { code: 'PROVIDER_NAMESPACE_CAPABILITY_NOT_CONFIGURED' } });
     const moved = enabled(`0x${'56'.repeat(20)}`);
+    await pool.query("UPDATE plans SET status='ARCHIVED' WHERE id=$1", [plan.id]);
+    expect((await moved.renewalPreview(customer, payment.licenseId!)).canRenew).toBe(true);
+    await expect(moved.createOrder(customer, randomUUID(), undefined, { planId, targetLicenseId: payment.licenseId! })).rejects.toBeDefined();
     const renewal = await moved.createOrder(customer, randomUUID(), undefined, { planId: plan.id, targetLicenseId: payment.licenseId! });
     const renewalTerms = await moved.getServiceTerms(customer, renewal.id);
     await moved.acceptServiceTerms(customer, renewal.id, { accepted: true, hash: renewalTerms.hash, version: renewalTerms.version });
@@ -258,13 +249,13 @@ describe('customer commerce and payment flow', () => {
     const termsPendingId = '00000000-0000-4000-8000-000000000715';
     for (const fixtureId of [overdueId, termsPendingId]) await pool.query(`INSERT INTO orders (id, order_number, idempotency_key, customer_user_id, provider_user_id,
       product_id, plan_id, order_type, provider_name_snapshot, product_name_snapshot, plan_name_snapshot,
-      plan_version_snapshot, price_vnd_snapshot, billing_cycle_snapshot, duration_months_snapshot,
+      plan_version_snapshot, price_vnd_snapshot,  duration_months_snapshot,
       max_active_devices_snapshot, entitlements_snapshot, plan_commitment_snapshot,
       service_terms_version_snapshot, service_terms_hash_snapshot, service_terms_content_snapshot,
       payment_due_at, ipn_accept_until)
       SELECT $2::uuid, 'TIMEOUT-' || $2::text, $2::uuid, customer_user_id, provider_user_id, product_id, plan_id, order_type,
       provider_name_snapshot, product_name_snapshot, plan_name_snapshot, plan_version_snapshot, price_vnd_snapshot,
-      billing_cycle_snapshot, duration_months_snapshot, max_active_devices_snapshot, entitlements_snapshot,
+       duration_months_snapshot, max_active_devices_snapshot, entitlements_snapshot,
       plan_commitment_snapshot, service_terms_version_snapshot, service_terms_hash_snapshot, service_terms_content_snapshot,
       statement_timestamp()+interval '2 seconds', statement_timestamp()+interval '60 seconds'
       FROM orders WHERE id=$1`, [original.id, fixtureId]);

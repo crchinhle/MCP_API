@@ -26,12 +26,12 @@ export class NotificationProcessor extends WorkerHost {
     if (!notification) return;
     try {
       if (notification.channel === 'EMAIL') await this.email.deliver({ data: notification.data, eventKey: notification.eventKey, template: notification.type, to: notification.email });
-      else if (notification.pushToken) await this.push.deliver({ body: notification.content, data: notification.data, eventKey: notification.eventKey, title: notification.title, token: notification.pushToken });
+      else if (notification.pushToken) await this.push.deliver({ body: 'Mở ứng dụng để xem thông báo.', data: { notificationId: notification.notificationId }, eventKey: notification.id, title: 'EmuKey', token: notification.pushToken });
       else throw new Error('PUSH_TOKEN_UNAVAILABLE');
       await this.repository.markSent(notification.id, leaseOwner);
     } catch (error) {
       const invalidToken = error instanceof Error && error.name === 'INVALID_PUSH_TOKEN';
-      if (invalidToken && notification.pushToken) await this.repository.invalidatePushToken(notification.pushToken);
+      if (invalidToken && notification.pushToken) await this.repository.invalidatePushToken(notification.pushToken, notification.tokenGeneration);
       await this.repository.markDeliveryFailure(notification.id, error instanceof Error ? error.message : 'DELIVERY_FAILED', invalidToken || notification.attemptCount >= (this.config.get<number>('NOTIFICATION_MAX_ATTEMPTS') ?? 5), leaseOwner, this.config.get<number>('NOTIFICATION_RETRY_BASE_SECONDS') ?? 30);
     }
   }

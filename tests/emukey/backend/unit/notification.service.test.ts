@@ -34,8 +34,9 @@ describe('NotificationService', () => {
     const service = new NotificationService(repository);
     const actor = { role: 'CUSTOMER' as const, sessionVersion: 1, sub: 'user-1' };
 
-    await expect(service.registerPushToken(actor, 'expo-token-123456', 'EXPO')).resolves.toMatchObject({ status: 'ACTIVE' });
-    await expect(service.unregisterPushToken(actor, 'expo-token-123456')).resolves.toMatchObject({ status: 'INVALID' });
-    expect(repository.registerPushToken).toHaveBeenCalledWith('user-1', 'expo-token-123456', 'EXPO');
+    expect(() => service.registerPushToken(actor, 'unsupported-token', 'EXPO')).toThrow('Bad Request');
+    await expect(service.registerPushToken(actor, 'fcm-token-123456', 'FCM')).resolves.toMatchObject({ status: 'ACTIVE' });
+    await expect(service.unregisterPushToken(actor, 'fcm-token-123456')).resolves.toMatchObject({ status: 'INVALID' });
+    expect(repository.registerPushToken).toHaveBeenCalledWith('user-1', 'fcm-token-123456', 'FCM');
   });
 });

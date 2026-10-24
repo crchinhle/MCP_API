@@ -27,6 +27,11 @@ describe('provider-scoped catalog lifecycle', () => {
     sub: '00000000-0000-4000-8000-000000000012',
   };
 
+  it('keeps published plan price and rights immutable even through SQL', async () => {
+    await expect(pool.query("UPDATE plans SET price_vnd=price_vnd+1 WHERE id='00000000-0000-4000-8000-000000000301'"))
+      .rejects.toMatchObject({ code: '23514' });
+  });
+
   beforeAll(async () => {
     container = await new PostgreSqlContainer('pgvector/pgvector:pg15')
       .withDatabase('emukey_catalog_test')

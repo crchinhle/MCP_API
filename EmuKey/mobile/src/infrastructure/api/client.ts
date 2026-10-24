@@ -24,6 +24,10 @@ import type {
   RenewalPreviewDto,
 } from './generated';
 
+const PUSH_TOKEN_KEY = 'emukey_mobile_push_token';
+let pushRegistrationGeneration = 0;
+let pushRegistrationWork: Promise<void> = Promise.resolve();
+
 const SESSION_KEY = 'emukey_mobile_session_v1';
 const ACTIVATION_KEY_PREFIX = 'emukey_activation_key_v1_';
 const IDEMPOTENCY_PREFIX = 'emukey_order_intent_v1_';
@@ -187,9 +191,14 @@ export async function login(email: string, password: string): Promise<MobileSess
 }
 
 export async function logout(): Promise<void> {
+  pushRegistrationGeneration += 1;
+  await pushRegistrationWork.catch(() => undefined);
   try {
-    await request('/auth/logout', { method: 'POST' });
+    const token = await SecureStore.getItemAsync(PUSH_TOKEN_KEY);
+    try { if (token) await removePushToken(token); }
+    finally { await request('/auth/logout', { method: 'POST' }); }
   } finally {
+    await SecureStore.deleteItemAsync(PUSH_TOKEN_KEY);
     await saveSession(null);
   }
 }
@@ -393,8 +402,42 @@ export async function markNotificationRead(notificationId: string): Promise<Mobi
 
 export async function registerPushToken(token: string, provider: 'FCM' | 'EXPO'): Promise<void> {
   await json<void>(await request('/notifications/push-tokens', { method: 'POST', body: JSON.stringify({ provider, token }) }));
+  await SecureStore.setItemAsync(PUSH_TOKEN_KEY, token);
 }
 
 export async function removePushToken(token: string): Promise<void> {
   await json<void>(await request('/notifications/push-tokens/remove', { method: 'POST', body: JSON.stringify({ token }) }));
+}
+
+// Native tokens from Expo Notifications are FCM on Android, APNs on iOS.
+// The installed backend adapter supports FCM; never label an APNs token as FCM.
+export function observeDevicePushTokens(): () => void {
+  const generation = ++pushRegistrationGeneration;
+  let subscription: { remove(): void } | undefined;
+  const active = () => generation === pushRegistrationGeneration;
+  const register = (token: string) => {
+    pushRegistrationWork = pushRegistrationWork.catch(() => undefined).then(async () => {
+      if (!active()) return;
+      const previous = await SecureStore.getItemAsync(PUSH_TOKEN_KEY);
+      if (!active()) return;
+      if (previous && previous !== token) await removePushToken(previous);
+      if (active()) await registerPushToken(token, 'FCM');
+    });
+    void pushRegistrationWork.catch(() => undefined);
+  };
+  void (async () => {
+    const { Platform } = await import('react-native');
+    if (Platform.OS !== 'android' || !active()) return;
+    const notifications = await import('expo-notifications');
+    await notifications.setNotificationChannelAsync('default', { name: 'EmuKey', importance: notifications.AndroidImportance.DEFAULT });
+    const existing = await notifications.getPermissionsAsync();
+    if (!active()) return;
+    const permission = existing.granted ? existing : await notifications.requestPermissionsAsync();
+    if (!permission.granted || !active()) return;
+    const token = await notifications.getDevicePushTokenAsync();
+    if (!active()) return;
+    register(String(token.data));
+    subscription = notifications.addPushTokenListener((next) => { if (active()) register(String(next.data)); });
+  })().catch(() => { /* Push setup must not block account access; retried on next login. */ });
+  return () => { if (active()) pushRegistrationGeneration += 1; subscription?.remove(); };
 }

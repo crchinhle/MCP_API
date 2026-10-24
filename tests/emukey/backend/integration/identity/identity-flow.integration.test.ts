@@ -133,18 +133,12 @@ describe('identity security flow', () => {
     expect(identities.rows.every((row) => row.provider_chain_address === null)).toBe(true);
   });
 
-  it('upgrades the legacy invitation layout without rewriting legacy tokens or provider chain identity', async () => {
+  it('supports legacy invitation identity and email-only invitations in the final schema', async () => {
     const client = await pool.connect();
     await client.query('BEGIN');
     try {
-      // Disposable Testcontainers database only; rollback restores existing test rows.
-      await client.query('TRUNCATE provider_invitations');
-      // Reconstitute the old constraints on an otherwise identical empty invitation table.
-      await client.query('ALTER TABLE provider_invitations ALTER COLUMN display_name SET NOT NULL, ALTER COLUMN organization_name SET NOT NULL, ALTER COLUMN provider_chain_address SET NOT NULL, ALTER COLUMN provider_chain_namespace SET NOT NULL');
-      await client.query(`INSERT INTO provider_invitations (email, display_name, organization_name, provider_chain_address, provider_chain_namespace, token_hash, invited_by_user_id, expires_at)
-        VALUES ('legacy-layout@example.test', 'Old Owner', 'Old Organization', $1, 'legacy-layout', decode($2, 'hex'), '00000000-0000-4000-8000-000000000001', now() + interval '1 day')`, [`0x${'ef'.repeat(20)}`, '01'.repeat(32)]);
-      const migration = await readFile(resolve(process.cwd(), 'database/migrations/20261021-provider-namespace-onboarding.sql'), 'utf8');
-      await client.query(migration.replace(/^BEGIN;\s*/m, '').replace(/COMMIT;\s*$/m, ''));
+      await client.query(`INSERT INTO provider_invitations (email, provider_chain_address, provider_chain_namespace, token_hash, invited_by_user_id, expires_at)
+        VALUES ('legacy-layout@example.test', $1, 'legacy-layout', decode($2, 'hex'), '00000000-0000-4000-8000-000000000001', now() + interval '1 day')`, [`0x${'ef'.repeat(20)}`, '01'.repeat(32)]);
       const legacy = await client.query("SELECT provider_chain_address, provider_chain_namespace, encode(token_hash, 'hex') AS digest FROM provider_invitations WHERE email = 'legacy-layout@example.test'");
       expect(legacy.rows[0]).toEqual({ provider_chain_address: `0x${'ef'.repeat(20)}`, provider_chain_namespace: 'legacy-layout', digest: '01'.repeat(32) });
       await client.query(`INSERT INTO provider_invitations (email, token_hash, invited_by_user_id, expires_at) VALUES ('email-only-layout@example.test', decode($1, 'hex'), '00000000-0000-4000-8000-000000000001', now() + interval '1 day')`, ['02'.repeat(32)]);
@@ -185,7 +179,7 @@ describe('identity security flow', () => {
     const email = 'legacy-recipient@example.test';
     await service.inviteProvider(admin, { email });
     const address = `0x${'ef'.repeat(20)}`;
-    await pool.query('UPDATE provider_invitations SET display_name = $2, organization_name = $3, provider_chain_address = $4, provider_chain_namespace = $5 WHERE email = $1', [email, 'Admin supplied name', 'Admin supplied company', address, 'legacy-recipient']);
+    await pool.query('UPDATE provider_invitations SET provider_chain_address = $2, provider_chain_namespace = $3 WHERE email = $1', [email, address, 'legacy-recipient']);
     await service.acceptProviderInvitation(invitationToken, password, profile);
     const identity = await pool.query('SELECT display_name, organization_name, provider_chain_address, provider_chain_namespace FROM users WHERE email = $1', [email]);
     expect(identity.rows[0]).toEqual({ display_name: profile.displayName, organization_name: profile.organizationName, provider_chain_address: address, provider_chain_namespace: 'legacy-recipient' });

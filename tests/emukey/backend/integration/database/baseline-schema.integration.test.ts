@@ -1,4 +1,5 @@
-import { readFile } from 'node:fs/promises';
+import { readDatabaseSql, transactionBody } from '../../../../../EmuKey/backend/src/platform/database/database-cli.js';
+import { readFile, readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -8,6 +9,7 @@ import {
   type StartedPostgreSqlContainer,
 } from '@testcontainers/postgresql';
 import { Client } from 'pg';
+import { verify } from 'argon2';
 
 import { verifyBaselineDatabase } from '../../../../../EmuKey/backend/src/platform/database/verify-baseline-database.js';
 
@@ -17,7 +19,7 @@ describe('account-linked Customer PostgreSQL baseline', () => {
 
   beforeAll(async () => {
     container = await new PostgreSqlContainer('pgvector/pgvector:pg15')
-      .withDatabase('emukey_schema_test')
+      .withDatabase('EmuKey')
       .withUsername('emukey')
       .withPassword('test-password')
       .start();
@@ -38,42 +40,126 @@ describe('account-linked Customer PostgreSQL baseline', () => {
       matchesBaseline: true,
       missingExtensions: [],
       missingTables: [],
-      tables: 18,
+      tables: 19,
     });
+  });
+
+  it('ships one SQL source for the final schema and demo seed', async () => {
+    const files = await readdir(resolve(process.cwd(), 'database'), { recursive: true });
+    expect(files.filter((name) => name.endsWith('.sql'))).toEqual(['schema.sql']);
+  });
+
+  it('omits obsolete profile, lease, token estimate and message receipt fields', async () => {
+    const result = await database.query(`SELECT table_name || '.' || column_name AS field
+      FROM information_schema.columns WHERE table_schema = 'public' AND
+      (table_name, column_name) IN (('provider_invitations','display_name'),
+      ('provider_invitations','organization_name'), ('chain_commands','lease_owner'),
+      ('chain_commands','lease_expires_at'), ('knowledge_chunks','token_count'), ('messages','read_at'),
+      ('plans','provider_user_id'), ('plans','provider_role'), ('plans','billing_cycle'),
+      ('orders','billing_cycle_snapshot'), ('knowledge_documents','provider_user_id'))`);
+    expect(result.rows).toEqual([]);
+  });
+
+  it('rejects dangling typed conversation context at the database boundary', async () => {
+    await database.query('BEGIN');
+    try {
+      const user = await database.query(`INSERT INTO users(email,password_hash,display_name,role,status,customer_type,email_verified_at)
+        VALUES ('context-fk@example.test','hash','Context','CUSTOMER','ACTIVE','INDIVIDUAL',now()) RETURNING id`);
+      await expect(database.query(`INSERT INTO conversations(customer_user_id, product_id)
+        VALUES ($1, 'ffffffff-ffff-4fff-8fff-ffffffffffff')`, [user.rows[0].id])).rejects.toMatchObject({ code: '23503' });
+    } finally { await database.query('ROLLBACK'); }
+  });
+
+  it('seeds the full demo directly from the SQL source only in explicit development mode and can run twice', async () => {
+    const seed = await readDatabaseSql({ demo: true, seedOnly: true });
+    await expect(database.query(seed)).rejects.toThrow('development');
+    await database.query('ROLLBACK');
+    expect((await database.query('SELECT count(*)::int AS total FROM users')).rows[0].total).toBe(0);
+    for (let run = 0; run < 2; run += 1) {
+      await database.query('BEGIN');
+      try {
+        await database.query("SET LOCAL emukey.seed_environment='development'");
+        // A caller's malformed hash must not overwrite the known demo login hash.
+        await database.query("SET LOCAL emukey.seed_password_hash='$argon2id$garbage'");
+        await database.query(transactionBody(seed, 'schema.sql'));
+        await database.query('COMMIT');
+      } catch (error) { await database.query('ROLLBACK'); throw error; }
+    }
+    const counts = (await database.query(`SELECT
+      (SELECT count(*)::int FROM users) AS users,
+      (SELECT count(*)::int FROM products) AS products,
+      (SELECT count(*)::int FROM plans) AS plans,
+      (SELECT count(*)::int FROM licenses) AS licenses,
+      (SELECT count(*)::int FROM chain_events WHERE finality_status='CONFIRMED') AS confirmed_events`)).rows[0];
+    expect(counts).toEqual({ users: 30, products: 50, plans: 30, licenses: 30, confirmed_events: 0 });
+    const account = (await database.query("SELECT password_hash FROM users WHERE email='admin01@demo.emukey.local'")).rows[0];
+    expect(await verify(account.password_hash, 'Emu@1234')).toBe(true);
+    expect(await verifyBaselineDatabase(database)).toMatchObject({ matchesBaseline: true, tables: 19 });
+  });
+
+  it('recreates the final schema by default and removes old public objects without seeding', async () => {
+    const sql = await readFile(resolve(process.cwd(), 'database/schema.sql'), 'utf8');
+    await database.query('BEGIN');
+    try {
+      await database.query('CREATE TABLE obsolete_table (id integer); INSERT INTO obsolete_table VALUES (1)');
+      await database.query(transactionBody(sql, 'schema.sql'));
+      expect((await database.query("SELECT to_regclass('public.obsolete_table') AS name")).rows[0].name).toBeNull();
+      expect((await database.query('SELECT count(*)::int AS total FROM users')).rows[0].total).toBe(0);
+      expect(await verifyBaselineDatabase(database)).toMatchObject({ matchesBaseline: true, tables: 19 });
+      await database.query(transactionBody(sql, 'schema.sql'));
+      expect(await verifyBaselineDatabase(database)).toMatchObject({ matchesBaseline: true, tables: 19 });
+    } finally { await database.query('ROLLBACK'); }
+  });
+
+  it('resets and verifies inside one reversible transaction', async () => {
+    await database.query('BEGIN');
+    try {
+      await database.query("INSERT INTO users (email,password_hash,display_name,role,status) VALUES ('reset-check@example.test','hash','Reset check','SYSTEM_ADMIN','ACTIVE')");
+      await database.query('SAVEPOINT before_reset');
+      await database.query(transactionBody(await readDatabaseSql(), 'schema.sql'));
+      expect((await database.query('SELECT count(*)::int AS total FROM users')).rows[0].total).toBe(0);
+      expect(await verifyBaselineDatabase(database)).toMatchObject({ matchesBaseline: true, tables: 19 });
+      await database.query('ROLLBACK TO SAVEPOINT before_reset');
+      expect((await database.query("SELECT count(*)::int AS total FROM users WHERE email='reset-check@example.test'")).rows[0].total).toBe(1);
+    } finally { await database.query('ROLLBACK'); }
+  });
+
+  it('keeps independent objects in other schemas and disables inherited demo settings in the CLI', async () => {
+    await database.query('BEGIN');
+    try {
+      await database.query('CREATE SCHEMA independent; CREATE TABLE independent.keep_me (id integer); INSERT INTO independent.keep_me VALUES (1)');
+      await database.query("SET LOCAL emukey.seed_demo='true'");
+      await database.query(transactionBody(await readDatabaseSql(), 'schema.sql'));
+      expect((await database.query('SELECT id FROM independent.keep_me')).rows).toEqual([{ id: 1 }]);
+      expect((await database.query('SELECT count(*)::int AS total FROM users')).rows[0].total).toBe(0);
+    } finally { await database.query('ROLLBACK'); }
+  });
+
+  it('initializes and seeds atomically, restoring old data when demo seed fails', async () => {
+    await database.query('CREATE DATABASE emukey_demo_initialize_test');
+    const url = new URL(container.getConnectionUri());
+    url.pathname = '/emukey_demo_initialize_test';
+    const fresh = new Client({ connectionString: url.toString() });
+    await fresh.connect();
+    const combined = transactionBody(await readDatabaseSql({ demo: true }), 'schema.sql');
+    try {
+      await fresh.query('CREATE TABLE old_data (id integer PRIMARY KEY); INSERT INTO old_data VALUES (1)');
+      await fresh.query('BEGIN');
+      await expect(fresh.query(combined)).rejects.toThrow('development');
+      await fresh.query('ROLLBACK');
+      expect((await fresh.query('SELECT id FROM old_data')).rows).toEqual([{ id: 1 }]);
+      await fresh.query('BEGIN');
+      await fresh.query("SET LOCAL emukey.seed_environment='development'");
+      await fresh.query(combined);
+      await fresh.query('COMMIT');
+      expect((await fresh.query("SELECT to_regclass('public.old_data') AS name")).rows[0].name).toBeNull();
+      expect((await fresh.query('SELECT count(*)::int AS total FROM products')).rows[0].total).toBe(50);
+      expect(await verifyBaselineDatabase(fresh)).toMatchObject({ matchesBaseline: true, tables: 19 });
+    } finally { await fresh.query('ROLLBACK'); await fresh.end(); }
   });
 
   it('has no user audit table', async () => {
     expect((await database.query("SELECT to_regclass('public.audit_logs') AS name")).rows).toEqual([{ name: null }]);
-  });
-
-  it('removes legacy audit twice while preserving business rows and constraints', async () => {
-    const migration = await readFile(resolve(process.cwd(), 'database/migrations/20261020-remove-user-audit.sql'), 'utf8');
-    const history = async () => {
-      const rows = [];
-      for (const table of ['users', 'orders', 'payment_transactions', 'licenses', 'chain_commands', 'chain_events']) {
-        rows.push((await database.query(`SELECT jsonb_agg(to_jsonb(t) ORDER BY id) AS data FROM ${table} t`)).rows);
-      }
-      return rows;
-    };
-    // Seed real business rows before proving that the audit migration preserves them.
-    await promisify(execFile)(process.execPath, [resolve(process.cwd(), '../../tooling/emukey/fixtures/seed-demo-data.mjs'), '--yes', '--skip-image-check'], {
-      env: { ...process.env, NODE_ENV: 'development', DATABASE_URL: container.getConnectionUri() },
-    });
-    const before = await history();
-    await database.query(`CREATE TABLE audit_logs (id integer PRIMARY KEY, action text);
-      INSERT INTO audit_logs VALUES (1, 'LEGACY_ACTION');
-      CREATE FUNCTION reject_audit_logs_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
-      BEGIN RAISE EXCEPTION 'audit_logs is append-only'; END; $$;
-      CREATE TRIGGER audit_logs_no_update_or_delete BEFORE UPDATE OR DELETE ON audit_logs
-        FOR EACH ROW EXECUTE FUNCTION reject_audit_logs_mutation();
-      CREATE TRIGGER audit_logs_no_truncate BEFORE TRUNCATE ON audit_logs
-        FOR EACH STATEMENT EXECUTE FUNCTION reject_audit_logs_mutation();`);
-    await database.query(migration);
-    await database.query(migration);
-    expect(await history()).toEqual(before);
-    expect((await database.query("SELECT to_regclass('public.audit_logs') AS name, to_regprocedure('public.reject_audit_logs_mutation()') AS function")).rows)
-      .toEqual([{ name: null, function: null }]);
-    expect(await verifyBaselineDatabase(database)).toMatchObject({ matchesBaseline: true, tables: 18 });
   });
 
   it('owns orders and licenses through customer accounts without controller keys', async () => {
@@ -135,39 +221,6 @@ describe('account-linked Customer PostgreSQL baseline', () => {
     );
     expect(removed.rows).toEqual([]);
     expect((await database.query("SELECT 1 FROM pg_extension WHERE extname = 'vector'")).rows).toEqual([]);
-  });
-
-  it('migrates legacy columns without losing account, guide, message, or audit content and can run twice', async () => {
-    const migration = await readFile(resolve(process.cwd(), 'database/migrations/20261020-remove-unused-columns.sql'), 'utf8');
-    await database.query('CREATE SCHEMA column_removal_test');
-    try {
-      await database.query(`CREATE EXTENSION IF NOT EXISTS vector;
-        SET search_path TO column_removal_test, public;
-        CREATE TABLE users (id integer PRIMARY KEY, display_name text, phone text, representative_name text, tax_code text);
-        CREATE TABLE knowledge_chunks (
-          id integer PRIMARY KEY, content text, embedding vector, embedding_model text, embedding_dimension integer,
-          source_metadata jsonb,
-          CONSTRAINT ck_knowledge_chunks_embedding CHECK (embedding IS NULL OR vector_dims(embedding) = embedding_dimension),
-          CONSTRAINT ck_knowledge_chunks_source_metadata CHECK (jsonb_typeof(source_metadata) = 'object')
-        );
-        CREATE TABLE messages (id integer PRIMARY KEY, content text, model_name text);
-        CREATE TABLE audit_logs (id integer PRIMARY KEY, action text, actor_email_snapshot text);
-        INSERT INTO users VALUES (1, 'Customer', '0123456789', 'Representative', 'TAX');
-        INSERT INTO knowledge_chunks VALUES (1, 'Activation instructions', '[1,2,3]', 'legacy', 3, '{"page":1}');
-        INSERT INTO messages VALUES (1, 'Activate your license first.', 'legacy');
-        INSERT INTO audit_logs VALUES (1, 'PROFILE_UPDATED', 'customer@example.test');`);
-      await database.query(migration);
-      await database.query(migration);
-      expect((await database.query('SELECT * FROM users')).rows).toEqual([{ id: 1, display_name: 'Customer', phone: '0123456789' }]);
-      expect((await database.query('SELECT * FROM knowledge_chunks')).rows).toEqual([{ id: 1, content: 'Activation instructions' }]);
-      expect((await database.query('SELECT * FROM messages')).rows).toEqual([{ id: 1, content: 'Activate your license first.' }]);
-      expect((await database.query('SELECT * FROM audit_logs')).rows).toEqual([{ id: 1, action: 'PROFILE_UPDATED' }]);
-    } finally {
-      await database.query('ROLLBACK');
-      await database.query('SET search_path TO public');
-      await database.query('DROP SCHEMA column_removal_test CASCADE');
-      await database.query('DROP EXTENSION IF EXISTS vector');
-    }
   });
 
   it('requires normalized EVM provider addresses and keeps them unique', async () => {

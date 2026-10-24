@@ -68,55 +68,41 @@ Removing `redis-data` is an explicit destructive clean-room operation and is not
 
 Never commit a real `.env`. The checked-in examples contain placeholders. Production must provide credentials and keys through its secret manager. Both the root and backend Compose files load the real database connection from the ignored `backend/.env`; `REDIS_URL` is overridden inside containers so they can reach the Compose Redis service.
 
-Database initialization is not part of normal `docker compose up`. It applies `backend/database/schema.sql` only when the `public` schema has no tables, then verifies the result. Run it only as an explicit maintenance operation after confirming the target database and backup:
+Database initialization is not part of normal `docker compose up`. The only SQL
+source, `backend/database/schema.sql`, declares the final 18-table structure.
+It has no historical migration modes. **Its default is destructive:** drop schema
+`public` with `CASCADE`, recreate it and build the current structure. Dependent
+objects can also be removed, including dependencies in other schemas. This resets
+the application schema within the selected database; it does not drop the database
+or its roles. Stop the API/worker and confirm the database and recovery backup
+before explicitly running initialization.
+
+From `backend`, build the CLI and initialize only when a reset is intended:
+
+```powershell
+corepack pnpm build
+corepack pnpm db:initialize
+corepack pnpm db:verify
+```
+
+`db:reset` is a compatibility alias for the same operation. Both commands verify
+the final schema before committing; SQL/verification failures roll back the reset.
+The initializer requires ownership of `public` (or equivalent administrative
+privileges). New `public` is owned by `pg_database_owner`; only USAGE is granted
+to PUBLIC. Custom object grants must be reapplied for separate runtime roles.
+EmuKey uses explicit SQL through `pg`, with no ORM or automatic schema mutation.
+
+The Compose maintenance service performs the same destructive initialization:
 
 ```powershell
 docker compose --env-file .env.example --profile maintenance run --rm database-initialize
 ```
 
-The maintenance service reads `DATABASE_URL` from `backend/.env`. EmuKey uses version-controlled PostgreSQL SQL directly through `pg`; no ORM or automatic schema mutation is part of the backend.
-
-### Existing databases: remove unused columns (2026-10-20)
-
-Fresh databases use the reduced `database/schema.sql`. Existing databases require
-`database/migrations/20261020-remove-unused-columns.sql`; initialization does not
-apply migrations. From `backend`, with `DATABASE_URL` set to the intended database:
-
-```powershell
-psql --dbname "$env:DATABASE_URL" --set ON_ERROR_STOP=1 --file database/migrations/20261020-remove-unused-columns.sql
-psql --dbname "$env:DATABASE_URL" --set ON_ERROR_STOP=1 --file database/migrations/20261020-remove-user-audit.sql
-corepack pnpm build
-corepack pnpm db:verify
-```
-
-This migration removes `users.representative_name`, `users.tax_code`,
-`knowledge_chunks.embedding`, `embedding_model`, `embedding_dimension`,
-`source_metadata`, `messages.model_name`, and `audit_logs.actor_email_snapshot`,
-including any values in those columns. Guide text, document files and their storage
-metadata, message content, citations, and remaining business data are retained.
-The separate audit-removal migration below deletes the user activity audit table.
-It is transactional and can run again. Unexpected external dependencies cause an
-error instead of being removed with `CASCADE`.
-
-Knowledge retrieval continues to use PostgreSQL full-text search on guide chunks;
-AI answers use the retrieved sources. New databases require only `pgcrypto` and
-`citext`. The migration leaves an existing `vector` extension installed so it does
-not affect other database objects that may use it.
-
-### Existing databases: remove user activity audit (2026-10-20)
-
-Stop the old API and worker before applying `20261020-remove-user-audit.sql`.
-Apply earlier migrations first, then this migration, then start the new API/worker
-and run `db:verify` and readiness checks. New databases use `schema.sql` directly
-and have 18 tables; do not replay historical migrations on a fresh baseline.
-
-The audit migration deletes `audit_logs` and its private trigger function. It is
-transactional and can run twice. It preserves payment review actors/reasons,
-order/payment history, license state, blockchain commands/events/evidence and
-notification retry state. User activity history and the audit API/UI are removed.
-Reverting code alone cannot restore deleted audit data; restoring an older release
-requires its schema and an appropriate database backup. Runtime logging retains
-technical errors and startup information without logging successful user actions.
+It reads `DATABASE_URL` from the ignored `backend/.env`. There is no `db:migrate`
+command in this fresh-initializer workflow. Preserving an existing deployment's
+data requires a separately reviewed upgrade procedure; do not run this reset
+initializer as an in-place upgrade. New installations require `pgcrypto` and
+`citext`; guide retrieval uses PostgreSQL full-text search.
 
 Development seed data is separate from schema initialization and is never run automatically:
 
@@ -127,6 +113,29 @@ corepack pnpm db:seed
 ```
 
 `db:seed` reads `DATABASE_URL` and `SEED_PASSWORD` from `backend/.env` and is idempotent for the deterministic development fixtures.
+
+The full demo seed is at the bottom of `database/schema.sql`; the workspace
+fixture runner reads the same SQL and JSON data. With `NODE_ENV=development`,
+from `backend`, run:
+
+```powershell
+corepack pnpm db:seed:demo
+# Alternatively, RESET the selected application schema and seed in one transaction:
+corepack pnpm db:initialize --demo
+```
+
+The demo contains 50 products, 30 plans, 30 accounts and related business rows.
+Demo logins include `admin01@demo.emukey.local`, `provider01@demo.emukey.local`,
+`support01@demo.emukey.local`, and `customer01@demo.emukey.local`; the development
+password is `Emu@1234`, stored as an Argon2id hash. Repeated seeds retain the same
+fixture IDs. Demo blockchain rows are fixtures, not confirmed transactions.
+
+In a SQL editor, add both `SET LOCAL emukey.seed_demo='true';` and
+`SET LOCAL emukey.seed_environment='development';` after the outer `BEGIN;`,
+then execute the complete file. **This resets public before seeding.** To seed
+without resetting, use `db:seed:demo`, which extracts only the marked seed block.
+Seed verification and schema creation share the transaction; a failed seed rolls
+everything back. Default initialize/reset operations do not insert demo rows.
 
 ## OpenAPI contract
 
@@ -186,7 +195,7 @@ Public activation challenge and activation share a Redis limit of 30 requests pe
 
 The activation load scenario runs with `node tooling/emukey/load/load-test.mjs --scenario=activation`. Supply `LOAD_ACTIVATION_KEY` and `LOAD_DEVICE_PRIVATE_KEY` through environment variables for a disposable fixture with enough quota for `LOAD_REQUESTS`. It sends public challenge plus signed activation without purchaser authentication. It reports throttled requests separately; missing credentials return exit code 2. Never target a durable customer license.
 
-The current schema includes the aggregate-sync projection fix. Existing databases require explicit application of `EmuKey/backend/database/migrations/20261003-device-sync-canonical-projection.sql` through the normal migration procedure. Cleanup verification applies it only to disposable PostgreSQL; no real database was migrated.
+The final initializer includes the aggregate-sync projection fix. Existing deployments need a separately reviewed data-preserving upgrade; this initializer resets the application schema.
 
 Visual helpers run from UY, for example `node tooling/emukey/run.mjs frontend:visual-regression`; mobile readiness is `node tooling/emukey/run.mjs mobile:check-maestro`. Captures and generated reports are ignored under `docs/emukey/evidence/`; reference images and fixtures remain versioned.
 
@@ -214,3 +223,12 @@ node --env-file=EmuKey/backend/.env tooling/emukey/run.mjs verify:verify-sepolia
 This creates disposable PostgreSQL/Redis, uses the real application commerce path with a test payment adapter, then sends real Sepolia ISSUE and aggregate-sync transactions. Public activation and entitlement use the actual HTTP API without purchaser login. Evidence records receipt/event/projection plus T0-T4; payment evidence here does not claim a real payment-provider callback. The script removes its disposable services at exit and never initializes or resets the configured application database.
 
 Normal CI runs no real blockchain transactions. `.github/workflows/emukey-external.yml` uses manual `run_sepolia=true`, the Sepolia RPC/relayer secrets and v3 address/block variables. Its blockchain smoke owns disposable DB/Redis containers; it does not require staging database credentials.
+
+
+### Mô hình dữ liệu 24/10/2026
+
+Schema mới có 19 bảng, tách `notification_deliveries` khỏi inbox. API/worker cũ không tương thích schema mới; cập nhật cùng phiên bản. `schema.sql` vẫn là initializer xóa public, chỉ dùng khi đã quyết định tạo lại DB. Các kiểm tra trong đợt refactor chạy trên Docker tạm, không cập nhật DB đang sử dụng.
+
+Gia hạn cho phép đúng version đã mua kể cả đã ARCHIVED, với Provider ACTIVE; không đổi gói hoặc khách sở hữu. Plan đã công bố không được sửa giá/quyền trực tiếp.
+
+Android push dùng native FCM (expo-notifications), không dùng Expo push gateway. Bản native phải có Firebase Android configuration tương ứng `app.emukey.mobile`, cấu hình googleServicesFile trong Expo build, và backend phải cấu hình adapter FCM/credentials theo biến môi trường hiện có. Không đưa credentials vào Git. Expo Go không thay thế development/release build để kiểm chứng push. Đợt này đã kiểm thử đăng ký/hủy token và gửi độc lập nhiều thiết bị bằng integration tests; nhận push thật khi app đóng cần kiểm chứng trên thiết bị có cấu hình Firebase.

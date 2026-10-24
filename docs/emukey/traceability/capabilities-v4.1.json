@@ -24,6 +24,7 @@
     "conversations",
     "messages",
     "notifications",
+    "notification_deliveries",
     "mobile_push_tokens"
   ],
   "uniqueOwners": {
@@ -471,6 +472,7 @@
       "api": "notification and push registration endpoints",
       "tables": [
         "notifications",
+        "notification_deliveries",
         "mobile_push_tokens"
       ],
       "transaction": "durable notification before retryable delivery",

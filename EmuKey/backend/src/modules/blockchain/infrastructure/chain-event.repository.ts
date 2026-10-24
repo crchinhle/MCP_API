@@ -426,11 +426,12 @@ export class ChainEventRepository {
           pending_activation_command_id=NULL,
            activation_key_trust_status='PENDING_FINALITY', entitlement_version=GREATEST(entitlement_version, 1),
 
-         expires_at=(issue.payload->>'expiresAt')::timestamptz,
-         activation_commitment=decode(
-           replace(issue.payload->>'activationCommitment','0x',''), 'hex'
+         expires_at=COALESCE((issue.payload->>'expiresAt')::timestamptz, l.expires_at),
+         activation_commitment=COALESCE(
+           decode(replace(issue.payload->>'activationCommitment','0x',''), 'hex'),
+           l.activation_commitment
          ),
-         activation_key_version=(issue.payload->>'keyVersion')::int,
+         activation_key_version=COALESCE((issue.payload->>'keyVersion')::int, l.activation_key_version),
          updated_at=now()
        FROM chain_commands issue
        WHERE l.id=$1 AND issue.license_id=l.id
@@ -499,6 +500,8 @@ export class ChainEventRepository {
     client: PoolClient,
     limit: number,
   ): Promise<Array<{ id: string }>> {
+    // Missing fields in older snapshots are unknown, not evidence of drift.
+    // Confirmed typed key evidence takes precedence over the ISSUE snapshot.
     const result = await client.query<{ id: string }>(
       `SELECT license.id
        FROM licenses license
@@ -531,11 +534,11 @@ export class ChainEventRepository {
          LIMIT 1
        ) renewal_event ON TRUE
        LEFT JOIN LATERAL (
-         SELECT event.payload
+         SELECT event.activation_commitment, event.activation_key_version
          FROM chain_events event
          WHERE event.license_id=license.id
            AND event.finality_status='CONFIRMED'
-           AND event.event_type='KEY_ROTATED'
+           AND event.event_type IN ('LICENSE_ISSUED','KEY_ROTATED')
          ORDER BY event.block_number DESC, event.log_index DESC, event.id DESC
          LIMIT 1
        ) key_event ON TRUE
@@ -551,30 +554,33 @@ export class ChainEventRepository {
           WHERE license.status IS DISTINCT FROM CASE status_event.event_type
             WHEN 'LICENSE_ISSUED' THEN CASE WHEN COALESCE(
               (renewal_event.payload->>'expiresAt')::timestamptz,
-              (issue.payload->>'expiresAt')::timestamptz
+              (issue.payload->>'expiresAt')::timestamptz,
+              license.expires_at
             ) <= now() THEN 'EXPIRED' ELSE 'ACTIVE' END
             WHEN 'LICENSE_SUSPENDED' THEN 'SUSPENDED'
             WHEN 'LICENSE_RESUMED' THEN CASE WHEN COALESCE(
               (renewal_event.payload->>'expiresAt')::timestamptz,
-              (issue.payload->>'expiresAt')::timestamptz
+              (issue.payload->>'expiresAt')::timestamptz,
+              license.expires_at
             ) <= now() THEN 'EXPIRED' ELSE 'ACTIVE' END
            WHEN 'LICENSE_REVOKED' THEN 'REVOKED'
              ELSE 'PENDING_ONCHAIN'
           END
          OR license.expires_at IS DISTINCT FROM COALESCE(
            (renewal_event.payload->>'expiresAt')::timestamptz,
-           (issue.payload->>'expiresAt')::timestamptz
+           (issue.payload->>'expiresAt')::timestamptz,
+           license.expires_at
          )
          OR license.activation_key_version IS DISTINCT FROM COALESCE(
-           (key_event.payload->>'keyVersion')::int,
-           (issue.payload->>'keyVersion')::int
+           key_event.activation_key_version,
+           (issue.payload->>'keyVersion')::int,
+           license.activation_key_version
          )
-         OR license.activation_commitment IS DISTINCT FROM decode(replace(
-           COALESCE(
-             key_event.payload->>'activationCommitment',
-             issue.payload->>'activationCommitment'
-           ), '0x', ''
-         ), 'hex')
+         OR license.activation_commitment IS DISTINCT FROM COALESCE(
+           key_event.activation_commitment,
+           decode(replace(issue.payload->>'activationCommitment', '0x', ''), 'hex'),
+           license.activation_commitment
+         )
          OR license.last_applied_chain_event_id IS DISTINCT FROM last_event.id
          OR license.suspended_at IS DISTINCT FROM CASE
            WHEN status_event.event_type='LICENSE_SUSPENDED'

@@ -124,29 +124,26 @@ async function seedCatalog(database: DatabaseClient): Promise<void> {
   );
   await database.query(
     `INSERT INTO plans (
-      id, product_id, provider_user_id, code, version, name, billing_cycle,
+      id, product_id, code, version, name,
        duration_months, price_vnd, max_active_devices, entitlements,
        plan_commitment, status, published_at
     ) VALUES
       (
         '00000000-0000-4000-8000-000000000301',
         '00000000-0000-4000-8000-000000000200',
-        '00000000-0000-4000-8000-000000000002',
-        'STARTER', 1, 'Starter', 'MONTHLY', 1, 300000, 1,
+        'STARTER', 1, 'Starter', 1, 300000, 1,
          '{"desktop": true}'::jsonb, decode($1, 'hex'), 'PUBLISHED', '2026-09-08T00:00:00Z'
       ),
       (
         '00000000-0000-4000-8000-000000000302',
         '00000000-0000-4000-8000-000000000200',
-        '00000000-0000-4000-8000-000000000002',
-        'PROFESSIONAL', 1, 'Professional', 'YEARLY', 12, 900000, 3,
+        'PROFESSIONAL', 1, 'Professional', 12, 900000, 3,
        '{"desktop": true}'::jsonb, decode($2, 'hex'), 'PUBLISHED', '2026-09-08T00:00:00Z'
       ),
       (
         '00000000-0000-4000-8000-000000000303',
         '00000000-0000-4000-8000-000000000200',
-        '00000000-0000-4000-8000-000000000002',
-        'BUSINESS', 1, 'Business', 'YEARLY', 12, 1800000, 5,
+        'BUSINESS', 1, 'Business', 12, 1800000, 5,
        '{"desktop": true, "priority_support": true}'::jsonb, decode($3, 'hex'), 'PUBLISHED', '2026-09-08T00:00:00Z'
       )
     ON CONFLICT (product_id, code, version) DO NOTHING`,

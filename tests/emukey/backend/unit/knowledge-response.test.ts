@@ -4,6 +4,23 @@ import { KnowledgeRepository } from '../../../../EmuKey/backend/src/modules/assi
 import { KnowledgeService } from '../../../../EmuKey/backend/src/modules/assistance-support/knowledge.service.js';
 
 describe('knowledge public response', () => {
+  it('keeps identical uploads for different products in separate storage objects', async () => {
+    const query = vi.fn().mockImplementation((sql: string) => {
+      if (sql.startsWith('SELECT id FROM products')) return Promise.resolve({ rows: [{ id: 'product' }] });
+      if (sql.startsWith('INSERT INTO knowledge_documents')) return Promise.resolve({ rows: [{ id: 'document' }] });
+      return Promise.resolve({ rows: [] });
+    });
+    const storage = { put: vi.fn().mockResolvedValue(undefined), delete: vi.fn(), get: vi.fn() };
+    const repository = new KnowledgeRepository({ connect: vi.fn().mockResolvedValue({ query, release: vi.fn() }) } as unknown as Pool, storage);
+    for (const productId of ['product-a', 'product-b']) {
+      await repository.create({ sub: 'provider', role: 'PROVIDER_ADMIN', sessionVersion: 1 }, {
+        productId, logicalDocumentKey: 'guide', title: 'Guide', sourceType: 'TXT',
+        file: { originalname: 'guide.txt', mimetype: 'text/plain', size: 12, buffer: Buffer.from('Instructions') },
+      });
+    }
+    expect(storage.put).toHaveBeenCalledTimes(2);
+    expect(storage.put.mock.calls[0][0]).not.toBe(storage.put.mock.calls[1][0]);
+  });
   it('does not let providers approve their own guides', async () => {
     const repository = new KnowledgeRepository({} as Pool);
     const publish = vi.spyOn(repository, 'publish');

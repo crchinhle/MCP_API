@@ -21,8 +21,8 @@ import { NotificationRepository } from '../../operations/infrastructure/notifica
 function mapConversation(row: Record<string, unknown>): ConversationRecord {
   return {
     assignedSupportUserId: typeof row.assigned_support_user_id === 'string' ? row.assigned_support_user_id : null,
-    contextId: typeof row.context_id === 'string' ? row.context_id : null,
-    contextType: String(row.context_type) as ConversationContextType,
+    contextId: (row.product_id ?? row.plan_id ?? row.order_id ?? row.license_id ?? null) as string | null,
+    contextType: row.product_id ? 'PRODUCT' : row.plan_id ? 'PLAN' : row.order_id ? 'ORDER' : row.license_id ? 'LICENSE' : 'GENERAL',
     customerUserId: String(row.customer_user_id),
     id: String(row.id),
     status: String(row.status) as ConversationStatus,
@@ -69,8 +69,9 @@ export class AssistanceSupportRepository {
       if (!visible.rows[0]) throw new Error('CONVERSATION_CONTEXT_NOT_FOUND');
     }
     const result = await this.pool.query<Record<string, unknown>>(
-      `INSERT INTO conversations (customer_user_id, context_type, context_id, title)
-       VALUES ($1, $2, $3, $4) RETURNING *`,
+      `INSERT INTO conversations (customer_user_id, product_id, plan_id, order_id, license_id, title)
+       VALUES ($1, CASE WHEN $2='PRODUCT' THEN $3::uuid END, CASE WHEN $2='PLAN' THEN $3::uuid END,
+         CASE WHEN $2='ORDER' THEN $3::uuid END, CASE WHEN $2='LICENSE' THEN $3::uuid END, $4) RETURNING *`,
       [customerUserId, contextType, input.contextId ?? null, input.title ?? null],
     );
     return mapConversation(result.rows[0]!);

@@ -130,9 +130,6 @@ describe('customer durable license and device invariants without a local blockch
     pool = new Pool({ connectionString: postgres.getConnectionUri() });
     const schema = await readFile(resolve(process.cwd(), 'database/schema.sql'), 'utf8');
     await pool.query(schema);
-    await pool.query(
-      await readFile(resolve(process.cwd(), 'database/migrations/20261003-device-sync-canonical-projection.sql'), 'utf8'),
-    );
     await seedBaseline(pool, 'Sepolia-freeze@123');
     redis = new Redis(redisContainer.getConnectionUrl());
     envelopes = new RedisActivationEnvelope(redis, '11'.repeat(32));
@@ -421,6 +418,69 @@ describe('customer durable license and device invariants without a local blockch
       remainingMismatches: 0,
     });
     await expect(queries.find(customer, licenseId)).resolves.toMatchObject({ id: licenseId, status: 'ACTIVE' });
+  });
+
+  it.each([false, true])('preserves submitted ISSUE evidence when an older snapshot has no key or expiry fields (pointer drift: %s)', async (pointerDrift) => {
+    // Reproduce the existing demo fixture shape without weakening runtime guards.
+    const fixture = await pool.connect();
+    try {
+      await fixture.query('SET session_replication_role = replica');
+      await fixture.query(
+        `UPDATE chain_commands SET payload=jsonb_build_object('seedNamespace','legacy-demo','licenseId',license_id),
+           status='DEAD_LETTER', confirmed_at=NULL, confirmation_chain_event_id=NULL WHERE id=$1`,
+        [issueCommand],
+      );
+      await fixture.query("UPDATE chain_events SET finality_status='PENDING', finalized_at=NULL WHERE chain_command_id=$1", [issueCommand]);
+      await fixture.query(
+        `UPDATE licenses SET status='PENDING_ONCHAIN', last_applied_chain_event_id=NULL,
+           activation_key_trust_status='PENDING_FINALITY' WHERE id=$1`,
+        [licenseId],
+      );
+      if (pointerDrift) await fixture.query(
+        'UPDATE licenses SET last_applied_chain_event_id=(SELECT id FROM chain_events WHERE chain_command_id=$2) WHERE id=$1',
+        [licenseId, issueCommand],
+      );
+    } finally {
+      await fixture.query('SET session_replication_role = origin');
+      fixture.release();
+    }
+    const snapshot = async () => (await pool.query(
+      `SELECT l.status, l.expires_at, l.activation_commitment, l.activation_key_version,
+         l.activation_key_trust_status, c.payload, c.payload_hash, c.nonce,
+         c.signed_transaction, c.transaction_hash FROM licenses l
+       JOIN chain_commands c ON c.license_id=l.id WHERE c.id=$1`, [issueCommand],
+    )).rows[0];
+    const before = await snapshot();
+    await expect(eventRepository.reconcileCanonicalProjections()).resolves.toMatchObject({
+      licenseRepairs: pointerDrift ? 1 : 0, commandRepairs: 0, remainingMismatches: 0,
+    });
+    await expect(snapshot()).resolves.toEqual(before);
+    await expect(eventRepository.reconcileCanonicalProjections()).resolves.toMatchObject({ licenseRepairs: 0 });
+    await expect(pool.query("UPDATE licenses SET activation_commitment=decode(repeat('12',32),'hex') WHERE id=$1", [licenseId]))
+      .rejects.toThrow('ISSUE activation proposal is immutable after submission evidence exists');
+  });
+
+  it.each(['ACTIVE', 'EXPIRED'])('uses confirmed typed key evidence for a %s license with an incomplete JSON snapshot', async (status) => {
+    const fixture = await pool.connect();
+    const key = (await fixture.query('SELECT activation_commitment FROM licenses WHERE id=$1', [licenseId])).rows[0].activation_commitment;
+    try {
+      await fixture.query('SET session_replication_role = replica');
+      await fixture.query("UPDATE chain_commands SET payload=payload - 'activationCommitment' - 'keyVersion' - 'expiresAt' WHERE id=$1", [issueCommand]);
+      await fixture.query("UPDATE chain_events SET payload=payload - 'activationCommitment' - 'keyVersion' - 'expiresAt' WHERE chain_command_id=$1", [issueCommand]);
+      if (status === 'EXPIRED') await fixture.query("UPDATE licenses SET status='EXPIRED', period_start=now() - interval '2 days', expires_at=now() - interval '1 day' WHERE id=$1", [licenseId]);
+      await fixture.query('SET session_replication_role = origin');
+      await expect(eventRepository.reconcileCanonicalProjections()).resolves.toMatchObject({ licenseRepairs: 0, remainingMismatches: 0 });
+      // Known canonical key drift must still fail closed, not be hidden by the fallback.
+      await fixture.query('SET session_replication_role = replica');
+      await fixture.query("UPDATE licenses SET activation_commitment=decode(repeat('12',32),'hex') WHERE id=$1", [licenseId]);
+      await fixture.query('SET session_replication_role = origin');
+      await expect(eventRepository.reconcileCanonicalProjections()).rejects.toMatchObject({ code: 'P0001' });
+    } finally {
+      await fixture.query('SET session_replication_role = replica');
+      await fixture.query('UPDATE licenses SET activation_commitment=$2 WHERE id=$1', [licenseId, key]);
+      await fixture.query('SET session_replication_role = origin');
+      fixture.release();
+    }
   });
 
   it('invalidates and rebuilds reorged repository projections deterministically', async () => {

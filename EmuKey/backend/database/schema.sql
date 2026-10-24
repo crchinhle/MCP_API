@@ -1,12 +1,33 @@
+-- EmuKey fresh database initializer (PostgreSQL 15+); sole SQL source.
+-- DESTRUCTIVE DEFAULT: drop public and its dependent objects, then rebuild the final schema.
+-- Run only against the intended database with the API and worker stopped.
+-- This resets the selected database's application schema, not the database/roles themselves.
+-- No historical migrations or maintenance dispatcher; normal application startup never runs this.
+-- CLI: pnpm db:initialize (db:reset is an alias); pnpm db:verify.
+-- Optional demo: pnpm db:initialize --demo; seed existing schema: pnpm db:seed:demo.
+-- SQL editor: add SET LOCAL emukey.seed_demo='true'; and
+-- SET LOCAL emukey.seed_environment='development'; immediately after BEGIN below.
+-- Demo accounts: admin01/provider01/support01/customer01@demo.emukey.local; password Emu@1234.
+-- All schema/seed changes share one transaction; an error requires ROLLBACK before retry.
+-- https://www.postgresql.org/docs/15/sql-dropschema.html
+
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '5min';
+SELECT pg_advisory_xact_lock(hashtext('emukey-schema-initialize'));
+DROP SCHEMA IF EXISTS public CASCADE;
+CREATE SCHEMA public AUTHORIZATION pg_database_owner;
+GRANT USAGE ON SCHEMA public TO PUBLIC;
+SET LOCAL search_path = public;
+
 -- License Management — account-linked Customer, relayer-only blockchain schema v7.3
 -- PostgreSQL 15+
 -- Target baseline reviewed 17/09/2026.
--- This target schema has 18 tables. Customer accounts are retained; Customer Controller/KMS are removed.
+-- This target schema has 19 tables. Customer accounts are retained; Customer Controller/KMS are removed.
 -- Smart-contract policy/ABI is authoritative for License/Device rights.
 -- PostgreSQL owns private identity/catalog/commerce plus chain projection/evidence.
 -- Global License Terms content is a versioned application artefact, not a DB table.
 
-BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS citext;
@@ -69,8 +90,6 @@ CREATE UNIQUE INDEX uq_users_provider_chain_namespace
 CREATE TABLE provider_invitations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email CITEXT NOT NULL UNIQUE,
-    display_name VARCHAR(255) CHECK (btrim(display_name) <> ''),
-    organization_name VARCHAR(255) CHECK (btrim(organization_name) <> ''),
     provider_chain_address VARCHAR(42) UNIQUE
         CHECK (provider_chain_address ~ '^0x[0-9a-f]{40}$' AND provider_chain_address <> '0x0000000000000000000000000000000000000000'),
     provider_chain_namespace CITEXT UNIQUE
@@ -81,7 +100,7 @@ CREATE TABLE provider_invitations (
     expires_at TIMESTAMPTZ NOT NULL,
     sent_at TIMESTAMPTZ,
     accepted_at TIMESTAMPTZ,
-    accepted_user_id UUID,
+    accepted_user_id UUID UNIQUE,
     accepted_role VARCHAR(30) GENERATED ALWAYS AS ('PROVIDER_ADMIN') STORED,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -125,12 +144,9 @@ CREATE TABLE products (
 CREATE TABLE plans (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     product_id UUID NOT NULL,
-    provider_user_id UUID NOT NULL,
-    provider_role VARCHAR(30) GENERATED ALWAYS AS ('PROVIDER_ADMIN') STORED,
     code CITEXT NOT NULL,
     version INT NOT NULL,
     name VARCHAR(255) NOT NULL,
-    billing_cycle VARCHAR(20) NOT NULL,
     duration_months INT NOT NULL,
     price_vnd BIGINT NOT NULL,
     max_active_devices INT NOT NULL,
@@ -140,22 +156,12 @@ CREATE TABLE plans (
     published_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT fk_plans_product
-        FOREIGN KEY (product_id, provider_user_id)
-        REFERENCES products(id, provider_user_id) ON DELETE RESTRICT,
-    CONSTRAINT fk_plans_provider
-        FOREIGN KEY (provider_user_id, provider_role)
-        REFERENCES users(id, role) ON DELETE RESTRICT,
+    CONSTRAINT fk_plans_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
     CONSTRAINT uq_plans_product_code_version UNIQUE (product_id, code, version),
-    CONSTRAINT uq_plans_id_provider UNIQUE (id, provider_user_id),
     CONSTRAINT uq_plans_id_product_provider_commitment
-        UNIQUE (id, product_id, provider_user_id, plan_commitment),
+        UNIQUE (id, product_id, plan_commitment),
     CONSTRAINT ck_plans_version CHECK (version > 0),
-    CONSTRAINT ck_plans_billing_cycle CHECK (billing_cycle IN ('MONTHLY', 'YEARLY')),
-    CONSTRAINT ck_plans_duration CHECK (
-        (billing_cycle = 'MONTHLY' AND duration_months = 1) OR
-        (billing_cycle = 'YEARLY' AND duration_months = 12)
-    ),
+    CONSTRAINT ck_plans_duration CHECK (duration_months IN (1,12)),
     CONSTRAINT ck_plans_values CHECK (price_vnd > 0 AND max_active_devices > 0),
     CONSTRAINT ck_plans_entitlements CHECK (jsonb_typeof(entitlements) = 'object'),
     CONSTRAINT ck_plans_hashes CHECK (octet_length(plan_commitment) = 32),
@@ -165,6 +171,33 @@ CREATE TABLE plans (
         (status IN ('PUBLISHED', 'ARCHIVED') AND published_at IS NOT NULL)
     )
 );
+
+CREATE FUNCTION guard_catalog_ownership() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_TABLE_NAME = 'products' THEN
+        IF NEW.provider_user_id IS DISTINCT FROM OLD.provider_user_id THEN
+            RAISE EXCEPTION 'Product ownership is immutable' USING ERRCODE='23514';
+        END IF;
+    ELSE
+        IF NEW.product_id IS DISTINCT FROM OLD.product_id THEN
+            RAISE EXCEPTION 'Plan product is immutable' USING ERRCODE='23514';
+        END IF;
+        IF OLD.status <> 'DRAFT' AND (
+            NEW.status = 'DRAFT' OR
+            ROW(NEW.code, NEW.version, NEW.name, NEW.duration_months, NEW.price_vnd,
+                NEW.max_active_devices, NEW.entitlements, NEW.plan_commitment)
+            IS DISTINCT FROM
+            ROW(OLD.code, OLD.version, OLD.name, OLD.duration_months, OLD.price_vnd,
+                OLD.max_active_devices, OLD.entitlements, OLD.plan_commitment)
+        ) THEN
+            RAISE EXCEPTION 'Published plan terms are immutable; create a version' USING ERRCODE='23514';
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER trg_products_ownership BEFORE UPDATE ON products FOR EACH ROW EXECUTE FUNCTION guard_catalog_ownership();
+CREATE TRIGGER trg_plans_ownership BEFORE UPDATE ON plans FOR EACH ROW EXECUTE FUNCTION guard_catalog_ownership();
 
 -- 4. Customer-owned commerce order.
 CREATE TABLE orders (
@@ -186,7 +219,6 @@ CREATE TABLE orders (
     plan_version_snapshot INT NOT NULL,
     price_vnd_snapshot BIGINT NOT NULL,
     currency CHAR(3) NOT NULL DEFAULT 'VND',
-    billing_cycle_snapshot VARCHAR(20) NOT NULL,
     duration_months_snapshot INT NOT NULL,
     max_active_devices_snapshot INT NOT NULL,
     entitlements_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -212,8 +244,8 @@ CREATE TABLE orders (
         FOREIGN KEY (product_id, provider_user_id)
         REFERENCES products(id, provider_user_id) ON DELETE RESTRICT,
     CONSTRAINT fk_orders_plan
-        FOREIGN KEY (plan_id, product_id, provider_user_id, plan_commitment_snapshot)
-        REFERENCES plans(id, product_id, provider_user_id, plan_commitment) ON DELETE RESTRICT,
+        FOREIGN KEY (plan_id, product_id, plan_commitment_snapshot)
+        REFERENCES plans(id, product_id, plan_commitment) ON DELETE RESTRICT,
     CONSTRAINT uq_orders_id_provider UNIQUE (id, provider_user_id),
     CONSTRAINT uq_orders_id_customer UNIQUE (id, customer_user_id),
     CONSTRAINT uq_orders_id_price UNIQUE (id, price_vnd_snapshot),
@@ -311,7 +343,7 @@ BEGIN
            NEW.target_license_id, NEW.order_type,
            NEW.provider_name_snapshot, NEW.product_name_snapshot, NEW.plan_name_snapshot,
            NEW.plan_version_snapshot, NEW.price_vnd_snapshot, NEW.currency,
-           NEW.billing_cycle_snapshot, NEW.duration_months_snapshot,
+           NEW.duration_months_snapshot,
             NEW.max_active_devices_snapshot, NEW.entitlements_snapshot,
             NEW.plan_commitment_snapshot, NEW.payment_due_at, NEW.ipn_accept_until,
            NEW.created_at,
@@ -323,7 +355,7 @@ BEGIN
            OLD.target_license_id, OLD.order_type,
            OLD.provider_name_snapshot, OLD.product_name_snapshot, OLD.plan_name_snapshot,
            OLD.plan_version_snapshot, OLD.price_vnd_snapshot, OLD.currency,
-           OLD.billing_cycle_snapshot, OLD.duration_months_snapshot,
+           OLD.duration_months_snapshot,
             OLD.max_active_devices_snapshot, OLD.entitlements_snapshot,
             OLD.plan_commitment_snapshot, OLD.payment_due_at, OLD.ipn_accept_until,
            OLD.created_at,
@@ -837,8 +869,8 @@ CREATE TABLE licenses (
         FOREIGN KEY (product_id, provider_user_id)
         REFERENCES products(id, provider_user_id) ON DELETE RESTRICT,
     CONSTRAINT fk_licenses_plan
-        FOREIGN KEY (plan_id, product_id, provider_user_id, plan_commitment)
-        REFERENCES plans(id, product_id, provider_user_id, plan_commitment) ON DELETE RESTRICT,
+        FOREIGN KEY (plan_id, product_id, plan_commitment)
+        REFERENCES plans(id, product_id, plan_commitment) ON DELETE RESTRICT,
     CONSTRAINT uq_licenses_id_provider UNIQUE (id, provider_user_id),
     CONSTRAINT uq_licenses_id_customer UNIQUE (id, customer_user_id),
     CONSTRAINT uq_licenses_id_provider_customer UNIQUE (id, provider_user_id, customer_user_id),
@@ -879,7 +911,8 @@ CREATE TABLE licenses (
     ),
     CONSTRAINT ck_licenses_revoke_stamp CHECK (
         (status = 'REVOKED' AND revoked_at IS NOT NULL) OR status <> 'REVOKED'
-    )
+    ),
+    UNIQUE (id, customer_user_id)
 );
 
 -- Renewal order target FK can be declared after License exists.
@@ -1006,8 +1039,6 @@ CREATE TABLE chain_commands (
     receipt_checked_at TIMESTAMPTZ,
     attempt_count INT NOT NULL DEFAULT 0,
     next_attempt_at TIMESTAMPTZ,
-    lease_owner VARCHAR(180),
-    lease_expires_at TIMESTAMPTZ,
     last_error TEXT,
     locked_by VARCHAR(120),
     locked_at TIMESTAMPTZ,
@@ -1021,8 +1052,6 @@ CREATE TABLE chain_commands (
     replaces_command_id UUID,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT fk_chain_commands_provider
-        FOREIGN KEY (provider_user_id) REFERENCES users(id) ON DELETE RESTRICT,
     CONSTRAINT fk_chain_commands_order_provider
         FOREIGN KEY (order_id, provider_user_id)
         REFERENCES orders(id, provider_user_id) ON DELETE RESTRICT,
@@ -1427,8 +1456,6 @@ CREATE TABLE chain_events (
     CONSTRAINT fk_chain_events_command_device
         FOREIGN KEY (chain_command_id, license_id, license_device_id)
         REFERENCES chain_commands(id, license_id, license_device_id) ON DELETE RESTRICT,
-    CONSTRAINT fk_chain_events_provider
-        FOREIGN KEY (provider_user_id) REFERENCES users(id) ON DELETE RESTRICT,
     CONSTRAINT fk_chain_events_license_provider
         FOREIGN KEY (license_id, provider_user_id)
         REFERENCES licenses(id, provider_user_id) ON DELETE RESTRICT,
@@ -2914,7 +2941,6 @@ EXECUTE FUNCTION enforce_key_confirmation_trust();
 -- 12. Provider knowledge document; private storage metadata only.
 CREATE TABLE knowledge_documents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    provider_user_id UUID NOT NULL,
     product_id UUID NOT NULL,
     logical_document_key VARCHAR(180) NOT NULL,
     version INT NOT NULL,
@@ -2928,12 +2954,8 @@ CREATE TABLE knowledge_documents (
     is_current BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT fk_knowledge_documents_provider
-        FOREIGN KEY (provider_user_id) REFERENCES users(id) ON DELETE RESTRICT,
-    CONSTRAINT fk_knowledge_documents_product
-        FOREIGN KEY (product_id, provider_user_id)
-        REFERENCES products(id, provider_user_id) ON DELETE RESTRICT,
-    CONSTRAINT uq_knowledge_documents_version UNIQUE (provider_user_id, logical_document_key, version),
+    CONSTRAINT fk_knowledge_documents_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
+    CONSTRAINT uq_knowledge_documents_version UNIQUE (product_id, logical_document_key, version),
     CONSTRAINT ck_knowledge_documents_version CHECK (version > 0),
     CONSTRAINT ck_knowledge_documents_source CHECK (source_type IN ('FAQ', 'PDF', 'TXT')),
     CONSTRAINT ck_knowledge_documents_status CHECK (
@@ -2944,7 +2966,7 @@ CREATE TABLE knowledge_documents (
 );
 
 CREATE UNIQUE INDEX uq_knowledge_documents_one_current
-    ON knowledge_documents (provider_user_id, logical_document_key)
+    ON knowledge_documents (product_id, logical_document_key)
     WHERE is_current;
 
 -- 13. Guide chunks for human-readable content and full-text AI retrieval.
@@ -2953,13 +2975,11 @@ CREATE TABLE knowledge_chunks (
     document_id UUID NOT NULL,
     chunk_index INT NOT NULL,
     content TEXT NOT NULL,
-    token_count INT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT fk_knowledge_chunks_document
         FOREIGN KEY (document_id) REFERENCES knowledge_documents(id) ON DELETE CASCADE,
     CONSTRAINT uq_knowledge_chunks_position UNIQUE (document_id, chunk_index),
-    CONSTRAINT ck_knowledge_chunks_index CHECK (chunk_index >= 0),
-    CONSTRAINT ck_knowledge_chunks_tokens CHECK (token_count IS NULL OR token_count >= 0)
+    CONSTRAINT ck_knowledge_chunks_index CHECK (chunk_index >= 0)
 );
 
 -- 14. Unified AI/Support conversation lifecycle.
@@ -2974,8 +2994,12 @@ CREATE TABLE conversations (
     status VARCHAR(30) NOT NULL DEFAULT 'AI_ACTIVE',
     version INT NOT NULL DEFAULT 1,
     title VARCHAR(255),
-    context_type VARCHAR(20) NOT NULL DEFAULT 'GENERAL',
-    context_id UUID,
+    product_id UUID REFERENCES products(id) ON DELETE RESTRICT,
+    plan_id UUID REFERENCES plans(id) ON DELETE RESTRICT,
+    order_id UUID,
+    license_id UUID,
+    FOREIGN KEY (order_id, customer_user_id) REFERENCES orders(id, customer_user_id) ON DELETE RESTRICT,
+    FOREIGN KEY (license_id, customer_user_id) REFERENCES licenses(id, customer_user_id) ON DELETE RESTRICT,
     last_message_at TIMESTAMPTZ,
     claimed_at TIMESTAMPTZ,
     closed_at TIMESTAMPTZ,
@@ -2991,11 +3015,7 @@ CREATE TABLE conversations (
         status IN ('AI_ACTIVE', 'WAITING_SUPPORT', 'SUPPORT_ACTIVE', 'CLOSED')
     ),
     CONSTRAINT ck_conversations_version CHECK (version > 0),
-    CONSTRAINT ck_conversations_context CHECK (
-        context_type IN ('GENERAL', 'PRODUCT', 'PLAN', 'ORDER', 'LICENSE') AND
-        ((context_type = 'GENERAL' AND context_id IS NULL) OR
-         (context_type <> 'GENERAL' AND context_id IS NOT NULL))
-    ),
+    CONSTRAINT ck_conversations_context CHECK (num_nonnulls(product_id, plan_id, order_id, license_id) <= 1),
     CONSTRAINT ck_conversations_assignment CHECK (
         (status = 'SUPPORT_ACTIVE' AND assigned_support_user_id IS NOT NULL AND claimed_at IS NOT NULL) OR
         (status = 'AI_ACTIVE' AND assigned_support_user_id IS NULL AND claimed_at IS NULL) OR
@@ -3027,7 +3047,6 @@ CREATE TABLE messages (
     content TEXT NOT NULL,
     grounded BOOLEAN,
     sources JSONB NOT NULL DEFAULT '[]'::jsonb,
-    read_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT fk_messages_conversation
         FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
@@ -3048,46 +3067,25 @@ CREATE TABLE messages (
 -- 16. Durable per-channel notification owner.
 CREATE TABLE notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     event_key VARCHAR(180) NOT NULL,
     type VARCHAR(60) NOT NULL,
     title VARCHAR(255) NOT NULL,
     content TEXT NOT NULL,
-    data JSONB NOT NULL DEFAULT '{}'::jsonb,
-    channel VARCHAR(20) NOT NULL,
-    delivery_status VARCHAR(30) NOT NULL DEFAULT 'PENDING',
-    attempt_count INT NOT NULL DEFAULT 0,
-    next_attempt_at TIMESTAMPTZ,
-    lease_owner VARCHAR(180),
-    lease_expires_at TIMESTAMPTZ,
-    last_error TEXT,
-    is_read BOOLEAN NOT NULL DEFAULT FALSE,
-    sent_at TIMESTAMPTZ,
+    data JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(data) = 'object'),
+    inbox_visible BOOLEAN NOT NULL DEFAULT TRUE,
     read_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT fk_notifications_user
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT uq_notifications_event_channel UNIQUE (user_id, event_key, channel),
-    CONSTRAINT ck_notifications_channel CHECK (channel IN ('IN_APP', 'EMAIL', 'PUSH')),
-    CONSTRAINT ck_notifications_delivery CHECK (
-        delivery_status IN ('PENDING', 'SENT', 'RETRYABLE_FAILED', 'DEAD_LETTER')
-    ),
-    CONSTRAINT ck_notifications_delivery_evidence CHECK (
-        (delivery_status = 'SENT' AND sent_at IS NOT NULL) OR
-        (delivery_status <> 'SENT' AND sent_at IS NULL)
-    ),
-    CONSTRAINT ck_notifications_data CHECK (jsonb_typeof(data) = 'object'),
-    CONSTRAINT ck_notifications_attempts CHECK (attempt_count >= 0)
-    ,CONSTRAINT ck_notifications_lease CHECK ((lease_owner IS NULL AND lease_expires_at IS NULL) OR (lease_owner IS NOT NULL AND lease_expires_at IS NOT NULL))
+    UNIQUE (user_id, event_key)
 );
 
--- 17. Android push registration.
 CREATE TABLE mobile_push_tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL,
     token TEXT NOT NULL UNIQUE,
     provider VARCHAR(40) NOT NULL,
+    generation INT NOT NULL DEFAULT 1 CHECK (generation > 0),
     status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
     last_seen_at TIMESTAMPTZ,
     invalidated_at TIMESTAMPTZ,
@@ -3101,6 +3099,31 @@ CREATE TABLE mobile_push_tokens (
         (status = 'INVALID' AND invalidated_at IS NOT NULL)
     )
 );
+
+CREATE TABLE notification_deliveries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    notification_id UUID NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,
+    channel VARCHAR(20) NOT NULL CHECK (channel IN ('EMAIL', 'PUSH')),
+    push_token_id UUID REFERENCES mobile_push_tokens(id) ON DELETE RESTRICT,
+    token_generation INT,
+    destination_key TEXT NOT NULL,
+    delivery_status VARCHAR(30) NOT NULL DEFAULT 'PENDING'
+        CHECK (delivery_status IN ('PENDING', 'RETRYABLE_FAILED', 'SENT', 'DEAD_LETTER', 'CANCELLED')),
+    attempt_count INT NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+    next_attempt_at TIMESTAMPTZ,
+    lease_owner VARCHAR(180),
+    lease_expires_at TIMESTAMPTZ,
+    last_error TEXT,
+    sent_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (notification_id, channel, destination_key),
+    CHECK ((channel = 'EMAIL' AND push_token_id IS NULL AND token_generation IS NULL) OR
+           (channel = 'PUSH' AND push_token_id IS NOT NULL AND token_generation > 0)),
+    CHECK ((delivery_status = 'SENT') = (sent_at IS NOT NULL)),
+    CHECK ((lease_owner IS NULL) = (lease_expires_at IS NULL))
+);
+
 
 -- Provider payment evidence and blockchain command/event records are durable;
 -- ChainEvent reorg occurrence detail is represented only by its durable summary.
@@ -3161,7 +3184,6 @@ CREATE INDEX ix_users_role_status ON users (role, status);
 CREATE INDEX ix_products_provider_status ON products (provider_user_id, status, updated_at DESC);
 CREATE INDEX ix_products_catalog ON products (status, published_at DESC);
 CREATE INDEX ix_plans_product_catalog ON plans (product_id, status, price_vnd);
-CREATE INDEX ix_plans_provider ON plans (provider_user_id, status, updated_at DESC);
 CREATE INDEX ix_orders_customer_status ON orders (customer_user_id, order_status, created_at DESC);
 CREATE INDEX ix_orders_provider_history ON orders (provider_user_id, created_at DESC);
 CREATE INDEX ix_orders_status_due ON orders (order_status, payment_due_at);
@@ -3210,14 +3232,729 @@ CREATE UNIQUE INDEX uq_chain_commands_current_renewal_order
 CREATE INDEX ix_chain_events_finality ON chain_events (network, chain_id, contract_address, finality_status, block_number);
 CREATE INDEX ix_chain_events_license ON chain_events (license_id, block_number DESC, log_index DESC);
 CREATE INDEX ix_chain_events_command ON chain_events (chain_command_id);
-CREATE INDEX ix_knowledge_documents_product ON knowledge_documents (provider_user_id, product_id, status, is_current);
+CREATE INDEX ix_knowledge_documents_product ON knowledge_documents (product_id, status, is_current);
 CREATE INDEX ix_conversations_customer ON conversations (customer_user_id, updated_at DESC);
 CREATE INDEX ix_conversations_support_queue ON conversations (status, created_at)
     WHERE status IN ('WAITING_SUPPORT', 'SUPPORT_ACTIVE');
 CREATE INDEX ix_messages_timeline ON messages (conversation_id, server_sequence);
-CREATE INDEX ix_notifications_delivery ON notifications (delivery_status, next_attempt_at, created_at)
+CREATE INDEX ix_notifications_delivery ON notification_deliveries (delivery_status, next_attempt_at, created_at)
     WHERE delivery_status IN ('PENDING', 'RETRYABLE_FAILED');
-CREATE INDEX ix_notifications_inbox ON notifications (user_id, is_read, created_at DESC);
+CREATE INDEX ix_notifications_inbox ON notifications (user_id, created_at DESC) WHERE inbox_visible AND read_at IS NULL;
 CREATE INDEX ix_mobile_push_tokens_user ON mobile_push_tokens (user_id, status);
+
+-- emukey:seed:begin
+DO $emukey_seed$
+BEGIN
+-- Development seed: shared SQL and fixture data for the CLI and SQL editor.
+-- Fixed namespace and keys are demonstration fixtures, never chain confirmations.
+IF current_setting('emukey.seed_demo', true) = 'true' THEN
+    PERFORM pg_advisory_xact_lock(hashtext('emukey-root-demo-v1'));
+    PERFORM set_config('emukey.seed_namespace', 'emukey-root-demo-v1', true);
+    -- Direct SQL/CLI uses the verified demo hash; ambient settings cannot replace it.
+    PERFORM set_config('emukey.seed_password_hash', $emukey_seed_password_hash$$argon2id$v=19$m=19456,p=1,t=2$qoW/AjpF2wNa4BbpVl5wJw$X8bMIEGVDoxsf3wrwtS7ZPOgWtxec8dO3aRZlvmGEco$emukey_seed_password_hash$, true);
+    PERFORM set_config('emukey.seed_products', $emukey_seed_products$
+[
+  {"i": 1,"code": "DEMO_SECUREDESK_STARTER","name": "SecureDesk Starter","description": "Bảo vệ máy trạm, mã hóa dữ liệu và kiểm soát thiết bị đầu cuối cho đội ngũ làm việc hiện đại. Phiên bản Starter phù hợp với cá nhân và nhóm nhỏ cần triển khai nhanh.","image_url": "https://picsum.photos/seed/emukey-securedesk-starter/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Khởi đầu","billing_cycle": "MONTHLY","duration_months": 1,"price_vnd": 149000,"max_active_devices": 1},
+  {"i": 2,"code": "DEMO_CLOUDSTUDIO_STARTER","name": "CloudStudio Starter","description": "Không gian cộng tác nội dung trên đám mây với phê duyệt, quản lý phiên bản và chia sẻ an toàn. Phiên bản Starter phù hợp với cá nhân và nhóm nhỏ cần triển khai nhanh.","image_url": "https://picsum.photos/seed/emukey-cloudstudio-starter/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Khởi đầu","billing_cycle": "MONTHLY","duration_months": 1,"price_vnd": 189000,"max_active_devices": 1},
+  {"i": 3,"code": "DEMO_DATAGUARD_STARTER","name": "DataGuard Starter","description": "Sao lưu tự động, khôi phục nhanh và giám sát tính toàn vẹn dữ liệu cho doanh nghiệp. Phiên bản Starter phù hợp với cá nhân và nhóm nhỏ cần triển khai nhanh.","image_url": "https://picsum.photos/seed/emukey-dataguard-starter/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Khởi đầu","billing_cycle": "MONTHLY","duration_months": 1,"price_vnd": 229000,"max_active_devices": 1},
+  {"i": 4,"code": "DEMO_CLASSROOM_STARTER","name": "Classroom Hub Starter","description": "Quản lý lớp học, học liệu, bài tập và tiến độ học tập trong một cổng đào tạo thống nhất. Phiên bản Starter phù hợp với cá nhân và nhóm nhỏ cần triển khai nhanh.","image_url": "https://picsum.photos/seed/emukey-classroom-starter/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Khởi đầu","billing_cycle": "MONTHLY","duration_months": 1,"price_vnd": 129000,"max_active_devices": 1},
+  {"i": 5,"code": "DEMO_DEVSHIELD_STARTER","name": "DevShield Starter","description": "Quét mã nguồn, phát hiện bí mật và quản trị rủi ro chuỗi cung ứng phần mềm ngay trong CI/CD. Phiên bản Starter phù hợp với cá nhân và nhóm nhỏ cần triển khai nhanh.","image_url": "https://picsum.photos/seed/emukey-devshield-starter/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Khởi đầu","billing_cycle": "MONTHLY","duration_months": 1,"price_vnd": 259000,"max_active_devices": 1},
+  {"i": 6,"code": "DEMO_RETAILFLOW_STARTER","name": "RetailFlow Starter","description": "Đồng bộ bán hàng, tồn kho, khách hàng thân thiết và báo cáo doanh thu cho chuỗi cửa hàng. Phiên bản Starter phù hợp với cá nhân và nhóm nhỏ cần triển khai nhanh.","image_url": "https://picsum.photos/seed/emukey-retailflow-starter/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Khởi đầu","billing_cycle": "MONTHLY","duration_months": 1,"price_vnd": 209000,"max_active_devices": 1},
+  {"i": 7,"code": "DEMO_CLINICDESK_STARTER","name": "ClinicDesk Starter","description": "Điều phối lịch hẹn, hồ sơ khám và chăm sóc sau khám dành cho phòng khám vừa và nhỏ. Phiên bản Starter phù hợp với cá nhân và nhóm nhỏ cần triển khai nhanh.","image_url": "https://picsum.photos/seed/emukey-clinicdesk-starter/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Khởi đầu","billing_cycle": "MONTHLY","duration_months": 1,"price_vnd": 279000,"max_active_devices": 1},
+  {"i": 8,"code": "DEMO_SMARTFACTORY_STARTER","name": "SmartFactory Starter","description": "Theo dõi sản xuất, bảo trì thiết bị và cảnh báo vận hành theo thời gian thực tại nhà máy. Phiên bản Starter phù hợp với cá nhân và nhóm nhỏ cần triển khai nhanh.","image_url": "https://picsum.photos/seed/emukey-smartfactory-starter/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Khởi đầu","billing_cycle": "MONTHLY","duration_months": 1,"price_vnd": 329000,"max_active_devices": 1},
+  {"i": 9,"code": "DEMO_EDUANALYTICS_STARTER","name": "EduAnalytics Starter","description": "Phân tích tuyển sinh, kết quả học tập và mức độ tương tác bằng bảng điều khiển trực quan. Phiên bản Starter phù hợp với cá nhân và nhóm nhỏ cần triển khai nhanh.","image_url": "https://picsum.photos/seed/emukey-eduanalytics-starter/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Khởi đầu","billing_cycle": "MONTHLY","duration_months": 1,"price_vnd": 169000,"max_active_devices": 1},
+  {"i": 10,"code": "DEMO_TEAMVAULT_STARTER","name": "TeamVault Starter","description": "Quản lý mật khẩu, thông tin nhạy cảm và quyền truy cập dùng chung với nhật ký kiểm toán. Phiên bản Starter phù hợp với cá nhân và nhóm nhỏ cần triển khai nhanh.","image_url": "https://picsum.photos/seed/emukey-teamvault-starter/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Khởi đầu","billing_cycle": "MONTHLY","duration_months": 1,"price_vnd": 119000,"max_active_devices": 1},
+  {"i": 11,"code": "DEMO_SECUREDESK_PRO","name": "SecureDesk Professional","description": "Bảo vệ máy trạm, mã hóa dữ liệu và kiểm soát thiết bị đầu cuối cho đội ngũ làm việc hiện đại. Phiên bản Professional phù hợp với đội ngũ chuyên môn cần tự động hóa quy trình hằng ngày.","image_url": "https://picsum.photos/seed/emukey-securedesk-pro/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Chuyên nghiệp","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 1490000,"max_active_devices": 3},
+  {"i": 12,"code": "DEMO_CLOUDSTUDIO_PRO","name": "CloudStudio Professional","description": "Không gian cộng tác nội dung trên đám mây với phê duyệt, quản lý phiên bản và chia sẻ an toàn. Phiên bản Professional phù hợp với đội ngũ chuyên môn cần tự động hóa quy trình hằng ngày.","image_url": "https://picsum.photos/seed/emukey-cloudstudio-pro/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Chuyên nghiệp","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 1890000,"max_active_devices": 3},
+  {"i": 13,"code": "DEMO_DATAGUARD_PRO","name": "DataGuard Professional","description": "Sao lưu tự động, khôi phục nhanh và giám sát tính toàn vẹn dữ liệu cho doanh nghiệp. Phiên bản Professional phù hợp với đội ngũ chuyên môn cần tự động hóa quy trình hằng ngày.","image_url": "https://picsum.photos/seed/emukey-dataguard-pro/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Chuyên nghiệp","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 2290000,"max_active_devices": 3},
+  {"i": 14,"code": "DEMO_CLASSROOM_PRO","name": "Classroom Hub Professional","description": "Quản lý lớp học, học liệu, bài tập và tiến độ học tập trong một cổng đào tạo thống nhất. Phiên bản Professional phù hợp với đội ngũ chuyên môn cần tự động hóa quy trình hằng ngày.","image_url": "https://picsum.photos/seed/emukey-classroom-pro/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Chuyên nghiệp","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 1290000,"max_active_devices": 3},
+  {"i": 15,"code": "DEMO_DEVSHIELD_PRO","name": "DevShield Professional","description": "Quét mã nguồn, phát hiện bí mật và quản trị rủi ro chuỗi cung ứng phần mềm ngay trong CI/CD. Phiên bản Professional phù hợp với đội ngũ chuyên môn cần tự động hóa quy trình hằng ngày.","image_url": "https://picsum.photos/seed/emukey-devshield-pro/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Chuyên nghiệp","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 2590000,"max_active_devices": 3},
+  {"i": 16,"code": "DEMO_RETAILFLOW_PRO","name": "RetailFlow Professional","description": "Đồng bộ bán hàng, tồn kho, khách hàng thân thiết và báo cáo doanh thu cho chuỗi cửa hàng. Phiên bản Professional phù hợp với đội ngũ chuyên môn cần tự động hóa quy trình hằng ngày.","image_url": "https://picsum.photos/seed/emukey-retailflow-pro/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Chuyên nghiệp","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 2090000,"max_active_devices": 3},
+  {"i": 17,"code": "DEMO_CLINICDESK_PRO","name": "ClinicDesk Professional","description": "Điều phối lịch hẹn, hồ sơ khám và chăm sóc sau khám dành cho phòng khám vừa và nhỏ. Phiên bản Professional phù hợp với đội ngũ chuyên môn cần tự động hóa quy trình hằng ngày.","image_url": "https://picsum.photos/seed/emukey-clinicdesk-pro/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Chuyên nghiệp","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 2790000,"max_active_devices": 3},
+  {"i": 18,"code": "DEMO_SMARTFACTORY_PRO","name": "SmartFactory Professional","description": "Theo dõi sản xuất, bảo trì thiết bị và cảnh báo vận hành theo thời gian thực tại nhà máy. Phiên bản Professional phù hợp với đội ngũ chuyên môn cần tự động hóa quy trình hằng ngày.","image_url": "https://picsum.photos/seed/emukey-smartfactory-pro/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Chuyên nghiệp","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 3290000,"max_active_devices": 3},
+  {"i": 19,"code": "DEMO_EDUANALYTICS_PRO","name": "EduAnalytics Professional","description": "Phân tích tuyển sinh, kết quả học tập và mức độ tương tác bằng bảng điều khiển trực quan. Phiên bản Professional phù hợp với đội ngũ chuyên môn cần tự động hóa quy trình hằng ngày.","image_url": "https://picsum.photos/seed/emukey-eduanalytics-pro/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Chuyên nghiệp","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 1690000,"max_active_devices": 3},
+  {"i": 20,"code": "DEMO_TEAMVAULT_PRO","name": "TeamVault Professional","description": "Quản lý mật khẩu, thông tin nhạy cảm và quyền truy cập dùng chung với nhật ký kiểm toán. Phiên bản Professional phù hợp với đội ngũ chuyên môn cần tự động hóa quy trình hằng ngày.","image_url": "https://picsum.photos/seed/emukey-teamvault-pro/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Chuyên nghiệp","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 1190000,"max_active_devices": 3},
+  {"i": 21,"code": "DEMO_SECUREDESK_BUSINESS","name": "SecureDesk Business","description": "Bảo vệ máy trạm, mã hóa dữ liệu và kiểm soát thiết bị đầu cuối cho đội ngũ làm việc hiện đại. Phiên bản Business phù hợp với doanh nghiệp cần quản trị tập trung và báo cáo nâng cao.","image_url": "https://picsum.photos/seed/emukey-securedesk-business/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Doanh nghiệp","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 2682000,"max_active_devices": 10},
+  {"i": 22,"code": "DEMO_CLOUDSTUDIO_BUSINESS","name": "CloudStudio Business","description": "Không gian cộng tác nội dung trên đám mây với phê duyệt, quản lý phiên bản và chia sẻ an toàn. Phiên bản Business phù hợp với doanh nghiệp cần quản trị tập trung và báo cáo nâng cao.","image_url": "https://picsum.photos/seed/emukey-cloudstudio-business/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Doanh nghiệp","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 3402000,"max_active_devices": 10},
+  {"i": 23,"code": "DEMO_DATAGUARD_BUSINESS","name": "DataGuard Business","description": "Sao lưu tự động, khôi phục nhanh và giám sát tính toàn vẹn dữ liệu cho doanh nghiệp. Phiên bản Business phù hợp với doanh nghiệp cần quản trị tập trung và báo cáo nâng cao.","image_url": "https://picsum.photos/seed/emukey-dataguard-business/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Doanh nghiệp","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 4122000,"max_active_devices": 10},
+  {"i": 24,"code": "DEMO_CLASSROOM_BUSINESS","name": "Classroom Hub Business","description": "Quản lý lớp học, học liệu, bài tập và tiến độ học tập trong một cổng đào tạo thống nhất. Phiên bản Business phù hợp với doanh nghiệp cần quản trị tập trung và báo cáo nâng cao.","image_url": "https://picsum.photos/seed/emukey-classroom-business/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Doanh nghiệp","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 2322000,"max_active_devices": 10},
+  {"i": 25,"code": "DEMO_DEVSHIELD_BUSINESS","name": "DevShield Business","description": "Quét mã nguồn, phát hiện bí mật và quản trị rủi ro chuỗi cung ứng phần mềm ngay trong CI/CD. Phiên bản Business phù hợp với doanh nghiệp cần quản trị tập trung và báo cáo nâng cao.","image_url": "https://picsum.photos/seed/emukey-devshield-business/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Doanh nghiệp","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 4662000,"max_active_devices": 10},
+  {"i": 26,"code": "DEMO_RETAILFLOW_BUSINESS","name": "RetailFlow Business","description": "Đồng bộ bán hàng, tồn kho, khách hàng thân thiết và báo cáo doanh thu cho chuỗi cửa hàng. Phiên bản Business phù hợp với doanh nghiệp cần quản trị tập trung và báo cáo nâng cao.","image_url": "https://picsum.photos/seed/emukey-retailflow-business/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Doanh nghiệp","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 3762000,"max_active_devices": 10},
+  {"i": 27,"code": "DEMO_CLINICDESK_BUSINESS","name": "ClinicDesk Business","description": "Điều phối lịch hẹn, hồ sơ khám và chăm sóc sau khám dành cho phòng khám vừa và nhỏ. Phiên bản Business phù hợp với doanh nghiệp cần quản trị tập trung và báo cáo nâng cao.","image_url": "https://picsum.photos/seed/emukey-clinicdesk-business/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Doanh nghiệp","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 5022000,"max_active_devices": 10},
+  {"i": 28,"code": "DEMO_SMARTFACTORY_BUSINESS","name": "SmartFactory Business","description": "Theo dõi sản xuất, bảo trì thiết bị và cảnh báo vận hành theo thời gian thực tại nhà máy. Phiên bản Business phù hợp với doanh nghiệp cần quản trị tập trung và báo cáo nâng cao.","image_url": "https://picsum.photos/seed/emukey-smartfactory-business/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Doanh nghiệp","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 5922000,"max_active_devices": 10},
+  {"i": 29,"code": "DEMO_EDUANALYTICS_BUSINESS","name": "EduAnalytics Business","description": "Phân tích tuyển sinh, kết quả học tập và mức độ tương tác bằng bảng điều khiển trực quan. Phiên bản Business phù hợp với doanh nghiệp cần quản trị tập trung và báo cáo nâng cao.","image_url": "https://picsum.photos/seed/emukey-eduanalytics-business/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Doanh nghiệp","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 3042000,"max_active_devices": 10},
+  {"i": 30,"code": "DEMO_TEAMVAULT_BUSINESS","name": "TeamVault Business","description": "Quản lý mật khẩu, thông tin nhạy cảm và quyền truy cập dùng chung với nhật ký kiểm toán. Phiên bản Business phù hợp với doanh nghiệp cần quản trị tập trung và báo cáo nâng cao.","image_url": "https://picsum.photos/seed/emukey-teamvault-business/1200/800.jpg","status": "PUBLISHED","plan_name": "Gói Doanh nghiệp","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 2142000,"max_active_devices": 10},
+  {"i": 31,"code": "DEMO_SECUREDESK_ENTERPRISE","name": "SecureDesk Enterprise","description": "Bảo vệ máy trạm, mã hóa dữ liệu và kiểm soát thiết bị đầu cuối cho đội ngũ làm việc hiện đại. Phiên bản Enterprise phù hợp với tổ chức lớn cần SSO, phân quyền sâu và hỗ trợ ưu tiên.","image_url": "https://picsum.photos/seed/emukey-securedesk-enterprise/1200/800.jpg","status": "DRAFT","plan_name": "Gói Enterprise","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 4768000,"max_active_devices": 30},
+  {"i": 32,"code": "DEMO_CLOUDSTUDIO_ENTERPRISE","name": "CloudStudio Enterprise","description": "Không gian cộng tác nội dung trên đám mây với phê duyệt, quản lý phiên bản và chia sẻ an toàn. Phiên bản Enterprise phù hợp với tổ chức lớn cần SSO, phân quyền sâu và hỗ trợ ưu tiên.","image_url": "https://picsum.photos/seed/emukey-cloudstudio-enterprise/1200/800.jpg","status": "DRAFT","plan_name": "Gói Enterprise","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 6048000,"max_active_devices": 30},
+  {"i": 33,"code": "DEMO_DATAGUARD_ENTERPRISE","name": "DataGuard Enterprise","description": "Sao lưu tự động, khôi phục nhanh và giám sát tính toàn vẹn dữ liệu cho doanh nghiệp. Phiên bản Enterprise phù hợp với tổ chức lớn cần SSO, phân quyền sâu và hỗ trợ ưu tiên.","image_url": "https://picsum.photos/seed/emukey-dataguard-enterprise/1200/800.jpg","status": "DRAFT","plan_name": "Gói Enterprise","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 7328000,"max_active_devices": 30},
+  {"i": 34,"code": "DEMO_CLASSROOM_ENTERPRISE","name": "Classroom Hub Enterprise","description": "Quản lý lớp học, học liệu, bài tập và tiến độ học tập trong một cổng đào tạo thống nhất. Phiên bản Enterprise phù hợp với tổ chức lớn cần SSO, phân quyền sâu và hỗ trợ ưu tiên.","image_url": "https://picsum.photos/seed/emukey-classroom-enterprise/1200/800.jpg","status": "DRAFT","plan_name": "Gói Enterprise","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 4128000,"max_active_devices": 30},
+  {"i": 35,"code": "DEMO_DEVSHIELD_ENTERPRISE","name": "DevShield Enterprise","description": "Quét mã nguồn, phát hiện bí mật và quản trị rủi ro chuỗi cung ứng phần mềm ngay trong CI/CD. Phiên bản Enterprise phù hợp với tổ chức lớn cần SSO, phân quyền sâu và hỗ trợ ưu tiên.","image_url": "https://picsum.photos/seed/emukey-devshield-enterprise/1200/800.jpg","status": "DRAFT","plan_name": "Gói Enterprise","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 8288000,"max_active_devices": 30},
+  {"i": 36,"code": "DEMO_RETAILFLOW_ENTERPRISE","name": "RetailFlow Enterprise","description": "Đồng bộ bán hàng, tồn kho, khách hàng thân thiết và báo cáo doanh thu cho chuỗi cửa hàng. Phiên bản Enterprise phù hợp với tổ chức lớn cần SSO, phân quyền sâu và hỗ trợ ưu tiên.","image_url": "https://picsum.photos/seed/emukey-retailflow-enterprise/1200/800.jpg","status": "DRAFT","plan_name": "Gói Enterprise","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 6688000,"max_active_devices": 30},
+  {"i": 37,"code": "DEMO_CLINICDESK_ENTERPRISE","name": "ClinicDesk Enterprise","description": "Điều phối lịch hẹn, hồ sơ khám và chăm sóc sau khám dành cho phòng khám vừa và nhỏ. Phiên bản Enterprise phù hợp với tổ chức lớn cần SSO, phân quyền sâu và hỗ trợ ưu tiên.","image_url": "https://picsum.photos/seed/emukey-clinicdesk-enterprise/1200/800.jpg","status": "DRAFT","plan_name": "Gói Enterprise","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 8928000,"max_active_devices": 30},
+  {"i": 38,"code": "DEMO_SMARTFACTORY_ENTERPRISE","name": "SmartFactory Enterprise","description": "Theo dõi sản xuất, bảo trì thiết bị và cảnh báo vận hành theo thời gian thực tại nhà máy. Phiên bản Enterprise phù hợp với tổ chức lớn cần SSO, phân quyền sâu và hỗ trợ ưu tiên.","image_url": "https://picsum.photos/seed/emukey-smartfactory-enterprise/1200/800.jpg","status": "DRAFT","plan_name": "Gói Enterprise","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 10528000,"max_active_devices": 30},
+  {"i": 39,"code": "DEMO_EDUANALYTICS_ENTERPRISE","name": "EduAnalytics Enterprise","description": "Phân tích tuyển sinh, kết quả học tập và mức độ tương tác bằng bảng điều khiển trực quan. Phiên bản Enterprise phù hợp với tổ chức lớn cần SSO, phân quyền sâu và hỗ trợ ưu tiên.","image_url": "https://picsum.photos/seed/emukey-eduanalytics-enterprise/1200/800.jpg","status": "DRAFT","plan_name": "Gói Enterprise","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 5408000,"max_active_devices": 30},
+  {"i": 40,"code": "DEMO_TEAMVAULT_ENTERPRISE","name": "TeamVault Enterprise","description": "Quản lý mật khẩu, thông tin nhạy cảm và quyền truy cập dùng chung với nhật ký kiểm toán. Phiên bản Enterprise phù hợp với tổ chức lớn cần SSO, phân quyền sâu và hỗ trợ ưu tiên.","image_url": "https://picsum.photos/seed/emukey-teamvault-enterprise/1200/800.jpg","status": "DRAFT","plan_name": "Gói Enterprise","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 3808000,"max_active_devices": 30},
+  {"i": 41,"code": "DEMO_SECUREDESK_ULTIMATE","name": "SecureDesk Ultimate","description": "Bảo vệ máy trạm, mã hóa dữ liệu và kiểm soát thiết bị đầu cuối cho đội ngũ làm việc hiện đại. Phiên bản Ultimate phù hợp với khách hàng từng sử dụng bộ tính năng trọn gói thế hệ trước.","image_url": "https://picsum.photos/seed/emukey-securedesk-ultimate/1200/800.jpg","status": "ARCHIVED","plan_name": "Gói Ultimate","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 6705000,"max_active_devices": 50},
+  {"i": 42,"code": "DEMO_CLOUDSTUDIO_ULTIMATE","name": "CloudStudio Ultimate","description": "Không gian cộng tác nội dung trên đám mây với phê duyệt, quản lý phiên bản và chia sẻ an toàn. Phiên bản Ultimate phù hợp với khách hàng từng sử dụng bộ tính năng trọn gói thế hệ trước.","image_url": "https://picsum.photos/seed/emukey-cloudstudio-ultimate/1200/800.jpg","status": "ARCHIVED","plan_name": "Gói Ultimate","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 8505000,"max_active_devices": 50},
+  {"i": 43,"code": "DEMO_DATAGUARD_ULTIMATE","name": "DataGuard Ultimate","description": "Sao lưu tự động, khôi phục nhanh và giám sát tính toàn vẹn dữ liệu cho doanh nghiệp. Phiên bản Ultimate phù hợp với khách hàng từng sử dụng bộ tính năng trọn gói thế hệ trước.","image_url": "https://picsum.photos/seed/emukey-dataguard-ultimate/1200/800.jpg","status": "ARCHIVED","plan_name": "Gói Ultimate","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 10305000,"max_active_devices": 50},
+  {"i": 44,"code": "DEMO_CLASSROOM_ULTIMATE","name": "Classroom Hub Ultimate","description": "Quản lý lớp học, học liệu, bài tập và tiến độ học tập trong một cổng đào tạo thống nhất. Phiên bản Ultimate phù hợp với khách hàng từng sử dụng bộ tính năng trọn gói thế hệ trước.","image_url": "https://picsum.photos/seed/emukey-classroom-ultimate/1200/800.jpg","status": "ARCHIVED","plan_name": "Gói Ultimate","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 5805000,"max_active_devices": 50},
+  {"i": 45,"code": "DEMO_DEVSHIELD_ULTIMATE","name": "DevShield Ultimate","description": "Quét mã nguồn, phát hiện bí mật và quản trị rủi ro chuỗi cung ứng phần mềm ngay trong CI/CD. Phiên bản Ultimate phù hợp với khách hàng từng sử dụng bộ tính năng trọn gói thế hệ trước.","image_url": "https://picsum.photos/seed/emukey-devshield-ultimate/1200/800.jpg","status": "ARCHIVED","plan_name": "Gói Ultimate","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 11655000,"max_active_devices": 50},
+  {"i": 46,"code": "DEMO_RETAILFLOW_ULTIMATE","name": "RetailFlow Ultimate","description": "Đồng bộ bán hàng, tồn kho, khách hàng thân thiết và báo cáo doanh thu cho chuỗi cửa hàng. Phiên bản Ultimate phù hợp với khách hàng từng sử dụng bộ tính năng trọn gói thế hệ trước.","image_url": "https://picsum.photos/seed/emukey-retailflow-ultimate/1200/800.jpg","status": "ARCHIVED","plan_name": "Gói Ultimate","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 9405000,"max_active_devices": 50},
+  {"i": 47,"code": "DEMO_CLINICDESK_ULTIMATE","name": "ClinicDesk Ultimate","description": "Điều phối lịch hẹn, hồ sơ khám và chăm sóc sau khám dành cho phòng khám vừa và nhỏ. Phiên bản Ultimate phù hợp với khách hàng từng sử dụng bộ tính năng trọn gói thế hệ trước.","image_url": "https://picsum.photos/seed/emukey-clinicdesk-ultimate/1200/800.jpg","status": "ARCHIVED","plan_name": "Gói Ultimate","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 12555000,"max_active_devices": 50},
+  {"i": 48,"code": "DEMO_SMARTFACTORY_ULTIMATE","name": "SmartFactory Ultimate","description": "Theo dõi sản xuất, bảo trì thiết bị và cảnh báo vận hành theo thời gian thực tại nhà máy. Phiên bản Ultimate phù hợp với khách hàng từng sử dụng bộ tính năng trọn gói thế hệ trước.","image_url": "https://picsum.photos/seed/emukey-smartfactory-ultimate/1200/800.jpg","status": "ARCHIVED","plan_name": "Gói Ultimate","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 14805000,"max_active_devices": 50},
+  {"i": 49,"code": "DEMO_EDUANALYTICS_ULTIMATE","name": "EduAnalytics Ultimate","description": "Phân tích tuyển sinh, kết quả học tập và mức độ tương tác bằng bảng điều khiển trực quan. Phiên bản Ultimate phù hợp với khách hàng từng sử dụng bộ tính năng trọn gói thế hệ trước.","image_url": "https://picsum.photos/seed/emukey-eduanalytics-ultimate/1200/800.jpg","status": "ARCHIVED","plan_name": "Gói Ultimate","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 7605000,"max_active_devices": 50},
+  {"i": 50,"code": "DEMO_TEAMVAULT_ULTIMATE","name": "TeamVault Ultimate","description": "Quản lý mật khẩu, thông tin nhạy cảm và quyền truy cập dùng chung với nhật ký kiểm toán. Phiên bản Ultimate phù hợp với khách hàng từng sử dụng bộ tính năng trọn gói thế hệ trước.","image_url": "https://picsum.photos/seed/emukey-teamvault-ultimate/1200/800.jpg","status": "ARCHIVED","plan_name": "Gói Ultimate","billing_cycle": "YEARLY","duration_months": 12,"price_vnd": 5355000,"max_active_devices": 50}
+]
+$emukey_seed_products$, true);
+    PERFORM set_config('emukey.seed_activations', $emukey_seed_activations$
+[
+  {"i": 1,"activation_key": "0x0f109fb60c2173f02c45484f45318e41d3c0b10c2a51c04a3e6dc4d661599f75","activation_commitment": "0x9d67cbff20ac1acee96151dc678ad303501d76de15f6ae3a77978b027192cb4c"},
+  {"i": 2,"activation_key": "0xab37f0fd2d903106ec1d37e9b7e6e3b587318921c9daa6f74218b17966fa638a","activation_commitment": "0x1e13ab9a6891e655047a843054711ad031301083148dcb6b14952edc7bdaeefd"},
+  {"i": 3,"activation_key": "0xa28361e3d04213b1be89cbec51d3d7d4f4f6f27e46830c47a4ff584ec1e9c6a7","activation_commitment": "0xdfda6189d62eff083ff58324638a1fa1af8c19b6b27299ced59ff350da90382c"},
+  {"i": 4,"activation_key": "0x7b79a6248b8d842cf2c917177f487096b7d9cddcaf767c5b68ec63688a60e527","activation_commitment": "0xb2d86b91bd9c1c603a0636367cc958977473b8ad1c7a7b4f85feb2398f82c3c6"},
+  {"i": 5,"activation_key": "0x193fa4819e3ac7259a0439869661d0e972bff9df4405422baae8f8d699f7631c","activation_commitment": "0x25d2f59d7fe2416bee727436d07d1f63b5c876d41ed5743ac33ba0d63c1ffe6a"},
+  {"i": 6,"activation_key": "0x597ce309cd2d7fda6b1fa1167db10ee17ddc33b225d89bc67d901bc3d587befc","activation_commitment": "0xbe4207dfb78dc35cba78abe1be7d0e31d754a55b2ce8cfad090f045c9740ca69"},
+  {"i": 7,"activation_key": "0x60af3381a348720ef00c4c2df09c3b07ea9e22ea28b3884e26bdc6dc1eeb800c","activation_commitment": "0x28e47c6b220875b5a3b55e215905d717fa6bf361ba09316678ba0e2e5f73fd42"},
+  {"i": 8,"activation_key": "0x9cdf4f1b6c4ca68dc07c49ca7a90a90c36b23ccd4f9c6288a20979d1d02f5c68","activation_commitment": "0x473e5d421b9ab70a1fcdbb183b2bb39aab58e9475a94bd15ec058bc0385c3f56"},
+  {"i": 9,"activation_key": "0xd897e053e65f40558f96573acd15231033d8fd6673a088d5598b8edc6e7f4ef6","activation_commitment": "0x4830105027d73e08a8aa3c3be3569b14f09ebcf305a2b4d7443a9a31fecaac64"},
+  {"i": 10,"activation_key": "0x75d3aecc0cd10c92a3120d31c9b2f9a29fd32296d32747afb548a30d2bf19f2f","activation_commitment": "0x05439a64ae4be8f948e20c5f4a514f5dedaa74efda65ce99390babeff6577e5c"},
+  {"i": 11,"activation_key": "0x01d76678d0a69799a5a4dbc54cb40a59a7a9ed524b911f289e8f686671841510","activation_commitment": "0xa5435684b7be5ddfebf247f27ad720f58ddab8bd3c9aac0629b5b57106051fe0"},
+  {"i": 12,"activation_key": "0x9ab6149b0e1cbabdab9ba4cb85000b87dfc8d38b2c4c0222d6ff9516d2c09b41","activation_commitment": "0x175781bd54dd872b28ac64c0112bf3f8d09a19e2b2f6ca9aa785a1db4aeae046"},
+  {"i": 13,"activation_key": "0x557fda370b49c1ed4f0aecb6bbdf0a37adb397abb0dc82da192d68eface9385d","activation_commitment": "0xd105edca1e6af373c3c02f3cf89226143f1ea52e4e1e04a021a6eada1f9c501e"},
+  {"i": 14,"activation_key": "0x8191d7f92df89d379687f523c30607db6f7fd90595369c62c8344a0143c74bda","activation_commitment": "0xbed13821eb2ac968a3af9314ac7783b28c8cf0f48a4e065b0eeabaa985da018d"},
+  {"i": 15,"activation_key": "0x7a42a1f5f907c7dda30d98d0fa5704d3a7ef73dbd5458cefe7cb5ab6ba7c27aa","activation_commitment": "0x0bc8af86aa9ea6ffac7fb1ea3e41f900e900ee966cac8b573042dd8ed6949a5c"},
+  {"i": 16,"activation_key": "0x042dd50235da5b8d716eb139575515526f3ab8f30ab278f487aa639f0f1980fc","activation_commitment": "0xd6d7d27444338bcd9fce356762260c86a3dc9e899499f012b58cb74c9412a45e"},
+  {"i": 17,"activation_key": "0xbc06f15acda9e68b655390c4180b3329438f00f21d8cac4b56047c9a97487cb8","activation_commitment": "0x8b95da674af139708a4859c695ec93c2cf81f94634e5769dae7f6fbd8b095855"},
+  {"i": 18,"activation_key": "0x4b3a5d32295a1c6696c78fa978ba33c878a12be46d768fbe0dea4c7a163feeab","activation_commitment": "0x799bbbd917d769a0259e6a9604047b934b8ede010d3aad0783ab4e299ac34322"},
+  {"i": 19,"activation_key": "0xa57d48d12c1333a92697403005b9e7cf6bd8b3291be8b43504c45cc0c113e520","activation_commitment": "0x7f0fe8432e4b1c9b1456488bc953a2687acfaa3d6fd47a1ce9cb8404bc80d063"},
+  {"i": 20,"activation_key": "0xb7732669c488dd990b9a2dfb8f0b635a1bfd6f88eba0838d7122a3d7051bb79f","activation_commitment": "0x8146064d24968adb35c44e7415a814f7bea9b96ab550a7e80a7aeb762ede2e22"},
+  {"i": 21,"activation_key": "0xdaca3005fe6029257762152b29e537071b3d0a1ee7b02edc9fc7316a982e7863","activation_commitment": "0x8d4fbf18cd4721e573c6902f44cff52a4d4e4669465fbf0180a6050046534604"},
+  {"i": 22,"activation_key": "0x072e8e6c1ec3d5094bbc3f04fd87af8e39756866ea556f3e4e14d90445fdc695","activation_commitment": "0x338d3c3f78d44acbe42f199f712dd3323402671bc858e17b11c4b173d0759271"},
+  {"i": 23,"activation_key": "0xce5a031511a5e71a5db35443ffe004abf7192b2fb58c314026500c18d5fbb2b2","activation_commitment": "0x0b140e14fdd98ef8c36f81bb5b4228336b9a542bdffd51bf347d3707652fc280"},
+  {"i": 24,"activation_key": "0x6656db86a22ffb1629c553e7f9329b7fe987c148f19b6e63a9bbe0931d4be7d2","activation_commitment": "0xb82fb9a1253ee9a2fd33320a6bdc5aaf4d2db7102a73bf662a1734f12c73d466"},
+  {"i": 25,"activation_key": "0x8f640a610ebdbf284ed3fea287a910856a31c520fd8653fd46c2ae80ce128780","activation_commitment": "0x1d1f09044c380ca9758bdd2d944db3c5b2861363c1a54b96408eac1ae240d9f2"},
+  {"i": 26,"activation_key": "0xb353138617c6fc4840bc65cb04f2b7b79b9b8cd156de684859ea0c250c09410c","activation_commitment": "0x426f4986ed2cab97676fa4e0bd66bf0570b502a6fdff3e8bd96b4a5a932a8bf2"},
+  {"i": 27,"activation_key": "0x53490e178f64dd62adea6b4feae6c474a433694d64e3e113940db1b289b8d1dd","activation_commitment": "0x67dcdad22f43088c4a3de8a9d2ed04459d4e90cf569fc4ece49c34807449df97"},
+  {"i": 28,"activation_key": "0x8421dd6101b3307a23a92de90382e2d8ea4faee23ec5938f37787900539002c9","activation_commitment": "0xcf0296241f4142f6eca44ae6c75b7c294ef229736a4a4d9868a73a0855f311b9"},
+  {"i": 29,"activation_key": "0xc5f04664120e41087d1a5dc28932592b0eac58a4dcf00e882f31e4726c0b9fad","activation_commitment": "0x786be7c2859f5fa0ad30992258219075b123241f486fb7eb1dfddcda2f08bb6e"},
+  {"i": 30,"activation_key": "0xa5f90bbb96f5863b3395afa5fd838ea3f0e5515067153e80f478170f675fee91","activation_commitment": "0x5735c52bf6819fb7a8088018114d9463342f1d20e17f43a0c9e80915381ac5e7"}
+]
+$emukey_seed_activations$, true);
+    EXECUTE $emukey_seed_demo$
+DO $emukey_seed_guard$
+BEGIN
+  IF current_setting('emukey.seed_environment', true) IS DISTINCT FROM 'development' THEN
+    RAISE EXCEPTION 'Demo seed is allowed only in explicit development mode';
+  END IF;
+  IF COALESCE(current_setting('emukey.seed_password_hash', true), '') NOT LIKE '$argon2id$%' THEN
+    RAISE EXCEPTION 'Demo seed requires an Argon2id password hash';
+  END IF;
+END;
+$emukey_seed_guard$;
+
+CREATE TEMP TABLE _demo_providers ON COMMIT DROP AS
+SELECT
+  i,
+  md5(current_setting('emukey.seed_namespace') || ':provider:' || i)::uuid AS id,
+  'provider' || lpad(i::text, 2, '0') || '@demo.emukey.local' AS email,
+  (ARRAY[
+    'Công ty Cổ phần An Việt Digital',
+    'Công ty TNHH Công nghệ Sao Khuê',
+    'Công ty Cổ phần Giải pháp Mây Xanh',
+    'Công ty TNHH Dữ liệu Minh Tâm',
+    'Công ty Cổ phần Nền tảng Tiên Phong'
+  ])[i] AS organization_name,
+  (ARRAY['Nguyễn Minh Anh', 'Trần Quốc Bảo', 'Lê Hoài Nam', 'Phạm Thu Hà', 'Võ Gia Huy'])[i] AS display_name
+FROM generate_series(1, 5) AS series(i);
+
+CREATE TEMP TABLE _demo_support ON COMMIT DROP AS
+SELECT
+  i,
+  md5(current_setting('emukey.seed_namespace') || ':support:' || i)::uuid AS id,
+  'support' || lpad(i::text, 2, '0') || '@demo.emukey.local' AS email,
+  (ARRAY['Đỗ Thanh Tùng', 'Bùi Khánh Linh', 'Ngô Hải Yến'])[i] AS display_name
+FROM generate_series(1, 3) AS series(i);
+
+CREATE TEMP TABLE _demo_admins ON COMMIT DROP AS
+SELECT
+  i,
+  md5(current_setting('emukey.seed_namespace') || ':admin:' || i)::uuid AS id,
+  'admin' || lpad(i::text, 2, '0') || '@demo.emukey.local' AS email,
+  (ARRAY['Quản trị hệ thống', 'Điều hành nền tảng'])[i] AS display_name
+FROM generate_series(1, 2) AS series(i);
+
+CREATE TEMP TABLE _demo_customers ON COMMIT DROP AS
+SELECT
+  i,
+  md5(current_setting('emukey.seed_namespace') || ':customer:' || i)::uuid AS id,
+  'customer' || lpad(i::text, 2, '0') || '@demo.emukey.local' AS email,
+  (ARRAY['INDIVIDUAL', 'STUDENT', 'BUSINESS'])[((i - 1) % 3) + 1] AS customer_type,
+  (ARRAY[
+    'Nguyễn Ngọc Mai', 'Trần Đức Anh', 'Lê Phương Thảo', 'Phạm Quang Minh',
+    'Hoàng Bảo Trâm', 'Vũ Tuấn Kiệt', 'Đặng Thu Trang', 'Bùi Nhật Nam',
+    'Đỗ Khánh Vy', 'Hồ Minh Khang', 'Ngô Thùy Dương', 'Dương Quốc Việt',
+    'Lý Gia Hân', 'Mai Anh Tuấn', 'Tạ Thanh Lam', 'Cao Đức Long',
+    'Trịnh Yến Nhi', 'Phan Hoàng Sơn', 'Võ Bảo Ngọc', 'Chu Minh Nhật'
+  ])[i] AS display_name
+FROM generate_series(1, 20) AS series(i);
+
+CREATE TEMP TABLE _demo_users ON COMMIT DROP AS
+SELECT id FROM _demo_providers
+UNION ALL SELECT id FROM _demo_support
+UNION ALL SELECT id FROM _demo_admins
+UNION ALL SELECT id FROM _demo_customers;
+
+INSERT INTO users (
+  id, email, password_hash, display_name, role, status,
+  organization_name, phone, address,
+  provider_chain_address, provider_chain_namespace, customer_type,
+  email_verified_at
+)
+SELECT id, email, current_setting('emukey.seed_password_hash'),
+       display_name, 'PROVIDER_ADMIN', 'ACTIVE',
+       organization_name, '028' || lpad((1000000 + i)::text, 7, '0'),
+       (ARRAY['Quận 1, TP. Hồ Chí Minh', 'Quận Cầu Giấy, Hà Nội', 'Quận Hải Châu, Đà Nẵng', 'TP. Thủ Đức, TP. Hồ Chí Minh', 'Quận Ninh Kiều, Cần Thơ'])[i],
+       '0x' || substr(md5(current_setting('emukey.seed_namespace') || ':provider-address-a:' || i) || md5(current_setting('emukey.seed_namespace') || ':provider-address-b:' || i), 1, 40),
+       'demo-provider-' || substr(md5(current_setting('emukey.seed_namespace') || ':provider-namespace:' || i), 1, 12),
+       NULL::varchar, NULL::timestamptz
+FROM _demo_providers
+UNION ALL
+SELECT id, email, current_setting('emukey.seed_password_hash'),
+       display_name, 'SUPPORT_STAFF', 'ACTIVE',
+       NULL, NULL, NULL, NULL, NULL, NULL, NULL
+FROM _demo_support
+UNION ALL
+SELECT id, email, current_setting('emukey.seed_password_hash'),
+       display_name, 'SYSTEM_ADMIN', 'ACTIVE',
+       NULL, NULL, NULL, NULL, NULL, NULL, NULL
+FROM _demo_admins
+UNION ALL
+SELECT id, email, current_setting('emukey.seed_password_hash'),
+       display_name, 'CUSTOMER', 'ACTIVE',
+       NULL, '09' || lpad((10000000 + i)::text, 8, '0'),
+       (ARRAY['TP. Hồ Chí Minh', 'Hà Nội', 'Đà Nẵng', 'Cần Thơ', 'Hải Phòng'])[((i - 1) % 5) + 1], NULL, NULL,
+       customer_type, now() - interval '30 days'
+FROM _demo_customers
+ON CONFLICT (id) DO UPDATE SET
+  email = EXCLUDED.email,
+  password_hash = EXCLUDED.password_hash,
+  display_name = EXCLUDED.display_name,
+  organization_name = EXCLUDED.organization_name,
+  phone = EXCLUDED.phone,
+  address = EXCLUDED.address,
+  status = 'ACTIVE',
+  failed_login_count = 0,
+  locked_until = NULL,
+  updated_at = now();
+
+CREATE TEMP TABLE _demo_products ON COMMIT DROP AS
+SELECT
+  catalog.*,
+  md5(current_setting('emukey.seed_namespace') || ':product:' || catalog.i)::uuid AS id,
+  ((catalog.i - 1) % 5) + 1 AS provider_index
+FROM jsonb_to_recordset(current_setting('emukey.seed_products')::jsonb) AS catalog(
+  i integer,
+  code text,
+  name text,
+  description text,
+  image_url text,
+  status text,
+  plan_name text,
+  billing_cycle text,
+  duration_months integer,
+  price_vnd bigint,
+  max_active_devices integer
+);
+
+INSERT INTO products (
+  id, provider_user_id, code, name, description, image_url, status, published_at
+)
+SELECT
+  product.id,
+  provider.id,
+  product.code,
+  product.name,
+  product.description,
+  product.image_url,
+  product.status,
+  CASE
+    WHEN product.status = 'DRAFT' THEN NULL
+    ELSE now() - make_interval(days => 65 - product.i)
+  END
+FROM _demo_products AS product
+JOIN _demo_providers AS provider ON provider.i = product.provider_index
+ON CONFLICT (id) DO UPDATE SET
+  code = EXCLUDED.code,
+  name = EXCLUDED.name,
+  description = EXCLUDED.description,
+  image_url = EXCLUDED.image_url,
+  status = EXCLUDED.status,
+  published_at = EXCLUDED.published_at,
+  updated_at = now();
+
+CREATE TEMP TABLE _demo_plans ON COMMIT DROP AS
+SELECT
+  product.i,
+  md5(current_setting('emukey.seed_namespace') || ':plan:' || product.i)::uuid AS id,
+  product.id AS product_id,
+  provider.id AS provider_user_id,
+  'DEMO_PLAN_' || lpad(product.i::text, 2, '0') AS code,
+  product.plan_name,
+  product.billing_cycle,
+  product.duration_months,
+  product.price_vnd,
+  product.max_active_devices,
+  digest(current_setting('emukey.seed_namespace') || ':plan-commitment:' || product.i, 'sha256') AS plan_commitment
+FROM _demo_products AS product
+JOIN _demo_providers AS provider ON provider.i = product.provider_index
+WHERE product.status = 'PUBLISHED';
+
+INSERT INTO plans (
+  id, product_id, code, version, name,
+   duration_months, price_vnd, max_active_devices, entitlements,
+   plan_commitment, status, published_at
+)
+SELECT
+  id, product_id, code, 1,
+  plan_name,
+  duration_months, price_vnd, max_active_devices,
+   jsonb_build_object(
+     'desktop', true,
+     'cloudSync', i > 10,
+     'prioritySupport', i > 20,
+     'analytics', i > 20,
+     'demoSeed', current_setting('emukey.seed_namespace')
+   ),
+   plan_commitment, 'PUBLISHED', now() - make_interval(days => 40 - i)
+FROM _demo_plans
+ON CONFLICT (id) DO NOTHING;
+
+CREATE TEMP TABLE _demo_orders ON COMMIT DROP AS
+SELECT
+  product.i,
+  md5(current_setting('emukey.seed_namespace') || ':order:' || product.i)::uuid AS id,
+  md5(current_setting('emukey.seed_namespace') || ':order-idempotency:' || product.i)::uuid AS idempotency_key,
+  customer.id AS customer_user_id,
+  plan.provider_user_id,
+  plan.product_id,
+  plan.id AS plan_id,
+  plan.billing_cycle,
+  plan.duration_months,
+  plan.price_vnd,
+   plan.max_active_devices,
+  plan.plan_commitment,
+  product.name AS product_name,
+  provider_name.organization_name AS provider_name
+FROM _demo_products AS product
+JOIN _demo_plans AS plan ON plan.i = product.i
+JOIN _demo_customers AS customer ON customer.i = ((product.i - 1) % 20) + 1
+JOIN users AS provider_name ON provider_name.id = plan.provider_user_id;
+
+INSERT INTO orders (
+  id, order_number, idempotency_key, customer_user_id, provider_user_id,
+  product_id, plan_id, order_type, order_status, provider_name_snapshot,
+  product_name_snapshot, plan_name_snapshot, plan_version_snapshot,
+  price_vnd_snapshot, currency,
+  duration_months_snapshot, max_active_devices_snapshot,
+  entitlements_snapshot,
+  plan_commitment_snapshot, payment_due_at, ipn_accept_until
+)
+SELECT
+  id, 'DEMO-' || upper(substr(md5(id::text), 1, 16)), idempotency_key,
+  customer_user_id, provider_user_id, product_id, plan_id,
+  'NEW_PURCHASE', 'WAITING_SERVICE_TERMS_ACCEPTANCE', provider_name, product_name,
+  CASE WHEN billing_cycle = 'YEARLY' THEN 'Gói năm' ELSE 'Gói tháng' END,
+  1, price_vnd, 'VND', duration_months, max_active_devices,
+  jsonb_build_object('desktop', true, 'demoSeed', current_setting('emukey.seed_namespace')),
+  plan_commitment, statement_timestamp() + interval '7 days',
+  statement_timestamp() + interval '8 days'
+FROM _demo_orders
+ON CONFLICT (id) DO NOTHING;
+
+UPDATE orders
+SET order_status = 'WAITING_PAYMENT'
+FROM _demo_orders AS demo
+WHERE orders.id = demo.id
+  AND orders.order_status = 'WAITING_SERVICE_TERMS_ACCEPTANCE';
+
+CREATE TEMP TABLE _demo_attempts ON COMMIT DROP AS
+SELECT
+  orders.i,
+  md5(current_setting('emukey.seed_namespace') || ':payment-attempt:' || orders.i)::uuid AS id,
+  orders.id AS order_id,
+  orders.price_vnd
+FROM _demo_orders AS orders;
+
+INSERT INTO payment_attempts (
+  id, order_id, attempt_no, provider_reference, amount_vnd, status, expires_at
+)
+SELECT
+  id, order_id, 1, 'DEMO-PAY-' || upper(substr(md5(id::text), 1, 18)),
+  price_vnd, 'PENDING', statement_timestamp() + interval '1 day'
+FROM _demo_attempts AS attempt
+WHERE NOT EXISTS (
+  SELECT 1 FROM payment_attempts AS existing WHERE existing.id = attempt.id
+)
+ON CONFLICT (id) DO NOTHING;
+
+CREATE TEMP TABLE _demo_transactions ON COMMIT DROP AS
+SELECT
+  attempt.i,
+  md5(current_setting('emukey.seed_namespace') || ':payment-transaction:' || attempt.i)::uuid AS id,
+  attempt.order_id,
+  attempt.id AS payment_attempt_id,
+  attempt.price_vnd,
+  statement_timestamp() AS provider_occurred_at
+FROM _demo_attempts AS attempt;
+
+INSERT INTO payment_transactions (
+  id, provider_event_id, provider_transaction_ref, order_id,
+  payment_attempt_id, amount_minor, classification, raw_payload,
+  provider_occurred_at
+)
+SELECT
+  transaction.id,
+  'DEMO-EVENT-' || upper(substr(md5(transaction.id::text), 1, 18)),
+  'DEMO-TXN-' || upper(substr(md5(transaction.order_id::text), 1, 18)),
+  transaction.order_id, transaction.payment_attempt_id,
+  transaction.price_vnd, 'MATCHED',
+  jsonb_build_object('seedNamespace', current_setting('emukey.seed_namespace'), 'demo', true),
+  transaction.provider_occurred_at
+FROM _demo_transactions AS transaction
+WHERE NOT EXISTS (
+  SELECT 1 FROM payment_transactions AS existing WHERE existing.id = transaction.id
+)
+ON CONFLICT (id) DO NOTHING;
+
+UPDATE payment_attempts
+SET status = 'SUCCEEDED'
+FROM _demo_attempts AS demo
+WHERE payment_attempts.id = demo.id
+  AND payment_attempts.status = 'PENDING';
+
+UPDATE orders
+SET order_status = 'PAYMENT_ACCEPTED'
+FROM _demo_orders AS demo
+WHERE orders.id = demo.id
+  AND orders.order_status = 'WAITING_PAYMENT';
+
+CREATE TEMP TABLE _demo_licenses ON COMMIT DROP AS
+SELECT
+  orders.i,
+  md5(current_setting('emukey.seed_namespace') || ':license:' || orders.i)::uuid AS id,
+  orders.id AS origin_order_id,
+  orders.provider_user_id,
+  orders.customer_user_id,
+  orders.product_id,
+  orders.plan_id,
+  orders.plan_commitment,
+  orders.duration_months,
+  orders.max_active_devices,
+  payment.provider_occurred_at AS period_start,
+  activation.activation_key,
+  decode(substr(activation.activation_commitment, 3), 'hex') AS activation_commitment
+FROM _demo_orders AS orders
+JOIN payment_transactions AS payment ON payment.fulfillment_order_id = orders.id
+JOIN jsonb_to_recordset(current_setting('emukey.seed_activations')::jsonb)
+  AS activation(i integer, activation_key text, activation_commitment text)
+  ON activation.i = orders.i;
+
+INSERT INTO licenses (
+  id, public_license_id, origin_order_id, provider_user_id, customer_user_id,
+  product_id, plan_id, plan_commitment, status, period_start,
+  expires_at, max_active_devices, activation_commitment,
+  activation_key_version, activation_key_last4, entitlement_version
+)
+SELECT
+  id, 'EMU-DEMO-' || upper(substr(md5(id::text), 1, 20)), origin_order_id,
+  provider_user_id, customer_user_id, product_id, plan_id,
+  plan_commitment, 'PENDING_ONCHAIN', period_start,
+  period_start + make_interval(months => duration_months),
+  max_active_devices,
+  activation_commitment,
+  1, substr(md5(id::text), 1, 4), 1
+FROM _demo_licenses
+ON CONFLICT (id) DO NOTHING;
+
+CREATE TEMP TABLE _demo_devices ON COMMIT DROP AS
+SELECT
+  license.i,
+  md5(current_setting('emukey.seed_namespace') || ':device:' || license.i)::uuid AS id,
+  license.id AS license_id
+FROM _demo_licenses AS license;
+
+INSERT INTO license_devices (
+  id, license_id, device_ref, device_signer_address,
+  status, binding_generation, activated_at
+)
+SELECT
+  id, license_id,
+  encode(digest(current_setting('emukey.seed_namespace') || ':device-ref:' || id::text, 'sha256'), 'hex'),
+  '0x' || substr(encode(digest(current_setting('emukey.seed_namespace') || ':device-key:' || id::text, 'sha256'), 'hex'), 1, 40),
+  'ACTIVE', 1, now()
+FROM _demo_devices
+ON CONFLICT (id) DO NOTHING;
+
+UPDATE licenses AS license
+SET active_device_count = (SELECT count(*) FROM license_devices WHERE license_id = license.id AND status = 'ACTIVE'),
+    device_state_version = device_state_version + 1
+WHERE license.id IN (SELECT license_id FROM _demo_devices)
+  AND license.active_device_count <> (SELECT count(*) FROM license_devices WHERE license_id = license.id AND status = 'ACTIVE');
+
+CREATE TEMP TABLE _demo_commands ON COMMIT DROP AS
+SELECT
+  license.i,
+  md5(current_setting('emukey.seed_namespace') || ':chain-command:' || license.i)::uuid AS id,
+  license.id AS license_id,
+  license.provider_user_id,
+  license.origin_order_id,
+  license.activation_commitment
+FROM _demo_licenses AS license;
+
+INSERT INTO chain_commands (
+  id, idempotency_key, command_type, provider_user_id, order_id, license_id,
+  license_command_sequence, network, chain_id, contract_address, payload,
+  payload_hash, status, relayer_address, nonce, signed_transaction,
+  transaction_hash, attempt_count
+)
+SELECT
+  id,
+  md5(current_setting('emukey.seed_namespace') || ':chain-idempotency:' || i)::uuid,
+  'ISSUE_LICENSE', provider_user_id, origin_order_id, license_id,
+  1, 'sepolia', 11155111,
+  '0x' || substr(md5(current_setting('emukey.seed_namespace') || ':contract-a') || md5(current_setting('emukey.seed_namespace') || ':contract-b'), 1, 40),
+  jsonb_build_object('seedNamespace', current_setting('emukey.seed_namespace'), 'licenseId', license_id),
+  digest(current_setting('emukey.seed_namespace') || ':payload:' || i, 'sha256'),
+  'PENDING',
+  '0x' || substr(md5(current_setting('emukey.seed_namespace') || ':relayer-a') || md5(current_setting('emukey.seed_namespace') || ':relayer-b'), 1, 40),
+  i,
+  '0x' || encode(digest(current_setting('emukey.seed_namespace') || ':signed-transaction:' || i, 'sha256'), 'hex'),
+  '0x' || encode(digest(current_setting('emukey.seed_namespace') || ':transaction:' || i, 'sha256'), 'hex'),
+  0
+FROM _demo_commands AS command
+WHERE NOT EXISTS (
+  SELECT 1 FROM chain_commands AS existing WHERE existing.id = command.id
+)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO chain_indexer_checkpoints (
+  network, chain_id, contract_address, next_block,
+  last_scanned_block, last_scanned_block_hash
+)
+SELECT
+  'demo-indexer-' || lpad(checkpoint.i::text, 2, '0'),
+  11155111,
+  '0x' || substr(
+    md5(current_setting('emukey.seed_namespace') || ':checkpoint-contract-a:' || checkpoint.i) ||
+    md5(current_setting('emukey.seed_namespace') || ':checkpoint-contract-b:' || checkpoint.i),
+    1,
+    40
+  ),
+  1200 + checkpoint.i,
+  1199 + checkpoint.i,
+  '0x' || encode(
+    digest(current_setting('emukey.seed_namespace') || ':checkpoint-block:' || checkpoint.i, 'sha256'),
+    'hex'
+  )
+FROM generate_series(1, 10) AS checkpoint(i)
+ON CONFLICT (network, chain_id, contract_address) DO UPDATE SET
+  next_block = EXCLUDED.next_block,
+  last_scanned_block = EXCLUDED.last_scanned_block,
+  last_scanned_block_hash = EXCLUDED.last_scanned_block_hash,
+  locked_by = NULL,
+  locked_at = NULL,
+  updated_at = now();
+
+CREATE TEMP TABLE _demo_events ON COMMIT DROP AS
+SELECT
+  command.i,
+  md5(current_setting('emukey.seed_namespace') || ':chain-event:' || command.i)::uuid AS id,
+  command.id AS chain_command_id,
+  command.provider_user_id,
+  command.license_id,
+  command.activation_commitment
+FROM _demo_commands AS command;
+
+INSERT INTO chain_events (
+  id, chain_command_id, event_type, provider_user_id, license_id, network,
+  chain_id, contract_address, transaction_hash, log_index, block_number,
+  block_hash, confirmation_count, finality_status, activation_commitment,
+  activation_key_version, payload, observed_at
+)
+SELECT
+  id, chain_command_id, 'LICENSE_ISSUED', provider_user_id, license_id,
+  'sepolia', 11155111,
+  '0x' || substr(md5(current_setting('emukey.seed_namespace') || ':contract-a') || md5(current_setting('emukey.seed_namespace') || ':contract-b'), 1, 40),
+  '0x' || encode(digest(current_setting('emukey.seed_namespace') || ':transaction:' || i, 'sha256'), 'hex'),
+  0, 1000 + i,
+  '0x' || encode(digest(current_setting('emukey.seed_namespace') || ':block:' || i, 'sha256'), 'hex'),
+  0, 'PENDING', activation_commitment, 1,
+  jsonb_build_object('seedNamespace', current_setting('emukey.seed_namespace'), 'licenseId', license_id),
+  statement_timestamp()
+FROM _demo_events AS event
+WHERE NOT EXISTS (
+  SELECT 1 FROM chain_events AS existing WHERE existing.id = event.id
+)
+ON CONFLICT (id) DO NOTHING;
+
+CREATE TEMP TABLE _demo_documents ON COMMIT DROP AS
+SELECT
+  product.i,
+  md5(current_setting('emukey.seed_namespace') || ':knowledge-document:' || product.i)::uuid AS id,
+  product.id AS product_id,
+  provider.id AS provider_user_id,
+  product.name AS product_name
+FROM _demo_products AS product
+JOIN _demo_providers AS provider ON provider.i = product.provider_index
+WHERE product.status = 'PUBLISHED';
+
+INSERT INTO knowledge_documents (
+  id, product_id, logical_document_key, version,
+  source_type, title, storage_key, storage_mime_type, storage_size_bytes,
+  checksum, status, is_current
+)
+SELECT
+  id, product_id,
+  'demo-guide-' || lpad(i::text, 2, '0'), 1, 'TXT',
+  'Hướng dẫn sử dụng ' || product_name,
+  'demo/knowledge/' || id || '.txt', 'text/plain', 2048 + i,
+  digest(current_setting('emukey.seed_namespace') || ':document:' || i, 'sha256'),
+  'READY', true
+FROM _demo_documents
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO knowledge_chunks (
+  id, document_id, chunk_index, content
+)
+SELECT
+  md5(current_setting('emukey.seed_namespace') || ':knowledge-chunk:' || i)::uuid,
+  id, 0,
+  'Nội dung minh họa cho ' || product_name || ': cài đặt, kích hoạt và quản lý license.'
+FROM _demo_documents
+ON CONFLICT (id) DO NOTHING;
+
+CREATE TEMP TABLE _demo_conversations ON COMMIT DROP AS
+SELECT
+  series.i,
+  md5(current_setting('emukey.seed_namespace') || ':conversation:' || series.i)::uuid AS id,
+  customer.id AS customer_user_id
+FROM generate_series(1, 30) AS series(i)
+JOIN _demo_customers AS customer ON customer.i = ((series.i - 1) % 20) + 1;
+
+INSERT INTO conversations (
+  id, customer_user_id, status, version, title, last_message_at
+)
+SELECT
+  id, customer_user_id, 'AI_ACTIVE', 1,
+  'Trao đổi minh họa ' || lpad(i::text, 2, '0'), now() - make_interval(hours => i)
+FROM _demo_conversations
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO messages (
+  id, conversation_id, sender_user_id, sender_type, client_message_id,
+  server_sequence, content, sources
+)
+SELECT
+  md5(current_setting('emukey.seed_namespace') || ':message:' || i)::uuid,
+  id, customer_user_id, 'CUSTOMER',
+  md5(current_setting('emukey.seed_namespace') || ':client-message:' || i)::uuid,
+  1, 'Tôi cần hướng dẫn kích hoạt sản phẩm minh họa số ' || i || '.',
+  jsonb_build_array(jsonb_build_object('seedNamespace', current_setting('emukey.seed_namespace')))
+FROM _demo_conversations
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO notifications (
+  id, user_id, event_key, type, title, content, data, read_at
+)
+SELECT
+  md5(current_setting('emukey.seed_namespace') || ':notification:' || i)::uuid,
+  id, 'demo-notification-' || lpad(i::text, 2, '0'), 'LICENSE_ACTIVE',
+  'License đã sẵn sàng', 'License minh họa của bạn đã được kích hoạt.',
+  jsonb_build_object('seedNamespace', current_setting('emukey.seed_namespace'), 'index', i),
+  CASE WHEN i % 3 = 0 THEN now() - make_interval(hours => i) END
+FROM (
+  SELECT row_number() OVER (ORDER BY id)::int AS i, id
+  FROM _demo_users
+) AS demo_users
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO mobile_push_tokens (
+  id, user_id, token, provider, status, last_seen_at
+)
+SELECT
+  md5(current_setting('emukey.seed_namespace') || ':push-token:' || i)::uuid,
+  id, 'demo-push-' || encode(digest(current_setting('emukey.seed_namespace') || ':push:' || i, 'sha256'), 'hex'),
+  'EXPO', 'ACTIVE', now() - make_interval(hours => i)
+FROM (
+  SELECT row_number() OVER (ORDER BY id)::int AS i, id
+  FROM _demo_users
+) AS demo_users
+ON CONFLICT (id) DO NOTHING;
+
+DO $emukey_seed_verify$
+DECLARE
+  item record;
+  expected integer;
+BEGIN
+  FOR item IN EXECUTE $emukey_seed_counts$
+SELECT table_name, row_count::int
+FROM (
+  SELECT 'users' AS table_name, count(*) AS row_count
+  FROM users AS row JOIN _demo_users AS seed ON seed.id = row.id
+  UNION ALL SELECT 'products', count(*)
+  FROM products AS row JOIN _demo_products AS seed ON seed.id = row.id
+  UNION ALL SELECT 'plans', count(*)
+  FROM plans AS row JOIN _demo_plans AS seed ON seed.id = row.id
+  UNION ALL SELECT 'orders', count(*)
+  FROM orders AS row JOIN _demo_orders AS seed ON seed.id = row.id
+  UNION ALL SELECT 'payment_attempts', count(*)
+  FROM payment_attempts AS row JOIN _demo_attempts AS seed ON seed.id = row.id
+  UNION ALL SELECT 'payment_transactions', count(*)
+  FROM payment_transactions AS row JOIN _demo_attempts AS seed ON seed.id = row.payment_attempt_id
+  UNION ALL SELECT 'licenses', count(*)
+  FROM licenses AS row JOIN _demo_licenses AS seed ON seed.id = row.id
+  UNION ALL SELECT 'license_devices', count(*)
+  FROM license_devices AS row JOIN _demo_devices AS seed ON seed.id = row.id
+  UNION ALL SELECT 'chain_commands', count(*)
+  FROM chain_commands AS row JOIN _demo_commands AS seed ON seed.id = row.id
+  UNION ALL SELECT 'chain_indexer_checkpoints', count(*)
+  FROM chain_indexer_checkpoints WHERE network LIKE 'demo-indexer-%'
+  UNION ALL SELECT 'chain_events', count(*)
+  FROM chain_events AS row JOIN _demo_events AS seed ON seed.id = row.id
+  UNION ALL SELECT 'knowledge_documents', count(*)
+  FROM knowledge_documents AS row JOIN _demo_documents AS seed ON seed.id = row.id
+  UNION ALL SELECT 'knowledge_chunks', count(*)
+  FROM knowledge_chunks AS row JOIN _demo_documents AS seed ON seed.id = row.document_id
+  UNION ALL SELECT 'conversations', count(*)
+  FROM conversations AS row JOIN _demo_conversations AS seed ON seed.id = row.id
+  UNION ALL SELECT 'messages', count(*)
+  FROM messages AS row JOIN _demo_conversations AS seed
+    ON row.id = md5(current_setting('emukey.seed_namespace') || ':message:' || seed.i)::uuid
+    AND seed.id = row.conversation_id
+  UNION ALL SELECT 'notifications', count(*)
+  FROM notifications AS row
+  JOIN generate_series(1, 30) AS seed(i)
+    ON row.id = md5(current_setting('emukey.seed_namespace') || ':notification:' || seed.i)::uuid
+  UNION ALL SELECT 'mobile_push_tokens', count(*)
+  FROM mobile_push_tokens AS row
+  JOIN generate_series(1, 30) AS seed(i)
+    ON row.id = md5(current_setting('emukey.seed_namespace') || ':push-token:' || seed.i)::uuid
+) AS counts
+ORDER BY table_name;
+$emukey_seed_counts$
+  LOOP
+    expected := CASE item.table_name WHEN 'products' THEN 50 WHEN 'chain_indexer_checkpoints' THEN 10 ELSE 30 END;
+    IF item.row_count <> expected THEN
+      RAISE EXCEPTION 'Demo seed verification failed for %: expected %, found %', item.table_name, expected, item.row_count;
+    END IF;
+  END LOOP;
+END;
+$emukey_seed_verify$;
+
+$emukey_seed_demo$;
+END IF;
+END;
+$emukey_seed$;
+-- emukey:seed:end
 
 COMMIT;

@@ -10,6 +10,7 @@
     "db:initialize": "node --env-file-if-exists=.env dist/entrypoints/database/initialize.js",
     "db:reset": "node --env-file-if-exists=.env dist/entrypoints/database/reset.js",
     "db:seed": "node --env-file-if-exists=.env dist/entrypoints/database/seed.js",
+    "db:seed:demo": "node --env-file-if-exists=.env dist/entrypoints/database/seed.js --demo",
     "db:verify": "node --env-file-if-exists=.env dist/entrypoints/database/verify.js",
     "reconcile:run": "node --env-file-if-exists=.env scripts/reconcile.mjs",
     "reconcile:payment:sandbox": "node --env-file-if-exists=.env scripts/reconcile-sandbox-payment.mjs",

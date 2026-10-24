@@ -125,7 +125,7 @@ Khi vẽ state diagram, tách ba chiều ở trên và không vẽ `EXPIRED` nh�
 
 ## 6. Database plan
 
-Canonical schema `EmuKey/backend/database/schema.sql` có **18 tables**. Backend dùng trực tiếp file này để build/delivery; mọi thay đổi schema cập nhật tại đây và migrations tương ứng:
+Canonical schema `EmuKey/backend/database/schema.sql` có **19 tables**. Đây là file SQL duy nhất, khai báo thẳng cấu trúc cuối cùng và seed tùy chọn ở cuối; khởi tạo mặc định xóa/tạo lại schema public trong một transaction, không chứa lịch sử migration; mọi thay đổi schema cập nhật tại đây:
 
 `users`, `products`, `plans`, `orders`, `payment_attempts`, `payment_transactions`, `licenses`, `license_devices`, `chain_commands`, `chain_events`, `chain_indexer_checkpoints`, `knowledge_documents`, `knowledge_chunks`, `conversations`, `messages`, `notifications`, `mobile_push_tokens`.
 

@@ -17,19 +17,19 @@ export class KnowledgeRepository {
       await client.query('BEGIN');
        const owned = await client.query('SELECT id FROM products WHERE id = $1 AND provider_user_id = $2 FOR SHARE', [input.productId, actor.sub]);
        if (!owned.rows[0]) throw new Error('KNOWLEDGE_PRODUCT_NOT_FOUND');
-       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))', [`knowledge:${actor.sub}:${input.logicalDocumentKey}`]);
-       const versions = await client.query<{ next_version: number }>('SELECT COALESCE(MAX(version), 0) + 1 AS next_version FROM knowledge_documents WHERE provider_user_id = $1 AND logical_document_key = $2', [actor.sub, input.logicalDocumentKey]);
+       await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))', [`knowledge:${input.productId}:${input.logicalDocumentKey}`]);
+       const versions = await client.query<{ next_version: number }>('SELECT COALESCE(MAX(version), 0) + 1 AS next_version FROM knowledge_documents WHERE product_id = $1 AND logical_document_key = $2', [input.productId, input.logicalDocumentKey]);
        const version = input.version ?? Number(versions.rows[0]?.next_version ?? 1);
-       const duplicate = await client.query('SELECT id FROM knowledge_documents WHERE provider_user_id = $1 AND logical_document_key = $2 AND version = $3', [actor.sub, input.logicalDocumentKey, version]);
+       const duplicate = await client.query('SELECT id FROM knowledge_documents WHERE product_id = $1 AND logical_document_key = $2 AND version = $3', [input.productId, input.logicalDocumentKey, version]);
        if (duplicate.rows[0]) throw new Error('KNOWLEDGE_VERSION_EXISTS');
        if (input.file && (!this.storage || input.file.size > this.limits.maxFileBytes || !this.limits.allowedMimeTypes.includes(input.file.mimetype) || !validFile(input.file) || (input.sourceType === 'PDF' && input.file.mimetype !== 'application/pdf') || (input.sourceType === 'TXT' && input.file.mimetype !== 'text/plain'))) throw new Error('KNOWLEDGE_FILE_NOT_ALLOWED');
         const chunks = input.chunks ?? (input.file ? await extractChunks(input.file, this.limits.maxChunkBytes) : []);
        if (chunks.length === 0 || chunks.length > this.limits.maxChunks || chunks.some((chunk) => Buffer.byteLength(chunk, 'utf8') > this.limits.maxChunkBytes)) throw new Error('KNOWLEDGE_CHUNK_LIMIT');
-       storageKey = input.file ? `knowledge/${actor.sub}/${input.logicalDocumentKey}/${version}-${createHash('sha256').update(input.file.buffer).digest('hex')}` : null;
+       storageKey = input.file ? `knowledge/${actor.sub}/${input.productId}/${input.logicalDocumentKey}/${version}-${createHash('sha256').update(input.file.buffer).digest('hex')}` : null;
        if (input.file && storageKey) await this.storage!.put(storageKey, input.file.buffer, input.file.mimetype);
-       const document = await client.query<Record<string, unknown>>(`INSERT INTO knowledge_documents (provider_user_id, product_id, logical_document_key, version, source_type, title, storage_key, storage_mime_type, storage_size_bytes, checksum, status) SELECT $1, id, $2, $3, $4, $5, $6, $7, $8, decode($9, 'hex'), 'PROCESSING' FROM products WHERE id = $10 AND provider_user_id = $1 RETURNING id`, [actor.sub, input.logicalDocumentKey, version, input.sourceType, input.title, storageKey, input.file?.mimetype ?? null, input.file?.size ?? null, input.file ? createHash('sha256').update(input.file.buffer).digest('hex') : null, input.productId]);
+       const document = await client.query<Record<string, unknown>>(`INSERT INTO knowledge_documents (product_id, logical_document_key, version, source_type, title, storage_key, storage_mime_type, storage_size_bytes, checksum, status) SELECT id, $2, $3, $4, $5, $6, $7, $8, decode($9, 'hex'), 'PROCESSING' FROM products WHERE id = $10 AND provider_user_id = $1 RETURNING id`, [actor.sub, input.logicalDocumentKey, version, input.sourceType, input.title, storageKey, input.file?.mimetype ?? null, input.file?.size ?? null, input.file ? createHash('sha256').update(input.file.buffer).digest('hex') : null, input.productId]);
        if (!document.rows[0]) throw new Error('KNOWLEDGE_PRODUCT_NOT_FOUND');
-       for (const [index, content] of chunks.entries()) await client.query(`INSERT INTO knowledge_chunks (document_id, chunk_index, content, token_count) VALUES ($1, $2, $3, $4)`, [document.rows[0].id, index, content, content.split(/\s+/u).length]);
+       for (const [index, content] of chunks.entries()) await client.query(`INSERT INTO knowledge_chunks (document_id, chunk_index, content) VALUES ($1, $2, $3)`, [document.rows[0].id, index, content]);
        await client.query(`UPDATE knowledge_documents SET status = 'READY', updated_at = now() WHERE id = $1`, [document.rows[0].id]);
       await client.query('COMMIT');
       return mapDocument({ ...document.rows[0], title: input.title, logical_document_key: input.logicalDocumentKey, version, status: 'READY', is_current: false });
@@ -37,9 +37,9 @@ export class KnowledgeRepository {
   }
   async list(actor: AuthPrincipal): Promise<Record<string, unknown>[]> {
     const result = await this.pool.query<Record<string, unknown>>(`
-      SELECT * FROM knowledge_documents
+      SELECT knowledge_documents.*, (SELECT provider_user_id FROM products WHERE id=knowledge_documents.product_id) AS provider_user_id FROM knowledge_documents
       WHERE $2 = 'SYSTEM_ADMIN'
-         OR ($2 = 'PROVIDER_ADMIN' AND provider_user_id = $1)
+         OR ($2 = 'PROVIDER_ADMIN' AND product_id IN (SELECT id FROM products WHERE provider_user_id=$1))
          OR ($2 = 'CUSTOMER' AND status = 'READY' AND is_current
              AND product_id IN (SELECT product_id FROM licenses WHERE customer_user_id = $1))
       ORDER BY provider_user_id, logical_document_key, version DESC`, [actor.sub, actor.role]);
@@ -47,9 +47,9 @@ export class KnowledgeRepository {
   }
   async detail(actor: AuthPrincipal, id: string) {
     const document = await this.pool.query<Record<string, unknown>>(`
-      SELECT * FROM knowledge_documents WHERE id = $1 AND (
+      SELECT knowledge_documents.*, (SELECT provider_user_id FROM products WHERE id=knowledge_documents.product_id) AS provider_user_id FROM knowledge_documents WHERE id = $1 AND (
         $3 = 'SYSTEM_ADMIN'
-        OR ($3 = 'PROVIDER_ADMIN' AND provider_user_id = $2)
+        OR ($3 = 'PROVIDER_ADMIN' AND product_id IN (SELECT id FROM products WHERE provider_user_id=$2))
         OR ($3 = 'CUSTOMER' AND status = 'READY' AND is_current
             AND product_id IN (SELECT product_id FROM licenses WHERE customer_user_id = $2)))`, [id, actor.sub, actor.role]);
     if (!document.rows[0]) throw new Error('KNOWLEDGE_DOCUMENT_NOT_FOUND');
@@ -61,15 +61,17 @@ export class KnowledgeRepository {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      const target = await client.query<{ logical_document_key: string; provider_user_id: string }>("SELECT logical_document_key, provider_user_id FROM knowledge_documents WHERE id = $1 AND (provider_user_id = $2 OR $3 = 'SYSTEM_ADMIN')", [id, actor.sub, actor.role]);
+      const target = await client.query<{ logical_document_key: string; product_id: string }>(
+        "SELECT logical_document_key, product_id FROM knowledge_documents WHERE id=$1 AND (product_id IN (SELECT id FROM products WHERE provider_user_id=$2) OR $3='SYSTEM_ADMIN')",
+        [id,actor.sub,actor.role]);
       if (!target.rows[0]) throw new Error('KNOWLEDGE_DOCUMENT_NOT_FOUND');
-      const providerId = target.rows[0].provider_user_id;
+      const productId = target.rows[0].product_id;
       // Serialize all versions, including the first publish where no current row exists.
-      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))', [`knowledge:${providerId}:${target.rows[0].logical_document_key}`]);
-      const current = await client.query<{ version: number }>('SELECT version FROM knowledge_documents WHERE provider_user_id = $1 AND logical_document_key = (SELECT logical_document_key FROM knowledge_documents WHERE id = $2 AND provider_user_id = $1) AND is_current FOR UPDATE', [providerId, id]);
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))', [`knowledge:${productId}:${target.rows[0].logical_document_key}`]);
+      const current = await client.query<{ version: number }>('SELECT version FROM knowledge_documents WHERE product_id = $1 AND logical_document_key = (SELECT logical_document_key FROM knowledge_documents WHERE id = $2 AND product_id=$1) AND is_current FOR UPDATE', [productId, id]);
       if (expectedCurrentVersion !== undefined && (current.rows[0]?.version ?? 0) !== expectedCurrentVersion) throw new Error('KNOWLEDGE_VERSION_CONFLICT');
-      await client.query(`UPDATE knowledge_documents SET is_current = FALSE, updated_at = now() WHERE provider_user_id = $1 AND logical_document_key = (SELECT logical_document_key FROM knowledge_documents WHERE id = $2 AND provider_user_id = $1)`, [providerId, id]);
-      const result = await client.query<Record<string, unknown>>(`UPDATE knowledge_documents SET is_current = TRUE, updated_at = now() WHERE id = $1 AND provider_user_id = $2 AND status = 'READY' RETURNING *`, [id, providerId]);
+      await client.query(`UPDATE knowledge_documents SET is_current = FALSE, updated_at = now() WHERE product_id = $1 AND logical_document_key = (SELECT logical_document_key FROM knowledge_documents WHERE id = $2 AND product_id=$1)`, [productId, id]);
+      const result = await client.query<Record<string, unknown>>(`UPDATE knowledge_documents SET is_current = TRUE, updated_at = now() WHERE id = $1 AND product_id = $2 AND status = 'READY' RETURNING *, (SELECT provider_user_id FROM products WHERE id=knowledge_documents.product_id) AS provider_user_id`, [id, productId]);
       if (!result.rows[0]) throw new Error('KNOWLEDGE_DOCUMENT_NOT_FOUND');
       await client.query('COMMIT');
       return mapDocument(result.rows[0]);
@@ -83,7 +85,7 @@ export class KnowledgeRepository {
        WHERE kd.status = 'READY' AND kd.is_current
          AND (
            $2 = 'SYSTEM_ADMIN' OR
-           ($2 = 'PROVIDER_ADMIN' AND kd.provider_user_id = $1) OR
+           ($2 = 'PROVIDER_ADMIN' AND kd.product_id IN (SELECT id FROM products WHERE provider_user_id=$1)) OR
            ($2 = 'CUSTOMER' AND kd.product_id IN (
              SELECT product_id FROM licenses WHERE customer_user_id = $1
            ))
@@ -106,18 +108,18 @@ export class KnowledgeRepository {
           AND kd.product_id IN (
             SELECT product_id FROM licenses WHERE customer_user_id = $2
           )
-          AND (c.context_type = 'GENERAL' OR
-               (c.context_type = 'PRODUCT' AND c.context_id = kd.product_id) OR
-               (c.context_type = 'ORDER' AND EXISTS (
-                 SELECT 1 FROM orders o WHERE o.id = c.context_id AND o.customer_user_id = $2 AND o.product_id = kd.product_id
+          AND (num_nonnulls(c.product_id,c.plan_id,c.order_id,c.license_id)=0 OR
+               (c.product_id IS NOT NULL AND c.product_id = kd.product_id) OR
+               (c.order_id IS NOT NULL AND EXISTS (
+                 SELECT 1 FROM orders o WHERE o.id = c.order_id AND o.customer_user_id = $2 AND o.product_id = kd.product_id
                )) OR
-               (c.context_type = 'PLAN' AND EXISTS (
+               (c.plan_id IS NOT NULL AND EXISTS (
                  SELECT 1 FROM plans p JOIN products product ON product.id = p.product_id
-                 WHERE p.id = c.context_id AND p.product_id = kd.product_id
+                 WHERE p.id = c.plan_id AND p.product_id = kd.product_id
                    AND p.status = 'PUBLISHED' AND product.status = 'PUBLISHED'
                )) OR
-               (c.context_type = 'LICENSE' AND EXISTS (
-                 SELECT 1 FROM licenses l WHERE l.id = c.context_id AND l.customer_user_id = $2 AND l.product_id = kd.product_id
+               (c.license_id IS NOT NULL AND EXISTS (
+                 SELECT 1 FROM licenses l WHERE l.id = c.license_id AND l.customer_user_id = $2 AND l.product_id = kd.product_id
                )))
           AND to_tsvector('simple', kc.content) @@ websearch_to_tsquery('simple', $3)
         ORDER BY ts_rank(to_tsvector('simple', kc.content), websearch_to_tsquery('simple', $3)) DESC,

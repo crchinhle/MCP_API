@@ -12,6 +12,7 @@ const EXPECTED_TABLES = [
   'messages',
   'mobile_push_tokens',
   'notifications',
+  'notification_deliveries',
   'orders',
   'payment_attempts',
   'payment_transactions',
@@ -45,9 +46,9 @@ const EXPECTED_CRITICAL_CONSTRAINTS = {
   fk_licenses_last_chain_event:
     'FOREIGN KEY (last_applied_chain_event_id, id) REFERENCES chain_events(confirmed_license_event_id, license_id) ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED',
   fk_licenses_plan:
-    'FOREIGN KEY (plan_id, product_id, provider_user_id, plan_commitment) REFERENCES plans(id, product_id, provider_user_id, plan_commitment) ON DELETE RESTRICT',
+    'FOREIGN KEY (plan_id, product_id, plan_commitment) REFERENCES plans(id, product_id, plan_commitment) ON DELETE RESTRICT',
   fk_orders_plan:
-    'FOREIGN KEY (plan_id, product_id, provider_user_id, plan_commitment_snapshot) REFERENCES plans(id, product_id, provider_user_id, plan_commitment) ON DELETE RESTRICT',
+    'FOREIGN KEY (plan_id, product_id, plan_commitment_snapshot) REFERENCES plans(id, product_id, plan_commitment) ON DELETE RESTRICT',
   fk_orders_target_license:
     'FOREIGN KEY (target_license_id, provider_user_id, customer_user_id, product_id, plan_id, plan_commitment_snapshot) REFERENCES licenses(id, provider_user_id, customer_user_id, product_id, plan_id, plan_commitment) ON DELETE RESTRICT',
   fk_payment_transactions_attempt_order:
@@ -72,7 +73,7 @@ const EXPECTED_CRITICAL_INDEXES = {
   uq_chain_commands_current_renewal_order:
     "CREATE UNIQUE INDEX uq_chain_commands_current_renewal_order ON public.chain_commands USING btree (renewal_order_id) WHERE ((renewal_order_id IS NOT NULL) AND ((status)::text <> ALL ((ARRAY['ABANDONED'::character varying, 'SUPERSEDED'::character varying])::text[])))",
   uq_knowledge_documents_one_current:
-    'CREATE UNIQUE INDEX uq_knowledge_documents_one_current ON public.knowledge_documents USING btree (provider_user_id, logical_document_key) WHERE is_current',
+    'CREATE UNIQUE INDEX uq_knowledge_documents_one_current ON public.knowledge_documents USING btree (product_id, logical_document_key) WHERE is_current',
   uq_orders_one_open_renewal:
     "CREATE UNIQUE INDEX uq_orders_one_open_renewal ON public.orders USING btree (target_license_id) WHERE (((order_type)::text = 'RENEWAL'::text) AND ((order_status)::text = ANY ((ARRAY['WAITING_SERVICE_TERMS_ACCEPTANCE'::character varying, 'WAITING_PAYMENT'::character varying])::text[])))",
   uq_users_provider_chain_address:

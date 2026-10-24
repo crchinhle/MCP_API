@@ -1,5 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
-import { acceptServiceTerms, createOrder, storeActivationKey, loadActivationKey, type MobileOrderDetail } from '../../../../EmuKey/mobile/src/infrastructure/api/client';
+import { acceptServiceTerms, createOrder, storeActivationKey, loadActivationKey, registerPushToken, logout, type MobileOrderDetail } from '../../../../EmuKey/mobile/src/infrastructure/api/client';
 
 jest.mock('expo-crypto', () => ({ randomUUID: jest.fn(() => '11111111-2222-4333-8444-555555555555') }));
 jest.mock('expo-secure-store', () => ({ getItemAsync: jest.fn(), setItemAsync: jest.fn(), deleteItemAsync: jest.fn(), WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'device' }));
@@ -16,6 +16,15 @@ beforeEach(() => {
   jest.mocked(SecureStore.deleteItemAsync).mockImplementation((key) => { validKey(key); values.delete(key); return Promise.resolve(); });
 });
 afterEach(() => jest.restoreAllMocks());
+
+it('unregisters the current push token before clearing the account session', async () => {
+  const fetchMock = jest.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({}) } as Response);
+  await registerPushToken('android-device-token', 'FCM');
+  await logout();
+  const calls = fetchMock.mock.calls.map(([url]) => String(url));
+  expect(calls.findIndex((url) => url.endsWith('/notifications/push-tokens/remove'))).toBeGreaterThanOrEqual(0);
+  expect(calls.findIndex((url) => url.endsWith('/notifications/push-tokens/remove'))).toBeLessThan(calls.findIndex((url) => url.endsWith('/auth/logout')));
+});
 
 it('persists a valid intent key through network failure and reuses it on retry', async () => {
   const fetchMock = jest.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('network lost'));

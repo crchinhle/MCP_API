@@ -1,5 +1,9 @@
 # Import dữ liệu demo
 
+> Từ 22/10/2026, `EmuKey/backend/database/schema.sql` là file khởi tạo duy nhất, khai báo thẳng cấu trúc cuối cùng. `db:initialize` (và alias `db:reset`) mặc định xóa schema `public` cùng các đối tượng phụ thuộc rồi tạo lại; không DROP DATABASE. Dừng API/worker và xác nhận đúng database, bản sao phục hồi trước khi chạy. Không còn lệnh `db:migrate`; file này không dùng để nâng cấp tại chỗ và giữ dữ liệu cũ.
+
+> Seed demo cũng nằm ở cuối `schema.sql`: từ thư mục `EmuKey`, chạy `corepack pnpm --dir backend db:seed:demo` sau khi build backend, với `NODE_ENV=development`. Database mới có thể dùng `corepack pnpm --dir backend db:initialize --demo` để tạo cấu trúc và seed trong cùng transaction. Dữ liệu gồm 50 sản phẩm, 30 gói và 30 tài khoản demo; seed không tự chạy khi khởi động API.
+
 > Phạm vi cập nhật 20/10/2026: gỡ nhật ký hoạt động người dùng (`OPS-02`), schema còn 18 bảng và danh mục còn 34 capability. Giữ lịch sử nghiệp vụ và log lỗi kỹ thuật tối thiểu; không có màn hình/API audit tổng quát. Các kết quả có ngày của phiên bản cũ là dữ liệu lịch sử.
 
 Chạy từ thư mục `D:\TLHT\KLTN\UY\EmuKey`:
@@ -25,15 +29,8 @@ không dùng giờ Windows, không bù giây cố định, không sửa thời g
 Webhook đến sau hạn vẫn bị từ chối, kể cả Sandbox. Đây là chính sách EmuKey,
 không phải cam kết thời gian của SePay.
 
-Từ thư mục `EmuKey/backend`, nâng cấp database hiện có **một lần** (không reset/seed):
-
-```powershell
-corepack pnpm build
-corepack pnpm reconcile:payment:sandbox --confirm-sandbox --migrate
-corepack pnpm reconcile:payment:sandbox --confirm-sandbox --migrate --apply
-```
-
-Khởi động lại API sau khi nâng cấp. Schema mới cài từ đầu đã có thay đổi này.
+Schema cuối cùng đã chứa chính sách Sandbox; lệnh đối soát không sửa schema.
+Chạy `corepack pnpm build` từ `EmuKey/backend` trước khi dùng CLI.
 Đối soát **một giao dịch Sandbox đã xác thực** bị lỗi giờ: xem trước rồi mới áp dụng.
 Thay các giá trị mẫu bằng mã giao dịch nội bộ và tài khoản quản trị đang ACTIVE:
 
@@ -55,15 +52,7 @@ Nguồn: [SePay IPN](https://developer.sepay.vn/vi/cong-thanh-toan/IPN),
 ## Điều khoản dịch vụ theo từng đơn
 
 - Khi tạo đơn, hệ thống snapshot phiên bản, SHA-256 và nội dung Điều khoản dịch vụ trong PostgreSQL. Người mua chỉ có thể chấp thuận đúng snapshot đã hiển thị; thay đổi tài liệu hiện tại không làm thay đổi đơn cũ.
-- Database đã tồn tại cần chạy migration additive một lần, không reset database:
-
-Chạy migration additive một lần trên database disposable hoặc database triển khai theo quy trình migration của môi trường; không dùng lệnh reset/khởi tạo lại database:
-
-```text
-EmuKey/backend/database/migrations/20260930-order-service-terms-snapshot.sql
-```
-
-Có thể mở file trên bằng Neon SQL Editor hoặc migration runner của môi trường. Sau đó kiểm tra các cột `orders.service_terms_version_snapshot`, `orders.service_terms_hash_snapshot`, `orders.service_terms_content_snapshot` và trigger `trg_orders_terms_snapshot`.
+- Schema cuối cùng khai báo trực tiếp các cột `orders.service_terms_version_snapshot`, `orders.service_terms_hash_snapshot`, `orders.service_terms_content_snapshot` và trigger `trg_orders_terms_snapshot`. Không có bước migration trong file khởi tạo; không dùng lệnh khởi tạo để nâng cấp database cần giữ dữ liệu.
 
 - Đơn legacy không có bằng chứng snapshot lịch sử sẽ không được gán ngược nội dung hiện tại; cần tạo snapshot hợp lệ theo luồng đơn mới trước khi chấp thuận.
 - Nếu tải điều khoản thất bại, nút chấp thuận bị khóa và nút **Thử lại** chỉ tải lại điều khoản của cùng order, không tạo order mới.
@@ -75,7 +64,7 @@ Có thể mở file trên bằng Neon SQL Editor hoặc migration runner của m
 - Đơn đã chấp nhận thanh toán, kể cả đang chờ blockchain, không bị hủy.
 - Đơn tự hủy có dấu `auto_cancelled`; vẫn chấp nhận webhook hợp lệ của giao dịch thực hiện trước hạn, trong cửa sổ nhận IPN đã cấu hình. Đơn khách chủ động hủy không được tự khôi phục. Thời điểm hủy được giữ lại kể cả khi sau đó chấp nhận thanh toán.
 - Sandbox dùng `SANDBOX_RECEIPT` vẫn lấy thời điểm backend nhận làm căn cứ; không dùng đồng hồ Sandbox lệch để tự kết luận giao dịch đúng hạn.
-- Database đã tồn tại cần chạy **một lần** file `EmuKey/backend/database/migrations/20260929-order-auto-cancellation.sql` bằng Neon SQL Editor trước khi chạy phiên bản API/worker này. Schema mới đã bao gồm thay đổi. Không chạy lại migration Sandbox cũ sau migration này.
+- Schema cuối cùng đã bao gồm tự hủy đơn; không cần chạy thêm migration sau khởi tạo.
 - Cần chạy cả `api` và `worker` để tự hủy ngay cả khi người dùng không mở trang.
 
 Tác vụ nền dùng [BullMQ Job Scheduler](https://docs.bullmq.io/guide/job-schedulers); chu kỳ quét không phải cam kết thực thi chính xác từng giây khi worker/Redis mất kết nối.
@@ -148,7 +137,7 @@ Trong biểu tượng thông báo, chọn **Xem thêm thông báo** để tải 
 
 ## Trạng thái môi trường demo 02/10/2026
 
-- Neon demo đã áp dụng migration additive `backend/database/migrations/20260930-order-service-terms-snapshot.sql`; kiểm tra `corepack pnpm db:verify:terms` phải trả `REAL_VERIFIED`. Không reset hoặc seed đè dữ liệu hiện có.
+- Kết quả lịch sử 02/10/2026: Neon demo đã được nâng cấp snapshot điều khoản. Kiểm tra `corepack pnpm db:verify:terms` phải trả `REAL_VERIFIED`; không khởi tạo lại database cần giữ dữ liệu.
 - Notification worker đã được đăng ký trong `WorkerModule`; cần cung cấp Redis reachable (biến hiện tại đang là `REDIS_URL=redis://127.0.0.1:6379`) trước khi chạy `corepack pnpm start:worker`.
 - Chưa gọi là nghiệm thu thật nếu chưa có domain HTTPS/CORS/callback, hộp thư kiểm thử, Redis host, SePay sandbox callback, Gemini/Brevo thật và giao dịch Sepolia có receipt/finality/indexer. Mobile chưa được nghiệm thu trên thiết bị Android thật.
 
@@ -160,4 +149,4 @@ Individual device state is operational data owned by PostgreSQL. Blockchain does
 - License row được khóa khi tính quota. `active_device_count` lấy từ các row `ACTIVE`; `device_state_version` tăng đơn điệu trong cùng transaction. Retry không chờ blockchain và không cấp thêm quota.
 - Backend enqueue command `SYNC_DEVICE_COUNT` bất đồng bộ. Payload chỉ gồm license id, active count, version, protocol version và command id. Worker retry lỗi; lỗi/reorg không rollback device state và không chặn entitlement.
 - Entitlement cần license lifecycle chain-confirmed, còn hạn, và device `ACTIVE` trong PostgreSQL. Device không có finality blockchain riêng.
-- Migration additive: `backend/database/migrations/20261002-device-postgres-source-of-truth.sql`. Không reset database, không xóa chain history. Contract mới có `syncActiveDeviceCount`; cần deploy testnet và cập nhật địa chỉ/ABI trước khi chạy relayer thật. Lượt refactor này chưa deploy testnet/mainnet.
+- Cấu trúc thiết bị PostgreSQL đã nằm trong schema cuối cùng. Contract có `syncActiveDeviceCount`; cần quy trình deploy riêng và cập nhật địa chỉ/ABI trước khi chạy relayer thật. Việc sửa file SQL không deploy contract.

@@ -46,6 +46,7 @@ import {
   login,
   logout,
   restoreSession,
+  observeDevicePushTokens,
   requestLicensingActionVerification,
   remoteRevokeDevice,
   type MobileDevice,
@@ -976,6 +977,7 @@ export function EmuKeyMobileApp() {
   const [loading, setLoading] = useState(true);
   const [publicVerify, setPublicVerify] = useState(false);
   useEffect(() => { void restoreSession().then(setSession).finally(() => setLoading(false)); }, []);
+  useEffect(() => { if (session) return observeDevicePushTokens(); }, [session?.user.id]);
   if ((!fontsLoaded && !fontError) || loading) return <View style={styles.container}><Text>Đang khôi phục phiên đăng nhập...</Text></View>;
   if (!session) {
     if (publicVerify) return <View style={styles.publicContainer}><VerifyLicenseScreen /><Button onPress={() => setPublicVerify(false)} title="Quay lại đăng nhập" /></View>;
