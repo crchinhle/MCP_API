@@ -97,9 +97,13 @@ jobs:
         run: corepack enable
       - name: Install frozen dependencies
         run: corepack pnpm install --frozen-lockfile
+      - name: Check Expo SDK compatibility
+        env:
+          # Validate against current recommendations, without a stale local cache.
+          EXPO_NO_CACHE: '1'
+        run: corepack pnpm exec expo install --check
       - name: Verify mobile
         run: |
-          corepack pnpm exec expo install --check
           corepack pnpm lint
           corepack pnpm typecheck
           corepack pnpm openapi:check

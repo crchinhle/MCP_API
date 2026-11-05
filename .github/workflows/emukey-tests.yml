@@ -28,6 +28,11 @@ jobs:
           pnpm --dir EmuKey/backend install --frozen-lockfile
           pnpm --dir EmuKey/frontend install --frozen-lockfile
           pnpm --dir EmuKey/mobile install --frozen-lockfile
+      - name: Check Expo SDK compatibility
+        env:
+          # Validate against current recommendations, without a stale local cache.
+          EXPO_NO_CACHE: '1'
+        run: pnpm --dir EmuKey/mobile exec expo install --check
       - name: Workspace verification
         run: |
           node tooling/emukey/run.mjs baseline
@@ -46,7 +51,6 @@ jobs:
               pnpm --dir EmuKey/$component $check
             done
           done
-          pnpm --dir EmuKey/mobile exec expo install --check
       - name: Install browser
         run: pnpm --dir EmuKey/frontend exec playwright install --with-deps chromium
       - name: Isolated web regressions
