@@ -6,7 +6,7 @@ function CustomerNavigation() {
     { label: 'Tổng quan', to: '/buyer', end: true },
     { label: 'Mua sắm', to: '/catalog' },
     { label: 'Đơn hàng', to: '/buyer/orders' },
-    { label: 'Bản quyền & thiết bị', to: '/buyer/licenses' },
+    { label: 'Bản quyền', to: '/buyer/licenses' },
     { label: 'Hỗ trợ', to: '/buyer/support' },
   ];
 

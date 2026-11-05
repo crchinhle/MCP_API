@@ -15,6 +15,12 @@ function policyInput(overrides: Partial<Parameters<typeof evaluatePaymentRetry>[
 }
 
 describe('evaluatePaymentRetry', () => {
+  it('distinguishes an open review from a closed review without reopening checkout', () => {
+    expect(evaluatePaymentRetry(policyInput({ hasUncertainTransaction: true, hasOpenReview: true }))).toMatchObject({ allowed: false, canResume: false, customerNextAction: 'WAIT' });
+    expect(evaluatePaymentRetry(policyInput({ hasUncertainTransaction: true, hasOpenReview: false }))).toMatchObject({ allowed: false, canResume: false, customerNextAction: 'CONTACT_SUPPORT' });
+    expect(evaluatePaymentRetry(policyInput({ orderStatus: 'PAYMENT_ACCEPTED' }))).toMatchObject({ customerNextAction: 'VIEW_LICENSE' });
+    expect(evaluatePaymentRetry(policyInput({ orderStatus: 'EXPIRED' }))).toMatchObject({ customerNextAction: 'CREATE_NEW_ORDER' });
+  });
   it('permits resuming a single live session without permitting a new attempt', () => {
     expect(evaluatePaymentRetry(policyInput({ attempts: [{ status: 'PENDING', expiresAt: new Date('2026-10-12T12:15:00Z') }] })))
       .toMatchObject({ allowed: false, canResume: true });

@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { ProviderHandoffModule } from '../licensing/provider-handoff.module.js';
+import { ProviderHandoffService } from '../licensing/application/provider-handoff.service.js';
 import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
 import { ServiceTermsContent } from '../../platform/terms/service-terms-content.js';
@@ -9,7 +11,7 @@ import {
 import { BlockchainModule } from '../blockchain/blockchain.module.js';
 import { ActivationEnvelopeRecoveryService } from '../blockchain/application/activation-envelope-recovery.service.js';
 import { IdentityModule } from '../identity-access/identity.module.js';
-import { NotificationRepository } from '../operations/infrastructure/notification.repository.js';
+import { NotificationWriter } from '../operations/application/notification-writer.js';
 import { OperationsModule } from '../operations/operations.module.js';
 import { CommerceService } from './application/commerce.service.js';
 import {
@@ -30,21 +32,23 @@ import {
 const CHAIN_CONFIGURATION = Symbol('CHAIN_CONFIGURATION');
 
 @Module({
-  imports: [IdentityModule, BlockchainModule, OperationsModule],
+  imports: [IdentityModule, BlockchainModule, OperationsModule, ProviderHandoffModule],
   controllers: [CommerceController, PaymentController],
   providers: [
     {
       provide: CommerceRepository,
-      inject: [Pool, ConfigService, NotificationRepository],
+      inject: [Pool, ConfigService, NotificationWriter, ProviderHandoffService],
       useFactory: (
         pool: Pool,
         config: ConfigService,
-        notifications: NotificationRepository,
+        notifications: NotificationWriter,
+        handoff: ProviderHandoffService,
       ) =>
         new CommerceRepository(
           pool,
           config.getOrThrow<number>('IPN_DELIVERY_GRACE_SECONDS'),
           notifications,
+          handoff,
         ),
     },
     {

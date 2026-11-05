@@ -38,6 +38,7 @@ export class CatalogController {
   findAdmin(@CurrentUser() actor: AuthPrincipal, @Param('id', ParseUUIDPipe) id: string) { return this.adminService.findProduct(actor, id); }
 
   @Get() @ApiOperation({ summary: 'List published products and plans' }) @ApiOkResponse({ type: PublicCatalogProductDto, isArray: true }) list() { return this.service.list(); }
+  @Get('by-id/:id') @ApiOperation({ summary: 'Get a published product by its globally unique ID' }) @ApiOkResponse({ type: PublicCatalogProductDto }) findById(@Param('id', ParseUUIDPipe) id: string) { return this.service.findById(id); }
   @Get(':slug') @ApiOperation({ summary: 'Get a published product by slug' }) @ApiOkResponse({ type: PublicCatalogProductDto }) find(@Param('slug') slug: string) { return this.service.find(slug); }
 
   @Post()

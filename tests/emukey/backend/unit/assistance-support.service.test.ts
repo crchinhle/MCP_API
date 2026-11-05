@@ -102,8 +102,8 @@ describe('AssistanceSupportService', () => {
     const { repository, service } = fixture();
     repository.findConversationForActor.mockResolvedValue({ ...conversation, assignedSupportUserId: support.sub, status: 'SUPPORT_ACTIVE' });
 
-    await expect(service.release(support, conversation.id)).resolves.toMatchObject({ status: 'WAITING_SUPPORT' });
-    expect(repository.releaseConversation).toHaveBeenCalledWith(support.sub, conversation.id);
+    await expect(service.release(support, conversation.id, 1)).resolves.toMatchObject({ status: 'WAITING_SUPPORT' });
+    expect(repository.releaseConversation).toHaveBeenCalledWith(support.sub, conversation.id, 1);
   });
 
   it('SUP-22: only the assigned support agent can release', async () => {

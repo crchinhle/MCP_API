@@ -371,6 +371,7 @@ describe('LicensingService Phase 6 boundaries', () => {
       expect.stringMatching(/^0x[0-9a-f]{64}$/),
       2,
       expect.objectContaining({ chainId: 11_155_111 }),
+      expect.stringMatching(/^0x[0-9a-f]{64}$/),
     );
     expect(envelopes.prepare).toHaveBeenCalledWith(
       expect.objectContaining({ commandId: '00000000-0000-4000-8000-000000000904', keyVersion: 2, licenseId }),

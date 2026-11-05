@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   HttpCode,
   Param,
   ParseUUIDPipe,
@@ -11,6 +12,7 @@ import {
   Req,
   Res,
   UnauthorizedException,
+  ForbiddenException,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags, ApiCreatedResponse, ApiOkResponse } from '@nestjs/swagger';
@@ -30,6 +32,8 @@ import {
   ProviderAccountDto,
   ProviderInvitationTokenDto,
   ProviderInvitationPreviewDto,
+  NativeRefreshDto,
+  NativeSessionDto,
 } from './identity.dto.js';
 import { IdentityService } from './identity.service.js';
 import { CurrentUser, Roles } from './security.decorators.js';
@@ -128,6 +132,7 @@ export class IdentityController {
   }
 
   @Post('login')
+  @Header('Cache-Control', 'no-store')
   @ApiOperation({ summary: 'Issue access token and HttpOnly refresh cookie' })
   async login(
     @Body() dto: CredentialsDto,
@@ -139,6 +144,7 @@ export class IdentityController {
   }
 
   @Post('refresh')
+  @Header('Cache-Control', 'no-store')
   async refresh(
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
@@ -161,6 +167,37 @@ export class IdentityController {
       throw error;
     }
   }
+
+  @Post('mobile/login')
+  @Header('Cache-Control', 'no-store')
+  @HttpCode(200)
+  @ApiOkResponse({ type: NativeSessionDto })
+  @ApiOperation({ summary: 'Issue native customer credentials; refresh token must be kept in device secure storage' })
+  async nativeLogin(@Body() dto: CredentialsDto) {
+    const result = await this.service.login(dto.email, dto.password);
+    if (result.user.role !== 'CUSTOMER') {
+      await this.service.logout(result.refreshToken);
+      throw new ForbiddenException({ code: 'CUSTOMER_ACCOUNT_REQUIRED' });
+    }
+    return result;
+  }
+
+  @Post('mobile/refresh')
+  @Header('Cache-Control', 'no-store')
+  @HttpCode(200)
+  @ApiOkResponse({ type: NativeSessionDto })
+  async nativeRefresh(@Body() dto: NativeRefreshDto) {
+    const result = await this.service.refresh(dto.refreshToken);
+    if (result.user.role !== 'CUSTOMER') {
+      await this.service.logout(result.refreshToken);
+      throw new UnauthorizedException({ code: 'INVALID_SESSION' });
+    }
+    return result;
+  }
+
+  @Post('mobile/logout')
+  @HttpCode(204)
+  async nativeLogout(@Body() dto: NativeRefreshDto) { await this.service.logout(dto.refreshToken); }
 
   @Post('logout')
   @HttpCode(204)

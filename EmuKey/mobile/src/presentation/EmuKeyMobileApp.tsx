@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Button,
+  AppState,
   Linking,
   Pressable,
   RefreshControl,
@@ -10,7 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type {
   NativeStackNavigationProp,
@@ -36,6 +37,8 @@ import {
   listConversations,
   listDevices,
   listLicenses,
+  getLicense,
+  getKnowledgeChunk,
   listOrders,
   listProducts,
   listNotifications,
@@ -46,9 +49,15 @@ import {
   login,
   logout,
   restoreSession,
+  subscribeSession,
   observeDevicePushTokens,
+  observeNotificationResponses,
+  getNotification,
   requestLicensingActionVerification,
-  remoteRevokeDevice,
+  pendingLicensingAction,
+  updateDeviceMetadata,
+  retrieveActivationKey,
+  loadActivationKey,
   type MobileDevice,
   type MobileCheckoutSession,
   verifyPublicLicense,
@@ -70,7 +79,7 @@ type RootStackParamList = {
   Catalog: undefined;
   Checkout: { orderId?: string; planId: string; planName: string; priceVnd: number; productName: string };
   ComparePlans: { ids: string[] };
-  Licenses: undefined;
+  Licenses: { licenseId?:string } | undefined;
   Notifications: undefined;
   Orders: undefined;
   OrderDetail: { id: string };
@@ -80,6 +89,13 @@ type RootStackParamList = {
   VerifyLicense: undefined;
 };
 const Stack = createNativeStackNavigator<RootStackParamList>();
+const navigationRef=createNavigationContainerRef<RootStackParamList>();
+function openNotification(target:MobileNotification['target'],navigation:Pick<NativeStackNavigationProp<RootStackParamList>,'navigate'>) {
+  if (!target?.id) return;
+  if (target.kind==='ORDER') navigation.navigate('OrderDetail',{id:target.id});
+  if (target.kind==='LICENSE') navigation.navigate('Licenses',{licenseId:target.id});
+  if (target.kind==='CONVERSATION') navigation.navigate('Assistance',{conversationId:target.id});
+}
 
 export function LoginScreen({
   onAuthenticated,
@@ -137,7 +153,7 @@ function CustomerNavigation({ navigation }: { readonly navigation: Pick<NativeSt
       void listNotifications()
         .then((items) => {
           const page = Array.isArray(items) ? { items, nextCursor: null } : items;
-          if (active) setUnread(page.items.filter((item) => !item.isRead).length);
+          if (active) setUnread('unreadCount' in page ? Number(page.unreadCount) : page.items.filter((item) => !item.isRead).length);
         })
         .catch(() => undefined);
     };
@@ -164,7 +180,7 @@ export function AssistanceScreen({ route }: { readonly route?: NativeStackScreen
   const [messages, setMessages] = useState<MobileConversationMessage[]>([]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
-  const [aiAnswer, setAiAnswer] = useState<{ answer: string; grounded: boolean; citedSourceIds: string[] } | null>(null);
+  const [aiAnswer, setAiAnswer] = useState<Awaited<ReturnType<typeof askConversationAi>> | null>(null);
   const requestGeneration = useRef(0);
   const outgoingIds = useRef<Record<string, string>>({});
   const draft = selected ? drafts[selected.id] ?? '' : '';
@@ -200,9 +216,15 @@ export function AssistanceScreen({ route }: { readonly route?: NativeStackScreen
     const conversationId = selected.id;
     const generation = requestGeneration.current;
     let active = true;
-    const timer = setInterval(() => { void listConversationMessages(conversationId).then((items) => { if (active && generation === requestGeneration.current) setMessages(items); }).catch(() => undefined); }, 5_000);
+    const timer = setInterval(() => { void Promise.all([listConversationMessages(conversationId), listConversations()]).then(([items, conversations]) => {
+      if (active && generation === requestGeneration.current) {
+        setMessages(items); setConversations(conversations);
+        const latest=conversations.find((item)=>item.id===conversationId);
+        if (latest) setSelected(latest);
+      }
+    }).catch(() => undefined); }, 5_000);
     return () => { active = false; clearInterval(timer); };
-  }, [selected]);
+  }, [selected?.id]);
 
   const selectConversation = async (conversation: MobileConversation) => {
     const generation = ++requestGeneration.current;
@@ -231,7 +253,7 @@ export function AssistanceScreen({ route }: { readonly route?: NativeStackScreen
     const question = draft.trim();
     const conversation = selected;
     const generation = requestGeneration.current;
-    if (!question || !conversation || conversation.status === 'CLOSED' || question.length > 4000) return;
+    if (!question || !conversation || conversation.status !== 'AI_ACTIVE' || question.length > 4000) return;
     const clientMessageId = outgoingIds.current[conversation.id] ?? crypto.randomUUID();
     outgoingIds.current[conversation.id] = clientMessageId;
     try {
@@ -261,19 +283,36 @@ export function AssistanceScreen({ route }: { readonly route?: NativeStackScreen
       <Button onPress={() => void start()} title="Hội thoại mới" />
       {conversations.map((conversation) => <Pressable accessibilityRole="button" accessibilityState={{ selected: selected?.id === conversation.id }} key={conversation.id} onPress={() => void selectConversation(conversation)} style={[styles.card, selected?.id === conversation.id ? styles.selectedCard : null]}><Text style={styles.cardTitle}>{conversation.title ?? 'Hội thoại hỗ trợ'}</Text><Text style={styles.muted}>{conversation.status === 'CLOSED' ? 'Đã đóng' : 'Đang mở'}</Text></Pressable>)}
       {!selected ? <Text>Chưa có hội thoại hỗ trợ.</Text> : <View style={styles.card}>
-        {messages.map((message) => <View key={message.id} style={styles.messageRow}><Text style={styles.muted}>{message.senderType === 'CUSTOMER' ? 'Bạn' : message.senderType === 'AI' ? 'AI' : 'Hỗ trợ'}</Text><Text>{message.content}</Text></View>)}
-        {aiAnswer ? <View style={styles.aiNotice}><Text>{aiAnswer.answer}</Text><Text style={styles.muted}>{aiAnswer.grounded ? `Mã nguồn tham khảo: ${aiAnswer.citedSourceIds.join(', ')}` : 'AI không đủ nguồn chính thức.'}</Text></View> : null}
+        {messages.map((message) => <View key={message.id} style={styles.messageRow}><Text style={styles.muted}>{message.senderType === 'CUSTOMER' ? 'Bạn' : message.senderType === 'AI' ? 'AI' : 'Hỗ trợ'}</Text><Text>{message.content}</Text>{message.senderType === 'AI' ? <MobileKnowledgeCitations citations={message.citationDetails ?? []} /> : null}</View>)}
+        {aiAnswer ? <View style={styles.aiNotice}><Text>{aiAnswer.answer}</Text><MobileKnowledgeCitations citations={aiAnswer.citationDetails ?? []} />{!aiAnswer.grounded?<Text style={styles.muted}>AI không đủ nguồn chính thức.</Text>:null}</View> : null}
         {selected.status === 'CLOSED' ? <><Text style={styles.muted}>Hội thoại đã đóng.</Text><Button onPress={() => void start()} title="Tạo yêu cầu tiếp theo" /></> : <>
           <TextInput accessibilityLabel="Tin nhắn hỗ trợ" maxLength={8000} onChangeText={setDraft} placeholder="Nhập câu hỏi hoặc tin nhắn" style={styles.input} value={draft} />
           <Text style={styles.muted}>{draft.length}/8000 ký tự hỗ trợ · Hỏi AI tối đa 4000</Text>
-          <View style={styles.actions}><Button disabled={!draft.trim() || draft.trim().length > 8000} onPress={() => void send()} title="Gửi tin nhắn" /><Button disabled={!draft.trim() || draft.trim().length > 4000} onPress={() => void ask()} title="Hỏi AI có nguồn" /><Button onPress={() => void close()} title="Đã giải quyết" /></View>
+          <View style={styles.actions}><Button disabled={!draft.trim() || draft.trim().length > 8000} onPress={() => void send()} title="Gửi tin nhắn" />{selected.status === 'AI_ACTIVE' ? <Button disabled={!draft.trim() || draft.trim().length > 4000} onPress={() => void ask()} title="Hỏi AI có nguồn" /> : null}<Button onPress={() => void close()} title="Đã giải quyết" /></View>
         </>}
       </View>}
     </ScrollView>
   );
 }
 
-export function NotificationsScreen() {
+function MobileKnowledgeCitations({ citations }: { citations: readonly import('../infrastructure/api/generated').CitationDetailDto[] }) {
+  const [opened, setOpened] = useState<{ id: string; content: string } | null>(null);
+  const [error, setError] = useState(false);
+  const [pending, setPending] = useState(false);
+  if (!citations.length) return <Text style={styles.muted}>Câu trả lời này chưa lưu nguồn xác thực.</Text>;
+  return <View>{citations.map((source) => <View key={source.chunkId}>
+    <Text style={styles.cardTitle}>{source.documentTitle} · phiên bản {source.documentVersion}</Text>
+    <Text>{source.excerpt}</Text>
+    <Button disabled={pending} title={`Mở nguồn ${source.documentTitle}`} onPress={() => {
+      setPending(true); setError(false);
+      void getKnowledgeChunk(source.documentId, source.chunkId).then((value) => setOpened({ id: source.chunkId, content: value.content }))
+        .catch(() => setError(true)).finally(() => setPending(false));
+    }} />
+    {opened?.id === source.chunkId ? <><Text>{opened.content}</Text><Button title="Đóng nguồn" onPress={() => setOpened(null)} /></> : null}
+  </View>)}{error ? <Text accessibilityRole="alert" style={styles.error}>Nguồn không còn khả dụng hoặc quyền đọc đã thay đổi.</Text> : null}</View>;
+}
+
+export function NotificationsScreen({navigation}:{navigation?:NativeStackScreenProps<RootStackParamList,'Notifications'>['navigation']}={}) {
   const [notifications, setNotifications] = useState<MobileNotification[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -310,6 +349,7 @@ export function NotificationsScreen() {
      {readError ? <Text accessibilityRole="alert" style={styles.error}>{readError}</Text> : null}
      {!loading && notifications.length === 0 && !error ? <Text>Chưa có thông báo.</Text> : null}
      {notifications.map((notification) => <Pressable accessibilityRole="button" key={notification.id} onPress={() => {
+       if (navigation) openNotification(notification.target,navigation);
        if (!notification.isRead) void markNotificationRead(notification.id)
          .then((updated) => { setReadError(null); setNotifications((items) => items.map((item) => item.id === notification.id ? { ...item, ...updated, isRead: true } : item)); })
          .catch(() => setReadError('Không thể đánh dấu thông báo đã đọc. Vui lòng thử lại.'));
@@ -353,7 +393,7 @@ export function CatalogScreen({ navigation }: NativeStackScreenProps<RootStackPa
       {selectedPlanIds.length >= 4 ? <Text style={styles.muted}>Đã chọn 4/4 gói. Bỏ bớt một gói để chọn gói khác.</Text> : null}
       {!loading && needle && visibleProducts.length === 0 ? <Text>Không tìm thấy sản phẩm hoặc gói phù hợp.</Text> : null}
       {visibleProducts.map((product) => (
-        <View key={product.slug} style={styles.card}>
+        <View key={product.id} style={styles.card}>
           <Text style={styles.cardTitle}>{product.name}</Text>
           <Text style={styles.muted}>{product.summary}</Text>
           {product.plans.map((plan) => (
@@ -432,12 +472,24 @@ function comparisonPrice(comparison: MobilePlanComparison, planId: string): numb
 
 function licenseStatusLabel(status: MobileLicense['status']): string {
   switch (status) {
+    case 'PENDING_ONCHAIN': return 'Đang phát hành';
     case 'ACTIVE': return 'Đang hoạt động';
     case 'SUSPENDED': return 'Tạm ngưng';
     case 'EXPIRED': return 'Đã hết hạn';
     case 'REVOKED': return 'Đã thu hồi';
     default: return status;
   }
+}
+
+function providerHandoffLabel(license: MobileLicense): string {
+  if (license.status==='SUSPENDED') return 'Bản quyền tạm ngưng';
+  if (license.status==='REVOKED') return 'Bản quyền đã thu hồi';
+  if (license.status==='EXPIRED' || (license.status!=='PENDING_ONCHAIN' && Date.parse(license.expiresAt)<=Date.now())) return 'Bản quyền đã hết hạn';
+  if (['UNTRUSTED_REORG','PROJECTION_STALE','REORGED'].includes(license.activationKeyTrustStatus) || ['UNTRUSTED_REORG','PROJECTION_STALE','REORGED'].includes(license.finality)) return 'Đang xác minh lại blockchain';
+  if (license.status==='PENDING_ONCHAIN' || license.activationKeyTrustStatus!=='TRUSTED' || !['CONFIRMED','CHAIN_CONFIRMED'].includes(license.finality)) return 'Đang xác nhận blockchain';
+  if (license.providerDeliveryStatus==='FAILED') return 'Bàn giao bản quyền cần xử lý. Không thanh toán lại.';
+  if (license.providerDeliveryStatus!=='DELIVERED') return 'Đang bàn giao cho nhà cung cấp';
+  return license.activationKeyAvailable===false ? 'Mã bản quyền đã được nhận' : 'Nhà cung cấp đã nhận bản quyền';
 }
 
 function finalityLabel(finality: string): string {
@@ -646,14 +698,26 @@ function checkoutDocument(checkout: MobileCheckoutSession): string {
   return `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:sans-serif;background:#f3f0e9;padding:24px"><p>Đang chuyển đến cổng thanh toán SePay…</p><form id="checkout" method="post" action="${htmlAttribute(checkout.checkoutUrl)}">${fields}</form><script>document.getElementById('checkout').submit()</script></body></html>`;
 }
 
+export function matchesPaymentReturn(raw:string,orderId:string,expectedWebUrl?:string):boolean {
+  try {
+    const url=new URL(raw);
+    if(url.protocol==='emukey:') return url.hostname==='payment'&&decodeURIComponent(url.pathname)===`/${orderId}`;
+    if(!expectedWebUrl) return false;
+    const expected=new URL(expectedWebUrl);
+    return url.protocol==='https:'&&url.origin===expected.origin&&url.pathname===`/buyer/orders/${encodeURIComponent(orderId)}/payment`;
+  }catch{return false;}
+}
+
 export function PaymentScreen({ navigation, route }: NativeStackScreenProps<RootStackParamList, 'Payment'>) {
   const [order, setOrder] = useState<MobileOrderDetail | null>(null);
   const [checkout, setCheckout] = useState<MobileCheckoutSession | null>(null);
   const [decision, setDecision] = useState<Awaited<ReturnType<typeof getPaymentRetryDecision>> | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [licenseReady,setLicenseReady]=useState(false);
+  const [licenseProgress,setLicenseProgress]=useState<string|null>(null);
   const handlePaymentReturn = (url: string) => {
-    if (!url.startsWith('emukey://payment/')) return false;
+    if (!matchesPaymentReturn(url,route.params.orderId,checkout?.checkoutFields.success_url)) return false;
     setCheckout(null);
     setError('Đã quay lại từ cổng thanh toán. Hệ thống đang kiểm tra trạng thái đơn từ backend.');
     void getOrder(route.params.orderId)
@@ -669,15 +733,32 @@ export function PaymentScreen({ navigation, route }: NativeStackScreenProps<Root
   }, [route.params.orderId]);
   useEffect(() => {
     let active = true;
-    const refresh = () => void getOrder(route.params.orderId)
+    const refresh = () => { if(AppState.currentState==='background') return; void getOrder(route.params.orderId)
       .then(async (value) => {
         const next = value.orderStatus === 'WAITING_PAYMENT' ? await getPaymentRetryDecision(value.id) : null;
-        if (active) { setOrder(value); setDecision(next); }
+        let ready=false;
+        let progress:string|null=null;
+        if(value.orderStatus==='PAYMENT_ACCEPTED') {
+          if(value.orderType==='RENEWAL' && value.targetLicenseId && value.renewalStatus==='CONFIRMED' && value.renewalExpiresAt) {
+            const license = await getLicense(value.targetLicenseId);
+            const expiryUpdated=Math.floor(Date.parse(license.expiresAt)/1000)>=Math.floor(Date.parse(value.renewalExpiresAt)/1000);
+            if(license.fulfillmentMode==='PROVIDER_HANDOFF') progress=providerHandoffLabel(expiryUpdated?license:{...license,status:'PENDING_ONCHAIN',activationKeyTrustStatus:'PENDING_FINALITY'});
+            ready = (license.fulfillmentMode!=='PROVIDER_HANDOFF' || (license.providerDeliveryStatus==='DELIVERED' && license.status==='ACTIVE' && Date.parse(license.expiresAt)>Date.now())) && license.activationKeyTrustStatus === 'TRUSTED' && ['CONFIRMED','CHAIN_CONFIRMED'].includes(license.finality) &&
+              Math.floor(Date.parse(license.expiresAt)/1000) >= Math.floor(Date.parse(value.renewalExpiresAt)/1000);
+          }
+          else if(value.licenseId) {
+            const license=await getLicense(value.licenseId);
+            if(license.fulfillmentMode==='PROVIDER_HANDOFF') progress=providerHandoffLabel(license);
+            ready=(license.fulfillmentMode!=='PROVIDER_HANDOFF'||(license.providerDeliveryStatus==='DELIVERED'&&Date.parse(license.expiresAt)>Date.now()))&&license.status==='ACTIVE'&&license.activationKeyTrustStatus==='TRUSTED'&&['CONFIRMED','CHAIN_CONFIRMED'].includes(license.finality);
+          }
+        }
+        if (active) { setOrder(value); setDecision(next); setLicenseReady(ready); setLicenseProgress(progress); }
       })
-      .catch(() => { if (active) { setDecision(null); setError('Không thể cập nhật trạng thái đơn hàng.'); } });
+      .catch(() => { if (active) { setDecision(null); setError('Không thể cập nhật trạng thái đơn hàng.'); } }); };
     void refresh();
     const timer = setInterval(refresh, 5_000);
-    return () => { active = false; clearInterval(timer); };
+    const foreground=AppState.addEventListener('change',(state)=>{if(state==='active') refresh();});
+    return () => { active = false; clearInterval(timer);foreground.remove(); };
   }, [route.params.orderId]);
   const openCheckout = async () => {
     if (busy) return;
@@ -702,8 +783,7 @@ export function PaymentScreen({ navigation, route }: NativeStackScreenProps<Root
         <WebView
           javaScriptEnabled
           onShouldStartLoadWithRequest={(request) => {
-            if (request.url.startsWith('emukey://payment/')) {
-              handlePaymentReturn(request.url);
+            if (handlePaymentReturn(request.url)) {
               return false;
             }
             return request.url === 'about:blank' || request.url.startsWith('https://');
@@ -725,12 +805,13 @@ export function PaymentScreen({ navigation, route }: NativeStackScreenProps<Root
         {order ? <Text style={styles.price}>{order.priceVndSnapshot.toLocaleString('vi-VN')} ₫</Text> : null}
       </View>
       {order?.orderStatus === 'WAITING_PAYMENT' ? (
-        decision?.allowed || decision?.canResume ? <><Text>Nếu đã chuyển tiền, hãy chờ xác nhận và không thanh toán thêm.</Text><Button disabled={busy} onPress={() => void openCheckout()} title={decision.canResume ? 'Tiếp tục phiên thanh toán' : 'Thanh toán trên SePay'} /></> : <Text>Đang chờ xác nhận hoặc đối soát thanh toán. Không chuyển tiền thêm.</Text>
+        decision?.allowed || decision?.canResume ? <><Text>Nếu đã chuyển tiền, hãy chờ xác nhận và không thanh toán thêm.</Text><Button disabled={busy} onPress={() => void openCheckout()} title={decision.canResume ? 'Tiếp tục phiên thanh toán' : 'Thanh toán trên SePay'} /></> : decision?.customerNextAction === 'CONTACT_SUPPORT' ? <><Text>Đã có kết quả kiểm tra giao dịch. Đơn chưa được mở thanh toán lại; liên hệ hỗ trợ kèm mã đơn để tiếp tục.</Text><Button title="Liên hệ hỗ trợ" onPress={() => navigation.navigate('Assistance')} /></> : <Text>Đang chờ xác nhận hoặc đối soát thanh toán. Không chuyển tiền thêm.</Text>
       ) : null}
       {order?.orderStatus === 'PAYMENT_ACCEPTED' ? (
         <>
-          <Text accessibilityRole="alert" style={styles.success}>Thanh toán đã hoàn tất. License đang được xử lý trên blockchain.</Text>
-          <Button onPress={() => navigation.navigate('Licenses')} title="Xem license của tôi" />
+          {licenseProgress?<Text accessibilityRole="alert">{licenseProgress}</Text>:null}
+          <Text accessibilityRole="alert" style={styles.success}>{licenseReady?(order.orderType==='RENEWAL'?`Gia hạn đã hoàn tất. Hạn mới: ${order.renewalExpiresAt}`:'Mở danh sách bản quyền để nhận mã hoặc xem mã đã lưu.'):licenseProgress?'Thanh toán đã được ghi nhận. Bạn có thể quay về danh sách bản quyền và kiểm tra lại sau; không thanh toán lại.':'Đã nhận thanh toán. Hệ thống đang chờ xác nhận bản quyền; không thanh toán lại.'}</Text>
+          <Button onPress={() => navigation.navigate('Licenses')} title="Xem bản quyền của tôi" />
         </>
       ) : null}
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
@@ -740,18 +821,39 @@ export function PaymentScreen({ navigation, route }: NativeStackScreenProps<Root
 
 export function LicensesScreen({
   navigation,
+  route,
 }: {
   readonly navigation?: NativeStackScreenProps<RootStackParamList, 'Licenses'>['navigation'];
+  readonly route?: NativeStackScreenProps<RootStackParamList, 'Licenses'>['route'];
 } = {}) {
   const [licenses, setLicenses] = useState<MobileLicense[]>([]);
+  const [keys, setKeys] = useState<Record<string, { value: string; version: number }>>({});
   const [error, setError] = useState<string | null>(null);
   const [devices, setDevices] = useState<Record<string, MobileDevice[]>>({});
-  const [actionToken, setActionToken] = useState('');
-  const [currentPassword, setCurrentPassword] = useState('');
+  const [deviceNames, setDeviceNames] = useState<Record<string, string>>({});
+  const [sendingAction, setSendingAction] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const loadLicenses = async (refresh = false) => { if (refresh) setRefreshing(true); setError(null); try { setLicenses(await listLicenses()); } catch { setError('Không thể tải danh sách License.'); } finally { setRefreshing(false); } };
   useEffect(() => { void loadLicenses(); }, []);
+  useEffect(()=>navigation?.addListener('focus',()=>{void loadLicenses();}),[navigation]);
+  useEffect(() => {
+    const foreground = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') return;
+      void loadLicenses();
+      for (const licenseId of Object.keys(devices)) void loadDevices(licenseId);
+    });
+    return () => foreground.remove();
+  }, [devices]);
+  const sendAction = async (licenseId: string, action: 'KEY_RECOVERY' | 'ROTATE_KEY' | 'REMOTE_REVOKE_DEVICE', deviceId?: string) => {
+    if (sendingAction) return;
+    setSendingAction(true); setError(null);
+    try {
+      await requestLicensingActionVerification(licenseId, action, deviceId);
+      setMessage('Mở liên kết trong email để xác nhận trên web. Không cần chép token. Sau khi hoàn tất, chọn Quay lại ứng dụng để cập nhật đúng bản quyền.');
+    } catch { setError('Không thể gửi email xác nhận. Kiểm tra trạng thái trước khi gửi lại.'); }
+    finally { setSendingAction(false); }
+  };
   const loadDevices = async (licenseId: string) => {
     try {
       const result = await listDevices(licenseId);
@@ -760,47 +862,35 @@ export function LicensesScreen({
       setError('Không thể tải danh sách thiết bị.');
     }
   };
-  const remoteRevoke = async (licenseId: string, deviceId: string) => {
-    setError(null);
-    setMessage(null);
-    if (!currentPassword.trim()) {
-      setError('Vui lòng nhập mật khẩu hiện tại.');
-      return;
-    }
-    if (!actionToken.trim()) {
-      setError('Vui lòng nhập action token từ email.');
-      return;
-    }
-    try {
-      await remoteRevokeDevice(licenseId, deviceId, {
-        actionToken: actionToken.trim(),
-        currentPassword: currentPassword.trim(),
-      });
-      setMessage('Đã thu hồi thiết bị.');
-      await loadDevices(licenseId);
-      setActionToken('');
-      setCurrentPassword('');
-    } catch {
-      setError('Không thể thu hồi thiết bị. Kiểm tra mật khẩu, action token và quyền sở hữu.');
-    }
-  };
   return (
     <ScrollView
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void loadLicenses(true)} />}
     >
-      <Text accessibilityRole="header" style={styles.heading}>License doanh nghiệp</Text>
+      <Text accessibilityRole="header" style={styles.heading}>Bản quyền của tôi</Text>
       {navigation ? <CustomerNavigation navigation={navigation} /> : null}
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
       {message ? <Text accessibilityRole="alert" style={styles.success}>{message}</Text> : null}
       {licenses.length === 0 ? <Text>Chưa có License nào.</Text> : null}
-      {licenses.map((license) => (
+      {route?.params?.licenseId && !licenses.some((item)=>item.id===route.params?.licenseId)?<Text accessibilityRole="alert">Không tìm thấy bản quyền hoặc bạn không có quyền truy cập.</Text>:null}
+      {licenses.filter((license)=>!route?.params?.licenseId||license.id===route.params.licenseId).map((license) => (
         <View key={license.id} style={styles.card}>
           <Text style={styles.cardTitle}>{license.productName}</Text>
           <Text>{license.publicLicenseId}</Text>
-          <Text>{licenseStatusLabel(license.status)} · {finalityLabel(license.finality)} ({license.confirmationCount}) · {license.activeDeviceCount}/{license.maxActiveDevices} thiết bị</Text>
-          <Button onPress={() => void loadDevices(license.id)} title="Xem thiết bị" />
-          {navigation && license.status === 'ACTIVE' ? (
+          <Text>{licenseStatusLabel(license.status)} · {finalityLabel(license.finality)} ({license.confirmationCount}) · {license.fulfillmentMode==='PROVIDER_HANDOFF'?`Tối đa ${license.maxActiveDevices} thiết bị, nhà cung cấp quản lý`:`${license.activeDeviceCount}/${license.maxActiveDevices} thiết bị`}</Text>
+          {license.fulfillmentMode==='PROVIDER_HANDOFF'?<Text>{providerHandoffLabel(license)}</Text>:<Button onPress={() => void loadDevices(license.id)} title="Xem thiết bị" />}
+          {license.status === 'ACTIVE' && (license.fulfillmentMode!=='PROVIDER_HANDOFF'||(license.providerDeliveryStatus==='DELIVERED' && license.activationKeyTrustStatus==='TRUSTED' && ['CONFIRMED','CHAIN_CONFIRMED'].includes(license.finality) && Date.parse(license.expiresAt)>Date.now())) ? <Button title={license.activationKeyAvailable ? 'Nhận mã bản quyền' : 'Xem mã đã lưu'} onPress={() => {
+            void (async () => {
+              try {
+                const stored = await loadActivationKey(license.id, license.keyVersion);
+                const key = stored ?? (await retrieveActivationKey(license.id, license.keyVersion)).activationKey;
+                setKeys((current) => ({ ...current, [license.id]: { value: key, version: license.keyVersion } }));
+              } catch { setError('Không thể nhận mã. Nếu mã đã được nhận hoặc hết thời gian nhận, hãy khôi phục qua email.'); }
+            })();
+          }} /> : null}
+          {license.status === 'ACTIVE' ? <><Button disabled={sendingAction} title="Khôi phục mã qua email" onPress={() => void sendAction(license.id, 'KEY_RECOVERY')} /><Button disabled={sendingAction} title="Đổi mã qua email" onPress={() => void sendAction(license.id, 'ROTATE_KEY')} /></> : null}
+          {keys[license.id]?.version === license.keyVersion && license.activationKeyTrustStatus === 'TRUSTED' ? <TextInput accessibilityLabel="Mã bản quyền" editable={false} value={keys[license.id]?.value} style={styles.input} /> : null}
+          {navigation && ['ACTIVE', 'EXPIRED', 'SUSPENDED'].includes(license.status) ? (
             <Button
               onPress={() => navigation.navigate('Renewal', {
                 licenseId: license.id,
@@ -810,15 +900,15 @@ export function LicensesScreen({
               title="Gia hạn License"
             />
           ) : null}
-          {(devices[license.id] ?? []).map((device) => (
+          {(license.fulfillmentMode==='PROVIDER_HANDOFF'?[]:devices[license.id] ?? []).map((device) => (
             <View key={device.id} style={styles.card}>
-              <Text>{device.deviceRef} · {device.status === 'ACTIVE' ? 'Đang hoạt động' : 'Đã thu hồi'}</Text>
+              <Text>{device.displayName || device.deviceRef} · {device.status === 'ACTIVE' ? 'Đang hoạt động' : 'Đã thu hồi'}</Text>
+              <Text style={styles.muted}>{device.platform ?? 'UNKNOWN'}</Text>
+              <TextInput accessibilityLabel={`Tên thiết bị ${device.id}`} maxLength={80} value={deviceNames[device.id] ?? device.displayName ?? ''} placeholder="Đặt tên thiết bị" style={styles.input} onChangeText={(value) => setDeviceNames((current) => ({ ...current, [device.id]: value }))} />
+              <Button title="Lưu tên thiết bị" onPress={() => void updateDeviceMetadata(license.id, device.id, deviceNames[device.id] ?? device.displayName ?? '').then(() => loadDevices(license.id)).catch(() => setError('Không thể lưu tên thiết bị.'))} />
               {device.status === 'ACTIVE' ? (
                 <>
-                  <Button onPress={() => void requestLicensingActionVerification(license.id, 'REMOTE_REVOKE_DEVICE', device.id).then(() => setMessage('Đã gửi email xác nhận thu hồi.')).catch(() => setError('Không thể gửi email xác nhận.'))} title="Gửi email xác nhận thu hồi" />
-                  <TextInput accessibilityLabel="Mật khẩu hiện tại" secureTextEntry onChangeText={setCurrentPassword} placeholder="Mật khẩu" style={styles.input} value={currentPassword} />
-                  <TextInput accessibilityLabel="Action token" autoCapitalize="none" onChangeText={setActionToken} placeholder="Action token từ email" style={styles.input} value={actionToken} />
-                  <Button disabled={!actionToken.trim() || !currentPassword.trim()} onPress={() => void remoteRevoke(license.id, device.id)} title="Thu hồi thiết bị" />
+                  <Button disabled={sendingAction} onPress={() => void sendAction(license.id, 'REMOTE_REVOKE_DEVICE', device.id)} title="Gửi email xác nhận thu hồi" />
                 </>
               ) : null}
             </View>
@@ -972,19 +1062,41 @@ export function OrderDetailScreen({ route, navigation }: NativeStackScreenProps<
 }
 
 export function EmuKeyMobileApp() {
+  const pendingNotification=useRef<string|null>(null);
   const [fontsLoaded, fontError] = useFonts({ GreatVibes_400Regular });
   const [session, setSession] = useState<MobileSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [publicVerify, setPublicVerify] = useState(false);
-  useEffect(() => { void restoreSession().then(setSession).finally(() => setLoading(false)); }, []);
+  useEffect(() => { const unsubscribe = subscribeSession(setSession); void restoreSession().then(setSession).finally(() => setLoading(false)); return unsubscribe; }, []);
   useEffect(() => { if (session) return observeDevicePushTokens(); }, [session?.user.id]);
+  const openPending=async()=>{
+    const id=pendingNotification.current;
+    if (!session||!navigationRef.isReady()) return;
+    if (!id) {
+      try { const action = await pendingLicensingAction(); if (action && navigationRef.isReady()) navigationRef.navigate('Licenses', { licenseId: action.licenseId }); }
+      catch { /* Retain the intent for the next foreground retry. */ }
+      return;
+    }
+    pendingNotification.current=null;
+    try { const notification=await getNotification(id); openNotification(notification.target,navigationRef); }
+    catch { if (navigationRef.isReady()) navigationRef.navigate('Notifications'); }
+  };
+  useEffect(()=>{
+    if (!session) {pendingNotification.current=null;return;}
+    return observeNotificationResponses((id)=>{pendingNotification.current=id;void openPending();});
+  },[session?.user.id]);
+  useEffect(() => {
+    if (!session) return;
+    const listener = AppState.addEventListener('change', (state) => { if (state === 'active') void openPending(); });
+    return () => listener.remove();
+  }, [session?.user.id]);
   if ((!fontsLoaded && !fontError) || loading) return <View style={styles.container}><Text>Đang khôi phục phiên đăng nhập...</Text></View>;
   if (!session) {
     if (publicVerify) return <View style={styles.publicContainer}><VerifyLicenseScreen /><Button onPress={() => setPublicVerify(false)} title="Quay lại đăng nhập" /></View>;
     return <LoginScreen onAuthenticated={setSession} onVerify={() => setPublicVerify(true)} />;
   }
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef} onReady={()=>void openPending()} linking={{prefixes:['emukey://'],config:{screens:{Licenses:'licenses',Payment:'payment/:orderId'}}}}>
       <Stack.Navigator initialRouteName="Catalog">
         <Stack.Screen component={CatalogScreen} name="Catalog" options={{ headerRight: () => <Button onPress={() => void logout().then(() => setSession(null))} title="Đăng xuất" />, title: 'Sản phẩm' }} />
         <Stack.Screen component={AssistanceScreen} name="Assistance" options={{ title: 'Hỗ trợ' }} />
@@ -992,7 +1104,7 @@ export function EmuKeyMobileApp() {
         <Stack.Screen component={CheckoutScreen} name="Checkout" options={{ title: 'Tạo đơn hàng' }} />
         <Stack.Screen component={OrdersScreen} name="Orders" options={{ headerRight: () => <Button onPress={() => void logout().then(() => setSession(null))} title="Đăng xuất" />, title: 'Đơn hàng' }} />
         <Stack.Screen component={OrderDetailScreen} name="OrderDetail" options={{ title: 'Chi tiết đơn hàng' }} />
-        <Stack.Screen component={LicensesScreen} name="Licenses" options={{ title: 'License của tôi' }} />
+        <Stack.Screen component={LicensesScreen} name="Licenses" options={{ title: 'Bản quyền của tôi' }} />
         <Stack.Screen component={NotificationsScreen} name="Notifications" options={{ title: 'Thông báo' }} />
         <Stack.Screen component={PaymentScreen} name="Payment" options={{ title: 'Thanh toán' }} />
         <Stack.Screen name="Profile" options={{ title: 'Hồ sơ' }}>

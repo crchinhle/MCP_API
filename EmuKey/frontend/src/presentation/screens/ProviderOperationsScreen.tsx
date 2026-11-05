@@ -1,5 +1,7 @@
 import { paginationTextControls } from '../theme';
-import { Alert, Button, DatePicker, Descriptions, Drawer, Empty, Input, Select, Table } from 'antd';
+import { Alert, Button, DatePicker, Descriptions, Drawer, Empty, Input, Select, Table, Tabs } from 'antd';
+import { ProviderIntegrationPanel } from '../components/ProviderIntegrationPanel';
+import { ProviderDeliveryPanel } from '../components/ProviderDeliveryPanel';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -19,9 +21,12 @@ const reviewStatusLabels: Record<string, string> = { OPEN: 'Chờ kiểm tra', R
 
 export function ProviderOperationsScreen() {
   const isSystem = useAuth().user?.role === 'SYSTEM_ADMIN';
+  const [showDeliveries,setShowDeliveries]=useState(false);
   const payments = usePaymentHistory();
   const [query, setQuery] = useState('');
   const [searchParams, setSearchParams] = useSearchParams();
+  const operationsTab=searchParams.get('tab')==='integration'?'integration':'payments';
+  const setOperationsTab=(value:string)=>setSearchParams((current)=>{const next=new URLSearchParams(current);if(value==='integration')next.set('tab','integration');else next.delete('tab');return next;});
   const requestedClassification = searchParams.get('classification') ?? '';
   const classification = requestedClassification === 'exceptions' || Object.hasOwn(paymentClassificationLabels, requestedClassification) ? requestedClassification : '';
   const setClassification = (value: string) => setSearchParams((previous) => {
@@ -47,7 +52,11 @@ export function ProviderOperationsScreen() {
   return (
     <>
       <PageHeader title="Thanh toán & đối soát" />
+      {!isSystem?<Tabs activeKey={operationsTab} onChange={setOperationsTab} items={[{key:'payments',label:'Thanh toán'},{key:'integration',label:'Tích hợp'}]}/>:null}
+      {!isSystem && operationsTab==='integration'?<ProviderIntegrationPanel/>:null}
+      <div hidden={!isSystem && operationsTab==='integration'}>
       {isSystem ? <PaymentReviewPanel /> : null}
+      {isSystem?<><Button onClick={()=>setShowDeliveries(!showDeliveries)}>Bàn giao bản quyền</Button>{showDeliveries?<ProviderDeliveryPanel scope="operations" canRetry/>:null}</>:null}
       {isSystem ? <h2>Lịch sử thanh toán</h2> : null}
       <div className="inline-filter">
         <Input.Search
@@ -76,6 +85,7 @@ export function ProviderOperationsScreen() {
       <Drawer title="Chi tiết giao dịch" size={500} className="provider-payment-drawer" open={Boolean(selected)} onClose={() => setSelected(null)}>
         {selected ? <><h2>Đơn hàng</h2><Descriptions column={1} items={[{key:'order',label:'Mã đơn',children:selected.orderNumber ?? 'Chưa gắn đơn'},{key:'product',label:'Sản phẩm',children:selected.productNameSnapshot ?? 'Chưa xác định'},{key:'plan',label:'Gói',children:selected.planNameSnapshot ?? 'Chưa xác định'}]} /><h2>Thanh toán</h2><Descriptions column={1} items={[{key:'amount',label:'Số tiền',children:`${selected.amountVnd.toLocaleString('vi-VN')} ₫`},{key:'ref',label:'Mã giao dịch',children:selected.providerTransactionReference ?? 'Không có'},{key:'event',label:'Mã sự kiện',children:selected.providerEventId},{key:'occurred',label:'Thời gian SePay',children:formatPaymentTime(selected.providerOccurredAt)},{key:'received',label:'Thời gian tiếp nhận',children:formatPaymentTime(selected.receivedAt)}]} /><h2>Kết quả đối soát</h2><StatusChip tone={paymentClassificationTone(selected.classification)}>{paymentClassificationLabels[selected.classification] ?? selected.classification}</StatusChip>{selected.reviewStatus ? <p>Trạng thái kiểm tra: {reviewStatusLabels[selected.reviewStatus] ?? selected.reviewStatus}</p> : null}</> : null}
       </Drawer>
+      </div>
     </>
   );
 }

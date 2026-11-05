@@ -18,6 +18,29 @@ const customer: AuthPrincipal = {
 };
 
 describe('LicenseQueryService boundaries', () => {
+  it('rejects device listing for an owned provider-managed license before reading device records', async () => {
+    const repository = { listCustomerDevices: vi.fn().mockResolvedValue([]) };
+    const handoff = {
+      customerInfo: vi.fn().mockResolvedValue({ fulfillmentMode: 'PROVIDER_HANDOFF' }),
+      rejectProductUse: vi.fn().mockRejectedValue(Object.assign(new Error('Provider managed'), { status: 410 })),
+    };
+    const service = new LicenseQueryService(repository as never, {} as never, {} as Redis, 30, undefined, handoff as never);
+    await expect(service.listDevices(customer, 'license')).rejects.toMatchObject({ status: 410 });
+    expect(handoff.customerInfo).toHaveBeenCalledWith(customer.sub, 'license');
+    expect(repository.listCustomerDevices).not.toHaveBeenCalled();
+  });
+  it('replays the same logical key delivery without consuming its encrypted envelope', async () => {
+    const command = { command_id: 'command', license_id: 'license', key_version: 1, commitment: 'commitment' };
+    const envelope = { commandId: 'command', licenseId: 'license', keyVersion: 1, commitment: 'commitment', secret: 'secret' };
+    const repository = { activationCommand: vi.fn().mockResolvedValue(command) };
+    const envelopes = { read: vi.fn().mockResolvedValue(envelope), remainingTtl: vi.fn().mockResolvedValue(300), consume: vi.fn() };
+    const deliveries = { claim: vi.fn().mockResolvedValue({ retryUntil: new Date('2026-11-01T00:05:00Z') }) };
+    const service = new LicenseQueryService(repository as never, envelopes as never, {} as Redis, 30, deliveries as never);
+    const first = await service.retrieveActivation(customer, 'license', 'delivery');
+    expect(await service.retrieveActivation(customer, 'license', 'delivery')).toEqual(first);
+    expect(first).toMatchObject({ activationKey: 'secret', deliveryId: 'delivery' });
+    expect(envelopes.consume).not.toHaveBeenCalled();
+  });
   it('rejects application callers outside the Customer and Provider roles', async () => {
     const repository = {
       listProvider: vi.fn(),
@@ -46,7 +69,7 @@ describe('LicenseQueryService boundaries', () => {
       }),
     } as unknown as Mocked<LicenseProjectionRepository>;
     const envelopes = {
-      consume: vi.fn().mockResolvedValue({
+      read: vi.fn().mockResolvedValue({
         commandId,
         commitment: `0x${'22'.repeat(32)}`,
         keyVersion: 1,
@@ -57,7 +80,7 @@ describe('LicenseQueryService boundaries', () => {
     const service = new LicenseQueryService(repository, envelopes, {} as Redis);
 
     await expect(
-      service.retrieveActivation(customer, licenseId),
+      service.retrieveActivation(customer, licenseId, 'delivery'),
     ).rejects.toMatchObject({ status: 404 });
   });
 

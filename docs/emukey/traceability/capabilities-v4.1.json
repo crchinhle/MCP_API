@@ -25,7 +25,12 @@
     "messages",
     "notifications",
     "notification_deliveries",
-    "mobile_push_tokens"
+    "mobile_push_tokens",
+    "license_key_deliveries",
+    "schema_versions",
+    "provider_integrations",
+    "license_key_materials",
+    "provider_license_deliveries"
   ],
   "uniqueOwners": {
     "comparePlans": "CAT-05",
@@ -240,9 +245,10 @@
         "licenses",
         "orders",
         "chain_commands",
-        "chain_events"
+        "chain_events",
+        "license_key_materials"
       ],
-      "transaction": "payment creates pending license; confirmed event activates projection",
+      "transaction": "payment/license/command/encrypted key commit together; confirmed chain event records provider snapshot",
       "testOwner": "tests/emukey/backend/integration/blockchain/license-db-invariants.integration.test.ts"
     },
     {
@@ -254,9 +260,12 @@
       "tables": [
         "licenses",
         "chain_commands",
-        "chain_events"
+        "chain_events",
+        "license_key_materials",
+        "provider_license_deliveries",
+        "license_key_deliveries"
       ],
-      "transaction": "persist commitment before post-commit encrypted envelope preparation",
+      "transaction": "provider handoff requires durable current revision ACK before customer key receipt; legacy envelope retained",
       "testOwner": "tests/emukey/backend/integration/blockchain/license-db-invariants.integration.test.ts"
     },
     {
@@ -270,50 +279,48 @@
         "license_devices",
         "chain_events"
       ],
-      "transaction": "read-only tenant-scoped projection with freshness",
+      "transaction": "tenant-scoped lifecycle and provider delivery projection; no product activation for new mode",
       "testOwner": "tests/emukey/backend/integration/blockchain/license-db-invariants.integration.test.ts"
     },
     {
       "id": "LIC-04",
       "phase": 6,
-      "actor": "DEVICE_USER_BACKEND_OR_CHAIN",
-      "owner": "licensing/device-activation",
-      "api": "POST /activations",
+      "actor": "PROVIDER_ADMIN",
+      "owner": "licensing/provider-integration",
+      "api": "GET/PUT /provider/integration; POST /provider/integration/test; POST /provider/integration/state",
       "tables": [
-        "licenses",
-        "license_devices",
-        "chain_commands"
+        "provider_integrations"
       ],
-      "transaction": "verify off-chain proof then persist pending device command",
-      "testOwner": "tests/emukey/backend/unit/licensing.service.test.ts"
+      "transaction": "versioned configuration, encrypted server credential, probe and authorization before enable",
+      "testOwner": "tests/emukey/backend/integration/licensing/provider-delivery.integration.test.ts"
     },
     {
       "id": "LIC-05",
       "phase": 6,
-      "actor": "ACTIVATION_KEY_HOLDER_OR_CHAIN",
-      "owner": "licensing/device-revocation",
-      "api": "POST /licenses/:licenseId/devices/:deviceId/revoke",
+      "actor": "WORKER_PROVIDER_OR_SYSTEM_ADMIN",
+      "owner": "licensing/provider-key-handoff",
+      "api": "provider HTTP delivery; GET /provider/license-deliveries; POST /provider/license-deliveries/:id/retry",
       "tables": [
-        "license_devices",
-        "chain_commands",
-        "chain_events"
+        "provider_license_deliveries",
+        "license_key_materials",
+        "licenses"
       ],
-      "transaction": "persist authorized revoke command",
-      "testOwner": "tests/emukey/backend/unit/licensing.service.test.ts"
+      "transaction": "leased durable snapshot delivery with matching receiver receipt and idempotent retry",
+      "testOwner": "tests/emukey/backend/integration/licensing/provider-delivery.integration.test.ts"
     },
     {
       "id": "LIC-06",
       "phase": 6,
-      "actor": "DEVICE_OR_BACKEND",
-      "owner": "licensing/entitlement",
-      "api": "POST /entitlements/issue; POST /entitlements/refresh",
+      "actor": "PROVIDER_SYSTEM_OR_CHAIN",
+      "owner": "licensing/provider-state-synchronization",
+      "api": "internal canonical lifecycle snapshot to provider",
       "tables": [
         "licenses",
-        "license_devices",
+        "provider_license_deliveries",
         "chain_events"
       ],
-      "transaction": "read confirmed current projection before signing short token",
-      "testOwner": "tests/emukey/backend/unit/licensing.service.test.ts"
+      "transaction": "monotonic full snapshots; provider controls product access; legacy device endpoints reject provider handoff mode",
+      "testOwner": "tests/emukey/backend/integration/licensing/provider-delivery.integration.test.ts"
     },
     {
       "id": "LIC-07",

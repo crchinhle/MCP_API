@@ -11,6 +11,7 @@ export interface ActivationEnvelopeData {
 }
 
 export interface ActivationEnvelopePort {
+  remainingTtl(commandId: string): Promise<number>;
   consume(commandId: string): Promise<ActivationEnvelopeData | null>;
   exists(commandId: string): Promise<boolean>;
   read(commandId: string): Promise<ActivationEnvelopeData | null>;

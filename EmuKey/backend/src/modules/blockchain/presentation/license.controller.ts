@@ -1,5 +1,7 @@
 import {
   Controller,
+  Body,
+  Header,
   Get,
   Ip,
   Param,
@@ -30,6 +32,8 @@ import {
   LicenseProjectionDto,
   LicenseDeviceDto,
   PublicLicenseVerificationDto,
+  RetrieveActivationKeyDto,
+  AcknowledgeActivationKeyDto,
 } from './license.dto.js';
 
 @ApiTags('licenses')
@@ -74,13 +78,23 @@ export class LicenseController {
   @UseGuards(AuthGuard, RolesGuard)
   @Roles('CUSTOMER')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Retrieve a confirmed activation key exactly once' })
+  @Header('Cache-Control', 'no-store')
+  @ApiOperation({ summary: 'Claim one confirmed key delivery with bounded idempotent retries' })
   @ApiCreatedResponse({ type: ActivationKeyDto })
   retrieve(
     @CurrentUser() actor: AuthPrincipal,
     @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RetrieveActivationKeyDto,
   ) {
-    return this.service.retrieveActivation(actor, id);
+    return this.service.retrieveActivation(actor, id, dto.deliveryId);
+  }
+
+  @Post(':id/activation-key/ack')
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles('CUSTOMER')
+  @Header('Cache-Control', 'no-store')
+  acknowledge(@CurrentUser() actor: AuthPrincipal, @Param('id', ParseUUIDPipe) id: string, @Body() dto: AcknowledgeActivationKeyDto) {
+    return this.service.acknowledgeActivation(actor,id,dto.deliveryId,dto.keyVersion);
   }
 }
 

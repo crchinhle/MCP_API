@@ -1,3 +1,4 @@
+import type { LicenseProjectionReader } from '../application/license-projection-reader.js';
 import { Pool } from 'pg';
 
 const PRIVATE_COLUMNS = `
@@ -10,9 +11,12 @@ const PRIVATE_COLUMNS = `
   pl.version AS plan_version, encode(l.plan_commitment,'hex') AS plan_commitment,
   provider.display_name AS provider_display_name,
   provider.organization_name AS provider_organization_name,
-  ce.transaction_hash, ce.block_number, ce.confirmation_count, ce.finality_status`;
+  ce.transaction_hash, ce.block_number, ce.confirmation_count, ce.finality_status,
+  l.fulfillment_mode,l.provider_revision,
+  (SELECT d.status FROM provider_license_deliveries d WHERE d.license_id=l.id AND d.revision=l.provider_revision) AS provider_delivery_status,
+  (SELECT d.accepted_at FROM provider_license_deliveries d WHERE d.license_id=l.id AND d.revision=l.provider_revision) AS provider_accepted_at`;
 
-export class LicenseProjectionRepository {
+export class LicenseProjectionRepository implements LicenseProjectionReader {
   constructor(private readonly pool: Pool) {}
 
   async listProvider(providerUserId: string) {
@@ -68,7 +72,7 @@ export class LicenseProjectionRepository {
   async listCustomerDevices(customerUserId: string, licenseId: string) {
     const result = await this.pool.query<Record<string, unknown>>(
        `SELECT d.id, d.device_ref, d.status, d.activated_at, d.revoked_at,
-               d.binding_generation
+               d.binding_generation, d.display_name, d.platform
         FROM license_devices d
         JOIN licenses l ON l.id=d.license_id
         WHERE d.license_id=$1 AND l.customer_user_id=$2
@@ -79,6 +83,8 @@ export class LicenseProjectionRepository {
       activatedAt: row.activated_at,
       bindingGeneration: Number(row.binding_generation),
       deviceRef: String(row.device_ref),
+      displayName: typeof row.display_name==='string'?row.display_name:null,
+      platform: typeof row.platform === 'string' ? row.platform : 'UNKNOWN',
        id: String(row.id),
       revokedAt: row.revoked_at,
       status: String(row.status),
@@ -87,7 +93,9 @@ export class LicenseProjectionRepository {
 
   async findPublic(publicId: string) {
     const result = await this.pool.query<Record<string, unknown>>(
-      `SELECT l.public_license_id,
+        `SELECT l.public_license_id, l.fulfillment_mode,
+           (SELECT d.status FROM provider_license_deliveries d
+            WHERE d.license_id=l.id AND d.revision=l.provider_revision) AS provider_delivery_status,
           CASE WHEN l.status='ACTIVE' AND l.expires_at <= now() THEN 'EXPIRED' ELSE l.status END AS status,
           l.expires_at,
          encode(l.plan_commitment,'hex') AS plan_commitment,
@@ -121,6 +129,10 @@ export class LicenseProjectionRepository {
               ? 'CHAIN_CONFIRMED'
               : 'PROJECTION_STALE';
     return {
+        ...(row.fulfillment_mode === 'PROVIDER_HANDOFF' ? {
+          fulfillmentMode: 'PROVIDER_HANDOFF' as const,
+          providerDeliveryStatus: row.provider_delivery_status ?? 'PENDING',
+        } : {}),
       blockNumber: row.block_number === null ? null : Number(row.block_number),
       confirmationCount: Number(row.confirmation_count ?? 0),
       expiresAt: row.expires_at,
@@ -143,8 +155,8 @@ export class LicenseProjectionRepository {
     };
   }
 
-  async activationCommand(customerUserId: string, id: string) {
-    const result = await this.pool.query<{
+  async activationCommand(customerUserId: string, id: string, connection: Pick<Pool, 'query'> = this.pool) {
+    const result = await connection.query<{
       command_id: string;
       commitment: string;
       key_version: number;
@@ -202,6 +214,10 @@ export class LicenseProjectionRepository {
 
   private map(row: Record<string, unknown>) {
     return {
+      fulfillmentMode: typeof row.fulfillment_mode==='string' ? row.fulfillment_mode : 'LEGACY_DEVICE',
+      providerRevision: Number(row.provider_revision ?? 0),
+      providerDeliveryStatus: typeof row.provider_delivery_status==='string' ? row.provider_delivery_status : null,
+      providerAcceptedAt: row.provider_accepted_at instanceof Date ? row.provider_accepted_at.toISOString() : null,
       blockNumber: row.block_number === null ? null : Number(row.block_number),
       confirmationCount: Number(row.confirmation_count ?? 0),
       createdAt: row.created_at,

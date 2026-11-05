@@ -10,7 +10,9 @@ export class RedisClient extends Redis implements OnApplicationShutdown {
       enableOfflineQueue: true,
       lazyConnect: true,
       maxRetriesPerRequest: 1,
-      retryStrategy: () => null,
+      // Reconnect the shared client after an outage; each command still fails
+      // after one retry so an HTTP request cannot wait through unlimited retries.
+      retryStrategy: (attempt) => Math.min(attempt * 200, 2_000),
     });
   }
 

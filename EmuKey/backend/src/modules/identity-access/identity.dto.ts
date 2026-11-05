@@ -28,6 +28,30 @@ export class CredentialsDto {
   password!: string;
 }
 
+export class NativeRefreshDto {
+  @ApiProperty({ minLength: 32, maxLength: 256 })
+  @IsString()
+  @Length(32, 256)
+  refreshToken!: string;
+}
+
+export class NativeUserDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'email' }) email!: string;
+  @ApiProperty() displayName!: string;
+  @ApiProperty({ enum: ['CUSTOMER'] }) role!: string;
+  @ApiProperty() status!: string;
+  @ApiProperty({ type: String, nullable: true }) phone!: string | null;
+  @ApiProperty({ type: String, nullable: true }) address!: string | null;
+  @ApiProperty({ type: String, nullable: true }) organizationName!: string | null;
+}
+
+export class NativeSessionDto {
+  @ApiProperty() accessToken!: string;
+  @ApiProperty() refreshToken!: string;
+  @ApiProperty({ type: NativeUserDto }) user!: NativeUserDto;
+}
+
 export class RegisterDto extends CredentialsDto {
   @ApiProperty({ minLength: 1, maxLength: 255 })
   @IsString()

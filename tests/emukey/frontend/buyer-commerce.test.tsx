@@ -387,14 +387,14 @@ try {
     fireEvent.click(screen.getByRole('button', { name: 'Nhận mã bản quyền' }));
     expect(await screen.findByLabelText('Mã bản quyền')).toBeTruthy();
     const keyInput = screen.getByLabelText('Mã bản quyền') as HTMLInputElement;
-    const retrievedKey = keyInput.value;
+    expect(keyInput.value).toBe('0x' + '12'.repeat(32));
     const keyDialog = keyInput.closest('.ant-modal');
     expect(keyDialog).toBeTruthy();
     fireEvent.click((keyDialog as HTMLElement).querySelector('button.ant-btn-primary')!);
-    expect(await screen.findByRole('button', { name: 'Xem mã bản quyền' })).toBeTruthy();
+    await waitFor(() => expect(screen.queryByLabelText('Mã bản quyền')).toBeNull());
+    expect(screen.queryByRole('button', { name: 'Xem mã bản quyền' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Thanh toán đơn hàng' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Xem mã bản quyền' }));
-    expect((await screen.findByLabelText('Mã bản quyền') as HTMLInputElement).value).toBe(retrievedKey);
+    expect(vi.mocked(fetch).mock.calls.some(([input, init]) => String(input).endsWith('/activation-key/ack') && init?.method === 'POST')).toBe(true);
   });
 
   it('creates a renewal order without asking for or sending the license secret', async () => {

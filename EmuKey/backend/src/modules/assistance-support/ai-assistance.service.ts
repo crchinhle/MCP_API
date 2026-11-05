@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
 
-import type { AiGatewayPort, GroundingSource } from './application/ports/ai-gateway.port.js';
+import type { AiGatewayPort, GroundingSource, CitationDetail } from './application/ports/ai-gateway.port.js';
 
 export interface KnowledgeSearchPort {
   searchSources(input: { conversationId: string; customerUserId: string; question: string }): Promise<GroundingSource[]>;
   appendCustomerMessage(input: { clientMessageId: string; conversationId: string; customerUserId: string; content: string }): Promise<unknown>;
-  appendAiMessage(input: { clientMessageId: string; conversationId: string; content: string; citedSourceIds: string[]; grounded: boolean }): Promise<{ content: string; sources?: string[]; grounded?: boolean }>;
+  appendAiMessage(input: { clientMessageId: string; conversationId: string; content: string; citedSourceIds: string[]; grounded: boolean; citationDetails?:CitationDetail[] }): Promise<{ content: string; sources?: string[]; grounded?: boolean;citationDetails?:CitationDetail[] }>;
 }
 
 export class AiAssistanceService {
@@ -41,6 +41,13 @@ export class AiAssistanceService {
       content: result.answer,
       citedSourceIds: result.citedSourceIds,
       grounded: result.grounded,
+      citationDetails: sources.flatMap((source) => {
+        if (!result.citedSourceIds.includes(source.id) || !source.documentId || !source.documentTitle ||
+            typeof source.documentVersion !== 'number' || !Number.isSafeInteger(source.documentVersion) || source.documentVersion < 1 ||
+            typeof source.chunkIndex !== 'number' || !Number.isSafeInteger(source.chunkIndex) || source.chunkIndex < 0) return [];
+        return [{ chunkId: source.id, documentId: source.documentId, documentTitle: source.documentTitle,
+          documentVersion: source.documentVersion, chunkIndex: source.chunkIndex, excerpt: source.content.slice(0, 800) }];
+      }),
     });
   }
 
@@ -48,9 +55,9 @@ export class AiAssistanceService {
     const answer = 'Không đủ nguồn chính thức để trả lời câu hỏi này.';
     return this.persistAnswer({ clientMessageId, conversationId, content: answer, citedSourceIds: [], grounded: false });
   }
-  private async persistAnswer(input: { clientMessageId: string; conversationId: string; content: string; citedSourceIds: string[]; grounded: boolean }) {
+  private async persistAnswer(input: { clientMessageId: string; conversationId: string; content: string; citedSourceIds: string[]; grounded: boolean;citationDetails?:CitationDetail[] }) {
     const stored = await this.knowledge.appendAiMessage(input);
-    return { answer: stored.content, citedSourceIds: stored.sources ?? [], grounded: stored.grounded ?? false };
+    return { answer: stored.content, citedSourceIds: stored.sources ?? [], grounded: stored.grounded ?? false,citationDetails:stored.citationDetails??[] };
   }
 }
 

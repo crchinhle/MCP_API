@@ -23,7 +23,8 @@
     "secrets:rotate:dev": "node scripts/rotate-dev-secrets.mjs",
     "contracts:build": "corepack pnpm --dir contracts build && corepack pnpm --dir contracts abi:export",
     "openapi:check": "node scripts/generate-openapi.mjs --check",
-    "openapi:generate": "node scripts/generate-openapi.mjs"
+    "openapi:generate": "node scripts/generate-openapi.mjs",
+    "db:upgrade": "node --env-file-if-exists=.env dist/entrypoints/database/upgrade.js"
   },
   "dependencies": {
     "@getbrevo/brevo": "6.0.3",

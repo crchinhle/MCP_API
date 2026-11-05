@@ -305,7 +305,7 @@ test.describe('Payment status downstream flow', () => {
     await page.goto(`/buyer/orders/${orderId}/payment`);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1440);
     await expect(page.getByRole('heading', { name: 'Thanh toán đã được xác nhận', exact: true })).toBeVisible();
-    await expect(page.getByText('Đang kích hoạt bản quyền', { exact: true })).toBeVisible();
+    await expect(page.getByText('Đang chuẩn bị bản quyền', { exact: true })).toBeVisible();
     const processing = page.getByRole('dialog', { name: 'Đang cấp bản quyền' });
     await expect(processing).toBeVisible();
     await expect(processing.getByRole('status')).toContainText('Thanh toán đã xác nhận. Bản quyền đang được chuẩn bị');

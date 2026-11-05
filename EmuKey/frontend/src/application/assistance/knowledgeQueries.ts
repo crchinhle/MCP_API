@@ -1,7 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { KnowledgeDocumentDetailDto, KnowledgeDocumentDto, KnowledgeSourceDto } from '../../infrastructure/api/generated';
-import { api, requestJson } from '../auth/authContext';
+import type { KnowledgeCapabilitiesDto, KnowledgeDocumentDetailDto, KnowledgeDocumentDto, KnowledgeSourceDto } from '../../infrastructure/api/generated';
+import { requestJson } from '../auth/authContext';
+
+export function useKnowledgeCapabilities(enabled: boolean) {
+  return useQuery({ queryKey: ['knowledge', 'capabilities'], enabled,
+    queryFn: () => requestJson<KnowledgeCapabilitiesDto>('/knowledge/capabilities'), staleTime: 60_000 });
+}
 
 export function knowledgeDocumentState(document: KnowledgeDocumentDto, documents: readonly KnowledgeDocumentDto[]) {
   if (document.isCurrent) return 'PUBLISHED';
@@ -40,11 +45,7 @@ export function useCreateKnowledgeDocument() {
       body.append('logicalDocumentKey', input.logicalDocumentKey);
       body.append('sourceType', input.sourceType);
       body.append('title', input.title);
-      const response = await api('/knowledge/documents', { method: 'POST', body });
-      if (!response.ok) {
-        throw new Error('KNOWLEDGE_UPLOAD_FAILED');
-      }
-      return response.json() as Promise<KnowledgeDocumentDto>;
+      return requestJson<KnowledgeDocumentDto>('/knowledge/documents', { method: 'POST', body });
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['knowledge', 'documents'] });

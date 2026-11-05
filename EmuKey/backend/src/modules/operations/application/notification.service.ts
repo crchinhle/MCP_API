@@ -22,12 +22,19 @@ export interface NotificationRecord {
 
 export class NotificationService {
   constructor(private readonly repository: {
+    find(userId:string,id:string):Promise<NotificationDto|null>;
     create(input: NotificationCreateInput): Promise<NotificationRecord>;
-    list(userId: string, options: { cursor?: string; limit: number }): Promise<{ items: NotificationDto[]; nextCursor: string | null }>;
+    list(userId: string, options: { cursor?: string; limit: number }): Promise<{ items: NotificationDto[]; nextCursor: string | null; unreadCount: number }>;
     markRead(userId: string, notificationId: string): Promise<NotificationDto | null>;
     registerPushToken(userId: string, token: string, provider: 'FCM' | 'EXPO'): Promise<NotificationRecord>;
     unregisterPushToken(userId: string, token: string): Promise<NotificationRecord | null>;
   }) {}
+
+  async find(actor:AuthPrincipal,id:string) {
+    const item=await this.repository.find(actor.sub,id);
+    if (!item) throw new NotFoundException({code:'NOTIFICATION_NOT_FOUND'});
+    return item;
+  }
 
   create(input: NotificationCreateInput) {
     return this.repository.create(input);

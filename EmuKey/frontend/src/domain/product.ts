@@ -10,6 +10,8 @@ export interface DevicePlan {
 }
 
 export interface Product {
+  readonly id: string;
+  readonly providerDisplayName: string;
   readonly imageUrl: string | null;
   readonly slug: string;
   readonly name: string;

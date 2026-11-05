@@ -16,7 +16,42 @@ import type {
   RevokeDeviceDto,
   RotateActivationKeyDto,
 } from '../../infrastructure/api/generated';
-import { requestJson, type ApiRequestError } from '../auth/authContext';
+import { requestJson, useAuth, type ApiRequestError } from '../auth/authContext';
+
+export function providerLicenseReady(license: LicenseProjectionDto): boolean {
+  return license.fulfillmentMode!=='PROVIDER_HANDOFF' || (license.providerDeliveryStatus==='DELIVERED' &&
+    license.status==='ACTIVE' && license.activationKeyTrustStatus==='TRUSTED' && ['CONFIRMED','CHAIN_CONFIRMED'].includes(license.finality) && Date.parse(license.expiresAt)>Date.now());
+}
+
+/** Customer-facing progress; authorization and delivery admission stay on the API. */
+export function providerHandoffStatus(license: LicenseProjectionDto): {
+  stage: 'blockchain' | 'review' | 'handoff' | 'failed' | 'delivered' | 'received' | 'inactive';
+  label: string;
+  description: string;
+  tone: 'info' | 'warning' | 'success';
+} | null {
+  if (license.fulfillmentMode !== 'PROVIDER_HANDOFF') return null;
+  if (['SUSPENDED', 'REVOKED', 'EXPIRED'].includes(license.status) || (license.status !== 'PENDING_ONCHAIN' && Date.parse(license.expiresAt) <= Date.now())) {
+    return { stage: 'inactive', label: license.status === 'SUSPENDED' ? 'Bản quyền tạm ngưng' : license.status === 'REVOKED' ? 'Bản quyền đã thu hồi' : 'Bản quyền đã hết hạn',
+      description: 'Quyền sử dụng do nhà cung cấp thực thi theo trạng thái và thời hạn hiện tại. Kiểm tra chi tiết bản quyền hoặc liên hệ hỗ trợ.', tone: 'warning' };
+  }
+  if (['UNTRUSTED_REORG', 'PROJECTION_STALE', 'REORGED'].includes(license.activationKeyTrustStatus) || ['PROJECTION_STALE', 'UNTRUSTED_REORG', 'REORGED'].includes(license.finality)) {
+    return { stage: 'review', label: 'Đang xác minh lại blockchain', description: 'Bằng chứng blockchain đang được kiểm tra lại. Chưa thể nhận mã; bạn không cần thanh toán lại.', tone: 'warning' };
+  }
+  if (license.status === 'PENDING_ONCHAIN' || license.activationKeyTrustStatus !== 'TRUSTED' || !['CONFIRMED', 'CHAIN_CONFIRMED'].includes(license.finality)) {
+    return { stage: 'blockchain', label: 'Đang xác nhận blockchain', description: 'Thanh toán đã được ghi nhận. Hệ thống đang chờ blockchain xác nhận trước khi bàn giao bản quyền cho nhà cung cấp. Không thanh toán lại.', tone: 'info' };
+  }
+  if (license.providerDeliveryStatus === 'FAILED') {
+    return { stage: 'failed', label: 'Bàn giao bản quyền cần xử lý', description: 'Thanh toán và blockchain đã được xác nhận. Chưa nhận được xác nhận lưu từ nhà cung cấp; không thanh toán lại. Liên hệ hỗ trợ theo đơn hàng.', tone: 'warning' };
+  }
+  if (license.providerDeliveryStatus !== 'DELIVERED') {
+    return { stage: 'handoff', label: 'Đang bàn giao cho nhà cung cấp', description: 'Blockchain đã được xác nhận. Mã sẽ sẵn sàng sau khi hệ thống nhà cung cấp xác nhận đã lưu. Bạn có thể quay về đơn hàng và kiểm tra lại sau.', tone: 'info' };
+  }
+  if (license.activationKeyAvailable === false) {
+    return { stage: 'received', label: 'Mã bản quyền đã được nhận', description: 'Nhà cung cấp đã nhận bản quyền và mã đã được giao cho bạn. Nếu mất mã, mở quản lý bản quyền để khôi phục qua email.', tone: 'success' };
+  }
+  return { stage: 'delivered', label: 'Nhà cung cấp đã nhận bản quyền', description: 'Bản quyền đã được bàn giao. Bạn có thể nhận mã một lần và lưu an toàn để dùng trong sản phẩm của nhà cung cấp.', tone: 'success' };
+}
 
 export function useResolveLicensingAction(token: string) {
   return useQuery({
@@ -50,7 +85,7 @@ export function activationKeyErrorLabel(error: unknown): string {
   if (error && typeof error === 'object' && 'status' in error) {
     const status = Number((error as ApiRequestError).status);
     const code = 'code' in error ? String((error as ApiRequestError).code ?? '') : '';
-    if (status === 404 || code === 'ACTIVATION_KEY_UNAVAILABLE' || code === 'ACTIVATION_KEY_ALREADY_RETRIEVED') return 'Mã bản quyền đã được nhận hoặc hiện không còn sẵn sàng. Nếu bạn đã mất mã, hãy dùng quy trình khôi phục mã.';
+    if (status === 404 || ['ACTIVATION_KEY_UNAVAILABLE', 'ACTIVATION_KEY_ALREADY_RETRIEVED', 'KEY_DELIVERY_EXPIRED', 'KEY_ALREADY_DELIVERED', 'KEY_UNAVAILABLE'].includes(code)) return 'Mã bản quyền đã được nhận hoặc hiện không còn sẵn sàng. Nếu bạn đã mất mã, hãy dùng quy trình khôi phục mã.';
     if (status === 409) return 'Mã bản quyền chưa thể nhận ở trạng thái hiện tại. Hãy kiểm tra lại trạng thái bản quyền.';
     if (status === 403) return 'Bạn không có quyền nhận mã bản quyền này.';
     if (status === 429) return 'Bạn đã yêu cầu quá nhiều lần. Vui lòng thử lại sau.';
@@ -128,6 +163,7 @@ export function useLicenses() {
   return useQuery({
     queryKey: ['licenses'],
     queryFn: () => requestJson<LicenseProjectionDto[]>('/licenses'),
+    refetchInterval:(query)=>query.state.data?.some((license)=>license.fulfillmentMode==='PROVIDER_HANDOFF' && !['DELIVERED','FAILED'].includes(license.providerDeliveryStatus ?? ''))?5000:false,
   });
 }
 
@@ -158,7 +194,7 @@ export function useOrderLicense(
       if (
         !continuePollingAfterReady && expiryUpdated &&
         license?.status === 'ACTIVE' &&
-        license.activationKeyTrustStatus === 'TRUSTED'
+        license.activationKeyTrustStatus === 'TRUSTED' && providerLicenseReady(license)
       ) return false;
       if (!continuePollingAfterReady && expiryUpdated && license && ['SUSPENDED', 'EXPIRED', 'REVOKED'].includes(license.status)) return false;
       return 2_000;
@@ -171,6 +207,7 @@ export function useProviderLicenses() {
   return useQuery({
     queryKey: ['licenses', 'provider'],
     queryFn: () => requestJson<LicenseProjectionDto[]>('/licenses'),
+    refetchInterval:(query)=>query.state.data?.some((license)=>license.fulfillmentMode==='PROVIDER_HANDOFF' && !['DELIVERED','FAILED'].includes(license.providerDeliveryStatus ?? ''))?5000:false,
   });
 }
 
@@ -206,14 +243,35 @@ export function usePhase6Command(commandId: string | undefined) {
 }
 
 export function useRetrieveActivationKey() {
+  const { user } = useAuth();
   return useMutation({
     retry: false,
-    mutationFn: ({ id }: { id: string }) =>
-      requestJson<ActivationKeyDto>(
+    mutationFn: async ({ id, keyVersion: observedVersion }: { id: string; keyVersion?: number }) => {
+      const keyVersion = observedVersion ?? (await requestJson<LicenseProjectionDto>(`/licenses/${encodeURIComponent(id)}`)).keyVersion;
+      const storageKey = `emukey-key-delivery:${user?.id}:${id}`;
+      const previous = sessionStorage.getItem(storageKey);
+      const receipt = previous ? JSON.parse(previous) as { deliveryId: string; keyVersion?: number } : null;
+      const deliveryId = receipt?.keyVersion === keyVersion ? receipt.deliveryId : crypto.randomUUID();
+      sessionStorage.setItem(storageKey, JSON.stringify({ deliveryId, keyVersion }));
+      const result = await requestJson<ActivationKeyDto>(
         `/licenses/${encodeURIComponent(id)}/activation-key/retrieve`,
-        { method: 'POST' },
-      ),
+        { method: 'POST', body: JSON.stringify({ deliveryId }) },
+      );
+      sessionStorage.setItem(storageKey, JSON.stringify({ deliveryId, keyVersion: result.keyVersion }));
+      return result;
+    },
   });
+}
+
+export function useAcknowledgeActivationKey() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({ mutationFn: async (id: string) => {
+    const key = `emukey-key-delivery:${user?.id}:${id}`;
+    const receipt = JSON.parse(sessionStorage.getItem(key) ?? '{}') as { deliveryId?: string; keyVersion?: number };
+    if (!receipt.deliveryId || !receipt.keyVersion) throw new Error('KEY_DELIVERY_NOT_FOUND');
+    return requestJson(`/licenses/${encodeURIComponent(id)}/activation-key/ack`, { method: 'POST', body: JSON.stringify(receipt) });
+  }, onSuccess: () => queryClient.invalidateQueries({ queryKey: ['licenses'] }) });
 }
 
 export function usePublicLicenseVerification() {

@@ -27,6 +27,7 @@ export function useClaimConversation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (conversationId: string) => requestJson<ConversationDto>(`/conversations/${encodeURIComponent(conversationId)}/claim`, { method: 'POST' }),
+    onError: () => { void queryClient.invalidateQueries({ queryKey: ['assistance', 'support-queue'] }); },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['assistance'] });
     },
@@ -46,9 +47,10 @@ export function useSupportConversationMessages(conversationId: string | undefine
 export function useReleaseSupportConversation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (conversationId: string) =>
-      requestJson<ConversationDto>(`/conversations/${encodeURIComponent(conversationId)}/release`, { method: 'POST' }),
-    onSuccess: (_conversation, conversationId) => {
+    mutationFn: ({ conversationId, claimVersion }: { conversationId: string; claimVersion: number }) =>
+      requestJson<ConversationDto>(`/conversations/${encodeURIComponent(conversationId)}/release`, { method: 'POST', body: JSON.stringify({ claimVersion }) }),
+    onError: () => { void queryClient.invalidateQueries({ queryKey: ['assistance', 'support-queue'] }); },
+    onSuccess: (_conversation, { conversationId }) => {
       void queryClient.invalidateQueries({ queryKey: ['assistance', 'support-queue'] });
       void queryClient.invalidateQueries({ queryKey: ['assistance', 'messages', conversationId] });
       void queryClient.invalidateQueries({ queryKey: ['assistance', 'queue-preview', conversationId] });
@@ -59,11 +61,12 @@ export function useReleaseSupportConversation() {
 export function useAppendSupportMessage() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ conversationId, clientMessageId, content }: { conversationId: string; clientMessageId: string; content: string }) =>
+    mutationFn: ({ conversationId, clientMessageId, content, claimVersion }: { conversationId: string; clientMessageId: string; content: string; claimVersion: number }) =>
       requestJson<MessageDto>(`/conversations/${conversationId}/messages`, {
-        body: JSON.stringify({ clientMessageId, content }),
+        body: JSON.stringify({ clientMessageId, content, claimVersion }),
         method: 'POST',
       }),
+    onError: () => { void queryClient.invalidateQueries({ queryKey: ['assistance', 'support-queue'] }); },
     onSuccess: (_message, input) => {
       void queryClient.invalidateQueries({ queryKey: ['assistance', 'messages', input.conversationId] });
       void queryClient.invalidateQueries({ queryKey: ['assistance', 'support-queue'] });
@@ -74,9 +77,10 @@ export function useAppendSupportMessage() {
 export function useCloseSupportConversation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (conversationId: string) =>
-      requestJson<ConversationDto>(`/conversations/${conversationId}/close`, { method: 'POST' }),
-    onSuccess: (_conversation, conversationId) => {
+    mutationFn: ({ conversationId, claimVersion }: { conversationId: string; claimVersion: number }) =>
+      requestJson<ConversationDto>(`/conversations/${conversationId}/close`, { method: 'POST', body: JSON.stringify({ claimVersion }) }),
+    onError: () => { void queryClient.invalidateQueries({ queryKey: ['assistance', 'support-queue'] }); },
+    onSuccess: (_conversation, { conversationId }) => {
       void queryClient.invalidateQueries({ queryKey: ['assistance', 'support-queue'] });
       void queryClient.invalidateQueries({ queryKey: ['assistance', 'messages', conversationId] });
     },

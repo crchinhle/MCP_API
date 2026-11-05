@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react-native';
 import App from '../../../../EmuKey/mobile/App';
 
 jest.mock('../../../../EmuKey/mobile/src/infrastructure/api/client', () => ({
+  subscribeSession: jest.fn(() => () => {}),
   restoreSession: jest.fn().mockResolvedValue(null),
 }));
 

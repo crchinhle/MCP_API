@@ -118,12 +118,14 @@ function AppRoutes() {
       <Route element={<CatalogScreen />} path="/products" />
       <Route element={<CatalogScreen />} path="/catalog" />
       <Route element={<ComparePlansScreen />} path="/compare" />
+      <Route element={<ProductDetailScreen />} path="/products/id/:productId" />
       <Route element={<ProductDetailScreen />} path="/products/:slug" />
       <Route element={<PublicVerificationScreen />} path="/verify" />
       <Route element={<PublicHelpScreen />} path="/help" />
       <Route element={<ProtectedRoute roles={['CUSTOMER']}><CustomerLayout /></ProtectedRoute>} path="/buyer">
         <Route index element={<BuyerHomeScreen />} />
         <Route element={<CatalogScreen authenticated />} path="products" />
+        <Route element={<ProductDetailScreen authenticated />} path="products/id/:productId" />
         <Route element={<ProductDetailScreen authenticated />} path="products/:slug" />
         <Route element={<BuyerCheckoutScreen />} path="checkout" />
         <Route element={<PaymentStatusScreen />} path="orders/:id/payment" />
@@ -165,10 +167,12 @@ export function App({ initialEntries }: AppProps) {
   const routes = initialEntries ? (
     <MemoryRouter initialEntries={[...initialEntries]}>
       <AppRoutes />
+      <AiAssistantLauncher />
     </MemoryRouter>
   ) : (
     <BrowserRouter>
       <AppRoutes />
+      <AiAssistantLauncher />
     </BrowserRouter>
   );
 
@@ -180,7 +184,6 @@ export function App({ initialEntries }: AppProps) {
          <div className="app-theme" style={themeCssVariables}>
            <AppErrorBoundary>
              {routes}
-             <AiAssistantLauncher />
            </AppErrorBoundary>
          </div>
       </ConfigProvider>

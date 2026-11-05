@@ -9,7 +9,14 @@ import {
   OrderDetailScreen,
   ProfileScreen,
   RenewalScreen,
+  matchesPaymentReturn,
 } from '../../../../EmuKey/mobile/src/presentation/EmuKeyMobileApp';
+
+it('recognizes only the configured checkout return origin and exact order', () => {
+  expect(matchesPaymentReturn('https://shop.example/buyer/orders/o1/payment?sepay=success','o1','https://shop.example/buyer/orders/o1/payment?sepay=success')).toBe(true);
+  expect(matchesPaymentReturn('https://evil.example/buyer/orders/o1/payment','o1','https://shop.example/buyer/orders/o1/payment')).toBe(false);
+  expect(matchesPaymentReturn('emukey://payment/o2','o1')).toBe(false);
+});
 import {
   askConversationAi,
   listConversations,
@@ -20,6 +27,7 @@ import {
   createConversation,
   createCheckout,
   getPaymentRetryDecision,
+  getLicense,
 getOrder,
   getOrderTerms,
   getRenewalPreview,
@@ -39,6 +47,7 @@ jest.mock('../../../../EmuKey/mobile/src/infrastructure/api/client', () => ({
   comparePlans: jest.fn(),
   createCheckout: jest.fn(),
   getPaymentRetryDecision: jest.fn(),
+  getLicense: jest.fn(),
   createOrder: jest.fn(),
   createConversation: jest.fn(),
   getOrder: jest.fn(),
@@ -123,6 +132,7 @@ describe('mobile Phase 3 and Phase 4 screens', () => {
   it('renders the published catalog and opens checkout with the selected plan', async () => {
     listProductsMock.mockResolvedValue([
       {
+        id: 'product-1', providerId: 'provider-1', providerDisplayName: 'Provider 1', code: 'DESKTOP',
         name: 'Emukey Desktop',
         plans: [{
           billingCycle: 'YEARLY',
@@ -219,7 +229,23 @@ describe('mobile Phase 3 and Phase 4 screens', () => {
     expect(screen.getByText(/Giá server đã thay đổi/)).toBeOnTheScreen();
   });
 
-  it('waits instead of paying again when the previous attempt is uncertain', async () => {
+    it.each([
+      ['PENDING_ONCHAIN','PENDING_FINALITY',null,'Đang xác nhận blockchain'],
+      ['ACTIVE','TRUSTED','PENDING','Đang bàn giao cho nhà cung cấp'],
+      ['ACTIVE','TRUSTED','DELIVERED','Nhà cung cấp đã nhận bản quyền'],
+      ['ACTIVE','TRUSTED','FAILED','Bàn giao bản quyền cần xử lý. Không thanh toán lại.'],
+      ['SUSPENDED','TRUSTED','DELIVERED','Bản quyền tạm ngưng'],
+      ['EXPIRED','TRUSTED','DELIVERED','Bản quyền đã hết hạn'],
+    ])('shows provider-managed payment progress for %s/%s/%s',async(status,trust,delivery,label)=>{
+      getOrderMock.mockResolvedValue({...order,orderStatus:'PAYMENT_ACCEPTED',licenseId:'license-progress'});
+      jest.mocked(getLicense).mockResolvedValue({id:'license-progress',fulfillmentMode:'PROVIDER_HANDOFF',status,activationKeyTrustStatus:trust,finality:status==='PENDING_ONCHAIN'?'PENDING_FINALITY':'CHAIN_CONFIRMED',providerDeliveryStatus:delivery,activationKeyAvailable:true,expiresAt:'2030-01-01T00:00:00Z'} as never);
+      await render(<PaymentScreen navigation={{navigate:jest.fn()} as never} route={{params:{orderId:order.id}} as never}/>);
+      expect(await screen.findByText(label)).toBeOnTheScreen();
+      expect(screen.queryByText('Thanh toán trên SePay')).toBeNull();
+      expect(screen.queryByText('Đã nhận thanh toán. Hệ thống đang chờ xác nhận bản quyền; không thanh toán lại.')).toBeNull();
+      if(status!=='ACTIVE' || delivery!=='DELIVERED') expect(screen.queryByText('Mở danh sách bản quyền để nhận mã hoặc xem mã đã lưu.')).toBeNull();
+    });
+    it('waits instead of paying again when the previous attempt is uncertain', async () => {
     getOrderMock.mockResolvedValue({ ...order, orderStatus: 'WAITING_PAYMENT' });
     jest.mocked(getPaymentRetryDecision).mockResolvedValue({ allowed: false, canResume: false, reason: 'ATTEMPT_PENDING' });
     await render(<PaymentScreen navigation={{ navigate: jest.fn() } as never} route={{ params: { orderId: order.id } } as never} />);
@@ -279,12 +305,14 @@ describe('mobile Phase 3 and Phase 4 screens', () => {
   it('filters the catalog and explains the four-plan comparison limit', async () => {
     listProductsMock.mockResolvedValue([
       {
+        id: 'product-1', providerId: 'provider-1', providerDisplayName: 'Provider 1', code: 'DESKTOP',
         name: 'Emukey Desktop',
         plans: [{ billingCycle: 'YEARLY', code: 'PRO', durationMonths: 12, entitlements: {}, id: 'plan-1', maxActiveDevices: 2, name: 'Pro', priceVnd: 990_000 }],
         slug: 'emukey-desktop',
         summary: 'Bản quyền desktop',
       },
       {
+        id: 'product-2', providerId: 'provider-1', providerDisplayName: 'Provider 1', code: 'MOBILE',
         name: 'Emukey Mobile',
         plans: [{ billingCycle: 'YEARLY', code: 'MOB', durationMonths: 12, entitlements: {}, id: 'plan-2', maxActiveDevices: 1, name: 'Mobile', priceVnd: 490_000 }],
         slug: 'emukey-mobile',

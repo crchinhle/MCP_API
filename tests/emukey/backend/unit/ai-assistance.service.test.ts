@@ -1,4 +1,5 @@
 import { AiAssistanceService } from '../../../../EmuKey/backend/src/modules/assistance-support/ai-assistance.service.js';
+import type { GroundingSource } from '../../../../EmuKey/backend/src/modules/assistance-support/application/ports/ai-gateway.port.js';
 
 const conversationId = '00000000-0000-4000-8000-000000000701';
 const questionId = '00000000-0000-4000-8000-000000000702';
@@ -18,7 +19,7 @@ interface RecordedQuestion {
   content: string;
 }
 
-function knowledgePort(sources: Array<{ content: string; id: string }>) {
+function knowledgePort(sources: GroundingSource[]) {
   const aiMessages: RecordedMessage[] = [];
   const questions: RecordedQuestion[] = [];
   return {
@@ -39,6 +40,11 @@ function knowledgePort(sources: Array<{ content: string; id: string }>) {
 }
 
 describe('AiAssistanceService', () => {
+  it('does not invent a source document version or chunk position when metadata is missing', async () => {
+    const knowledge = knowledgePort([{ id: 's', content: 'Evidence', documentId: 'document', documentTitle: 'Guide' }]);
+    const service = new AiAssistanceService({ answerGrounded: vi.fn().mockResolvedValue({ answer: 'Grounded', grounded: true, citedSourceIds: ['s'] }) }, knowledge.port);
+    expect(await service.answer({ conversationId, customerUserId: 'u1', question: 'Q', clientMessageId: questionId })).toMatchObject({ citationDetails: [] });
+  });
   it('returns the stored answer when a retry generated a different response', async () => {
     const knowledge = knowledgePort([{ content: 'source', id: 'source-1' }]);
     knowledge.port.appendAiMessage.mockImplementation((input) => Promise.resolve({ ...input, content: 'Original answer', grounded: true, sources: ['source-1'] }));

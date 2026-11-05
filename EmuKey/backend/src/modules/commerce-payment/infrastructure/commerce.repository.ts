@@ -1,8 +1,10 @@
+import type { ReviewPaymentDto } from '../presentation/commerce.dto.js';
 import { randomUUID } from 'node:crypto';
+import type { ProviderHandoffService } from '../../licensing/application/provider-handoff.service.js';
 
 import { Pool, type PoolClient } from 'pg';
 import { keccak256, stringToHex, type Hex } from 'viem';
-import { NotificationRepository } from '../../operations/infrastructure/notification.repository.js';
+import type { NotificationWriter } from '../../operations/application/notification-writer.js';
 import { canonicalizeEntitlements, providerNamespaceDigest } from '../../../platform/crypto/license-crypto.js';
 import type { AuthPrincipal } from '../../identity-access/identity.types.js';
 import type { VerifiedPaymentEvent } from '../application/ports/payment-gateway.port.js';
@@ -90,6 +92,8 @@ export interface PaymentReceiptRecord {
 }
 
 export interface PaymentReviewRecord {
+  reviewResolution: string | null;
+  reviewEvidence: Record<string, unknown>;
   amountVnd: number;
   classification: string;
   id: string;
@@ -181,6 +185,8 @@ function mapOrder(row: Record<string, unknown>): OrderRecord {
 
 function mapPaymentReview(row: Record<string, unknown>): PaymentReviewRecord {
   return {
+    reviewResolution: typeof row.review_resolution === 'string' ? row.review_resolution : null,
+    reviewEvidence: (row.review_evidence ?? {}) as Record<string, unknown>,
     amountVnd: Number(row.amount_vnd),
     classification: String(row.classification),
     id: String(row.id),
@@ -221,7 +227,8 @@ export class CommerceRepository {
   constructor(
     private readonly pool: Pool,
     private readonly ipnDeliveryGraceSeconds = 86_400,
-    private readonly notifications = new NotificationRepository(pool),
+    private readonly notifications: NotificationWriter,
+    private readonly handoff?: ProviderHandoffService,
   ) {
     if (
       !Number.isSafeInteger(ipnDeliveryGraceSeconds) ||
@@ -310,6 +317,10 @@ export class CommerceRepository {
       }
 
       const id = randomUUID();
+      const fulfillmentMode = targetLicenseId
+        ? (await client.query<{fulfillment_mode:string}>('SELECT fulfillment_mode FROM licenses WHERE id=$1',[targetLicenseId])).rows[0]!.fulfillment_mode
+        : this.handoff ? 'PROVIDER_HANDOFF' : 'LEGACY_DEVICE';
+      if (fulfillmentMode==='PROVIDER_HANDOFF') await this.handoff!.requireReady(client,String(plan.provider_user_id));
       const orderNumber = `EMU-${id.replaceAll('-', '').slice(0, 20).toUpperCase()}`;
       const result = await client.query<Record<string, unknown>>(
         `INSERT INTO orders
@@ -321,14 +332,14 @@ export class CommerceRepository {
             max_active_devices_snapshot, entitlements_snapshot,
             plan_commitment_snapshot, payment_due_at, ipn_accept_until,
             service_terms_version_snapshot, service_terms_hash_snapshot,
-            service_terms_content_snapshot)
+            service_terms_content_snapshot, fulfillment_mode)
          VALUES
           ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
             $13, $14, $15, $16, $17, decode($18, 'hex'),
             statement_timestamp() + interval '30 minutes',
             statement_timestamp() + interval '30 minutes' +
               ($19::integer * interval '1 second'),
-            $20, $21, $22)
+            $20, $21, $22, $23)
          RETURNING *`,
         [
           id,
@@ -353,6 +364,7 @@ export class CommerceRepository {
           terms.version,
           terms.hash,
           terms.content,
+          fulfillmentMode,
         ],
       );
       const order = mapOrder(result.rows[0] ?? {});
@@ -481,6 +493,7 @@ export class CommerceRepository {
   async paymentRetryDecision(customerUserId: string, id: string, connection: Pick<Pool, 'query'> = this.pool): Promise<PaymentRetryDecision> {
     const result = await connection.query<Record<string, unknown>>(
       `SELECT o.order_status, o.payment_due_at, statement_timestamp() AS checked_at,
+              EXISTS (SELECT 1 FROM payment_transactions pt WHERE pt.order_id=o.id AND pt.review_status='OPEN') AS has_open_review,
               EXISTS (
                 SELECT 1 FROM payment_transactions pt
                 WHERE pt.order_id = o.id AND (
@@ -504,6 +517,7 @@ export class CommerceRepository {
       now: date(row.checked_at),
       attempts: attempts.map((attempt) => ({ status: attempt.status, expiresAt: date(attempt.expiresAt) })),
       hasUncertainTransaction: row.has_uncertain_transaction === true,
+      hasOpenReview: row.has_open_review === true,
     });
   }
 
@@ -521,6 +535,7 @@ export class CommerceRepository {
       );
       const row = orderResult.rows[0];
       if (!row) throw new Error('ORDER_NOT_FOUND');
+      if (row.fulfillment_mode==='PROVIDER_HANDOFF') await this.handoff!.requireReady(client,String(row.provider_user_id));
       if (row.provider_chain_address === null && !chain?.namespaceContractAddress) throw new Error('PROVIDER_NAMESPACE_CAPABILITY_NOT_CONFIGURED');
       if (row.order_status !== 'WAITING_PAYMENT') {
         throw new Error('ORDER_NOT_WAITING_PAYMENT');
@@ -610,7 +625,8 @@ export class CommerceRepository {
     rawPayload: unknown,
     issuance: IssuanceMaterial,
     chain: ChainConfiguration,
-    reconciliation?: { transactionId: string; actor: AuthPrincipal; reason: string },
+    reconciliation?: { transactionId: string; actor: AuthPrincipal; reason: string; manual?: ReviewPaymentDto },
+    secret?: string,
   ): Promise<PaymentIngestResult> {
     return this.withTransaction(async (client) => {
       const transactionId = reconciliation?.transactionId ?? randomUUID();
@@ -628,16 +644,19 @@ export class CommerceRepository {
         [event.eventId],
       );
       const stored = previous.rows[0];
-      if (stored && (!reconciliation || stored.review_resolution === 'ACCEPT_AND_FULFILL')) {
+      if (stored && (!reconciliation || ['ACCEPT_AND_FULFILL','REMATCHED'].includes(String(stored.review_resolution)))) {
         return {
           classification: 'DUPLICATE',
           transactionId: String(previous.rows[0]?.id),
         };
       }
-      if (reconciliation && (!stored || stored.id !== transactionId ||
-          reconciliation.actor.role !== 'SYSTEM_ADMIN' || timingBasis !== 'SANDBOX_RECEIPT' ||
-          stored.classification !== 'UNMATCHED' || stored.review_status !== 'OPEN' ||
-          stored.review_reason !== 'PAYMENT_OUTSIDE_ACCEPTED_WINDOW')) {
+      if (reconciliation && (!stored || stored.id !== transactionId || reconciliation.actor.role !== 'SYSTEM_ADMIN')) {
+        throw new Error('PAYMENT_REVIEW_INVALID_RESOLUTION');
+      }
+      if (reconciliation?.manual) {
+        if (stored!.review_status!=='OPEN' || !['UNMATCHED','INVALID','AMOUNT_MISMATCH'].includes(String(stored!.classification)) ||
+            (stored!.classification==='AMOUNT_MISMATCH' && reconciliation.manual.resolution!=='REMATCHED')) throw new Error('PAYMENT_REVIEW_INVALID_RESOLUTION');
+      } else if (reconciliation && (timingBasis!=='SANDBOX_RECEIPT' || stored!.classification!=='UNMATCHED' || stored!.review_status!=='OPEN' || stored!.review_reason!=='PAYMENT_OUTSIDE_ACCEPTED_WINDOW')) {
         throw new Error('SANDBOX_PAYMENT_NOT_RECONCILABLE');
       }
 
@@ -659,7 +678,7 @@ export class CommerceRepository {
         [event.providerReference],
       );
       const row = attemptResult.rows[0];
-      if (reconciliation && (!row || stored?.order_id !== row.matched_order_id || stored?.payment_attempt_id !== row.payment_attempt_id)) {
+      if (reconciliation && (!row || (reconciliation.manual ? (reconciliation.manual.orderId !== row.matched_order_id || reconciliation.manual.paymentAttemptId !== row.payment_attempt_id) : (stored?.order_id !== row.matched_order_id || stored?.payment_attempt_id !== row.payment_attempt_id)))) {
         throw new Error('SANDBOX_PAYMENT_NOT_RECONCILABLE');
       }
       if (!row) {
@@ -679,6 +698,7 @@ export class CommerceRepository {
             event.occurredAt,
           ],
         );
+        await this.notifyPaymentReview(client, transactionId, 'REQUIRED');
         return { classification: 'UNMATCHED', transactionId };
       }
       const orderId = String(row.matched_order_id);
@@ -703,6 +723,7 @@ export class CommerceRepository {
             event.occurredAt,
           ],
         );
+        await this.notifyPaymentReview(client, transactionId, 'REQUIRED');
         return { classification: 'AMOUNT_MISMATCH', transactionId };
       }
       if (
@@ -730,7 +751,8 @@ export class CommerceRepository {
             [transactionId, event.eventId, event.transactionReference ?? null,
               orderId, attemptId, event.amountVnd, evidencePayload, event.occurredAt, timingBasis],
           );
-          return { classification: 'UNMATCHED', transactionId };
+          await this.notifyPaymentReview(client, transactionId, 'REQUIRED');
+        return { classification: 'UNMATCHED', transactionId };
         }
         await client.query(
           `INSERT INTO payment_transactions
@@ -757,7 +779,7 @@ export class CommerceRepository {
         : event.occurredAt;
       const occurredAt = effectiveAt.getTime();
       const eligible =
-        (row.order_status === 'WAITING_PAYMENT' || (row.order_status === 'CANCELLED' && row.auto_cancelled === true)) &&
+        (row.order_status === 'WAITING_PAYMENT' || (!reconciliation?.manual && row.order_status === 'CANCELLED' && row.auto_cancelled === true)) &&
         ['PENDING', 'EXPIRED', 'SUPERSEDED'].includes(
           String(row.payment_attempt_status),
         ) &&
@@ -790,16 +812,17 @@ export class CommerceRepository {
             timingBasis,
           ],
         );
+        await this.notifyPaymentReview(client, transactionId, 'REQUIRED');
         return { classification: 'UNMATCHED', transactionId };
       }
 
       if (reconciliation) {
         await client.query(
-          `UPDATE payment_transactions SET timing_basis = 'SANDBOX_RECEIPT',
-             review_status = 'RESOLVED', review_resolution = 'ACCEPT_AND_FULFILL',
-             review_reason = $2, reviewed_by_user_id = $3
+          `UPDATE payment_transactions SET timing_basis = $7,
+             review_status = 'RESOLVED', review_resolution = $4,
+             review_reason = $2, reviewed_by_user_id = $3, order_id=$5, payment_attempt_id=$6
            WHERE id = $1`,
-          [transactionId, reconciliation.reason, reconciliation.actor.sub],
+          [transactionId, reconciliation.reason, reconciliation.actor.sub, reconciliation.manual?.resolution ?? 'ACCEPT_AND_FULFILL', orderId, attemptId, timingBasis],
         );
       } else await client.query(
         `INSERT INTO payment_transactions
@@ -855,11 +878,11 @@ export class CommerceRepository {
             (id, public_license_id, origin_order_id, provider_user_id, customer_user_id,
              product_id, plan_id,
              plan_commitment, period_start, expires_at, max_active_devices,
-             activation_commitment, activation_key_version)
+             activation_commitment, activation_key_version, fulfillment_mode)
            VALUES ($1, $2, $3, $4, $5, $6, $7, decode($8, 'hex'),
                    (SELECT payment_effective_time(pt) FROM payment_transactions pt WHERE pt.id = $9),
                    (SELECT payment_effective_time(pt) FROM payment_transactions pt WHERE pt.id = $9) + make_interval(months => $10), $11,
-                   decode($12, 'hex'), 1)
+                   decode($12, 'hex'), 1, $13)
            RETURNING expires_at`,
           [
             licenseId,
@@ -874,6 +897,7 @@ export class CommerceRepository {
             Number(row.duration_months_snapshot),
             Number(row.max_active_devices_snapshot),
             issuance.activationCommitment.slice(2),
+            row.fulfillment_mode,
           ],
         );
         expiresAt = insertedLicense.rows[0]!.expires_at;
@@ -986,6 +1010,11 @@ export class CommerceRepository {
           commandPayloadHash.slice(2),
         ],
       );
+      if (row.order_type==='NEW_PURCHASE' && row.fulfillment_mode==='PROVIDER_HANDOFF') {
+        if (!this.handoff || !secret) throw new Error('PROVIDER_KEY_STORAGE_REQUIRED');
+        await this.handoff.persistKey(client,{licenseId,commandId:issuance.commandId,keyVersion:1,commitment:issuance.activationCommitment,secret});
+      }
+      if (reconciliation) await this.notifyPaymentReview(client, transactionId, 'RESOLVED');
       await this.notifications.enqueueInTransaction(client, {
         channel: 'IN_APP',
         content: row.order_type === 'NEW_PURCHASE'
@@ -998,7 +1027,7 @@ export class CommerceRepository {
         userId: String(row.customer_user_id),
       });
       return {
-        activationRequired: row.order_type === 'NEW_PURCHASE',
+        activationRequired: row.order_type === 'NEW_PURCHASE' && row.fulfillment_mode!=='PROVIDER_HANDOFF',
         classification: 'MATCHED',
         commandId: issuance.commandId,
         licenseId,
@@ -1102,7 +1131,7 @@ export class CommerceRepository {
     const result = await this.pool.query<Record<string, unknown>>(
       `SELECT pt.id, pt.provider_event_id, pt.provider_transaction_ref,
               pt.amount_minor AS amount_vnd, pt.classification,
-              pt.review_status, pt.review_reason, pt.provider_occurred_at,
+              pt.review_status, pt.review_reason, pt.review_resolution, pt.review_evidence, pt.provider_occurred_at,
               pt.received_at, pt.reviewed_at, o.id AS order_id,
               o.order_number
        FROM payment_transactions pt
@@ -1113,36 +1142,59 @@ export class CommerceRepository {
     return result.rows.map(mapPaymentReview);
   }
 
-  async reviewPayment(
-    actor: AuthPrincipal,
-    id: string,
-    status: 'CLOSED_NO_ACTION' | 'RESOLVED',
-    reason: string,
-  ): Promise<PaymentReviewRecord> {
+  async paymentReviewEvidence(id: string, attemptId: string) {
+    const result = await this.pool.query<Record<string, unknown>>(`SELECT pt.*, pa.provider_reference, pa.order_id AS selected_order_id
+      FROM payment_transactions pt CROSS JOIN payment_attempts pa WHERE pt.id=$1 AND pa.id=$2`,[id,attemptId]);
+    const row=result.rows[0];
+    if (!row) throw new Error('PAYMENT_REVIEW_NOT_FOUND');
+    return { row, event: { amountVnd: Number(row.amount_minor), eventId: String(row.provider_event_id),
+      occurredAt: date(row.provider_occurred_at), protocolVersion: 1 as const, providerReference: String(row.provider_reference),
+      ...(row.timing_basis === 'SANDBOX_RECEIPT' ? { timingBasis: 'SANDBOX_RECEIPT' as const } : {}),
+      ...(typeof row.provider_transaction_ref==='string' ? { transactionReference: row.provider_transaction_ref } : {}) },
+      payload: (row.raw_payload as { payload: unknown }).payload };
+  }
+
+  async reviewPayment(actor: AuthPrincipal, id: string, input: ReviewPaymentDto): Promise<PaymentReviewRecord> {
     return this.withTransaction(async (client) => {
-      const result = await client.query<Record<string, unknown>>(
-        `UPDATE payment_transactions
-         SET review_status = $2, review_reason = $3,
-             review_resolution = CASE WHEN $2 = 'CLOSED_NO_ACTION' THEN 'NO_ACTION'
-                                     ELSE 'ACCEPT_AND_FULFILL' END,
-             reviewed_by_user_id = $4, reviewed_at = now()
-         WHERE id = $1 AND review_status = 'OPEN'
-         RETURNING id, provider_event_id, provider_transaction_ref,
-                   amount_minor AS amount_vnd, classification, review_status,
-                   review_reason, provider_occurred_at, received_at, reviewed_at,
-                   order_id`,
-        [id, status, reason, actor.sub],
-      );
-      if (!result.rows[0]) throw new Error('PAYMENT_REVIEW_NOT_FOUND');
-      const orderId = result.rows[0].order_id;
-      if (typeof orderId === 'string') {
-        const order = await client.query<{ order_number: string }>(
-          'SELECT order_number FROM orders WHERE id = $1',
-          [orderId],
-        );
-        result.rows[0].order_number = order.rows[0]?.order_number ?? null;
+      const locked = await client.query<Record<string, unknown>>('SELECT * FROM payment_transactions WHERE id=$1 FOR UPDATE',[id]);
+      const current=locked.rows[0];
+      if (!current) throw new Error('PAYMENT_REVIEW_NOT_FOUND');
+      if (!['NO_ACTION','REFUND_CONFIRMED'].includes(input.resolution)) throw new Error('PAYMENT_REVIEW_INVALID_RESOLUTION');
+      if (current.review_status !== 'OPEN') {
+        if (current.review_resolution !== input.resolution || current.review_reason !== input.reason ||
+            (input.resolution === 'REFUND_CONFIRMED' && (current.review_evidence as { refundReference?: string })?.refundReference !== input.refundReference)) {
+          throw new Error('PAYMENT_REVIEW_ALREADY_CLOSED');
+        }
+        return mapPaymentReview({ ...current, amount_vnd: current.amount_minor });
       }
-      return mapPaymentReview(result.rows[0]);
+      const result = await client.query<Record<string,unknown>>(`UPDATE payment_transactions
+        SET review_status=$2,review_reason=$3,review_resolution=$4,review_evidence=$5,
+            reviewed_by_user_id=$6,reviewed_at=statement_timestamp() WHERE id=$1
+        RETURNING *,amount_minor AS amount_vnd`, [id,input.resolution==='NO_ACTION'?'CLOSED_NO_ACTION':'RESOLVED',
+        input.reason,input.resolution,JSON.stringify(input.resolution==='REFUND_CONFIRMED'?{refundReference:input.refundReference}:{}),actor.sub]);
+      const row=result.rows[0]!;
+      await this.notifyPaymentReview(client, id, 'RESOLVED');
+      if (row.order_id) {
+        const order=await client.query<{order_number:string}>('SELECT order_number FROM orders WHERE id=$1',[row.order_id]);
+        row.order_number=order.rows[0]?.order_number ?? null;
+      }
+      return mapPaymentReview(row);
+    });
+  }
+
+  private async notifyPaymentReview(client: PoolClient, transactionId: string, state: 'REQUIRED' | 'RESOLVED'): Promise<void> {
+    const targets = await client.query<{ user_id: string; order_id: string | null; customer: boolean }>(`SELECT u.id AS user_id,pt.order_id,false AS customer
+      FROM payment_transactions pt CROSS JOIN users u
+      WHERE pt.id=$1 AND u.role='SYSTEM_ADMIN' AND u.status='ACTIVE'
+      UNION ALL SELECT o.customer_user_id,pt.order_id,true
+      FROM payment_transactions pt JOIN orders o ON o.id=pt.order_id WHERE pt.id=$1`, [transactionId]);
+    for (const target of targets.rows) await this.notifications.enqueueInTransaction(client, {
+      channel: 'IN_APP', userId: target.user_id,
+      eventKey: `payment-review:${transactionId}:${state}:${target.user_id}`,
+      type: `${target.customer ? 'ORDER_PAYMENT_REVIEW' : 'PAYMENT_REVIEW'}_${state}`,
+      title: state === 'REQUIRED' ? 'Thanh toán cần được kiểm tra' : 'Đã có kết quả kiểm tra thanh toán',
+      content: target.customer ? 'Mở đơn hàng để xem trạng thái và bước tiếp theo.' : 'Mở danh sách kiểm tra thanh toán để xem bằng chứng.',
+      data: { transactionId, orderId: target.order_id },
     });
   }
 

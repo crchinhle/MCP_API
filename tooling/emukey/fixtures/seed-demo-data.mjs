@@ -20,6 +20,7 @@ const DATABASE_SQL = readFileSync(
   new globalThis.URL("../../../EmuKey/backend/database/schema.sql", import.meta.url),
   "utf8",
 );
+const EXPECTED_TABLE_COUNT = new Set([...DATABASE_SQL.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/\bCREATE TABLE\s+(\w+)/gi)].map((match) => match[1])).size;
 function seedSection(name) {
   const pieces = DATABASE_SQL.split(`$emukey_seed_${name}$`);
   if (pieces.length !== 3) throw new Error(`Missing or ambiguous SQL seed section: ${name}`);
@@ -177,7 +178,7 @@ async function run() {
         ) AS has_image_url
     `);
     const target = preflight.rows[0];
-    if (Number(target?.tables) !== 19 || target?.has_image_url !== true) {
+    if (Number(target?.tables) !== EXPECTED_TABLE_COUNT || target?.has_image_url !== true) {
       throw new Error(
         "Database does not match the current EmuKey schema; run db:verify first",
       );

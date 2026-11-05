@@ -10,7 +10,7 @@ const page = await context.newPage();
 await page.route('**/api/v1/auth/refresh', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ accessToken: 'x', user: { id: 'u', email: 'e', displayName: 'Minh An', role: 'CUSTOMER', status: 'ACTIVE' } }) }));
 await page.route('**/api/v1/licenses', async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
 await page.route('**/api/v1/orders', async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
-await page.route('**/api/v1/notifications', async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+await page.route('**/api/v1/notifications', async (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], nextCursor: null, unreadCount: 0 }) }));
 const results = [];
 for (const route of ['/', '/buyer', '/buyer/orders']) {
   await page.goto(`http://localhost:5174${route}`, { waitUntil: 'networkidle' });

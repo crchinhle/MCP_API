@@ -6,6 +6,7 @@ import {
   providerFinalityLabel,
   providerLicenseActions,
   providerLicenseLabels,
+  providerHandoffStatus,
   type ProviderLifecycleAction,
 } from '../../application/licenses/licenseQueries';
 import { StatusChip } from './WorkspacePrimitives';
@@ -64,6 +65,7 @@ export function ProviderLicenseStatus({
       {secondary ? (
         <span className="provider-license-meta">
           {providerFinalityLabel(license.finality)}
+          {license.fulfillmentMode==='PROVIDER_HANDOFF'?` · ${providerHandoffStatus(license)?.label ?? ''}`:''}
         </span>
       ) : null}
     </div>

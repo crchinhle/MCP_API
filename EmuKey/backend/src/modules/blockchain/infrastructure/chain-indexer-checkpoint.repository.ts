@@ -28,6 +28,18 @@ export interface CheckpointOwner {
 export class ChainIndexerCheckpointRepository {
   constructor(private readonly pool: Pool) {}
 
+  async pendingReceiptBlocks(owner: CheckpointOwner): Promise<number[]> {
+    const result = await this.pool.query<{ receipt_block_number: string }>(
+      `SELECT DISTINCT receipt_block_number FROM chain_commands
+       WHERE network=$1 AND chain_id=$2 AND contract_address=lower($3)
+         AND status IN ('SUBMITTED','SUBMITTED_UNKNOWN')
+         AND receipt_status='SUCCESS' AND receipt_block_number IS NOT NULL
+       ORDER BY receipt_block_number LIMIT 100`,
+      [owner.network, owner.chainId, owner.contractAddress],
+    );
+    return result.rows.map((row) => Number(row.receipt_block_number));
+  }
+
   async namespaceRegistryOrigins(chain: Pick<CheckpointOwner, 'network' | 'chainId'>): Promise<CheckpointOwner[]> {
     const result = await this.pool.query<{ contract_address: string }>(
       `SELECT DISTINCT lower(contract_address) AS contract_address FROM chain_commands

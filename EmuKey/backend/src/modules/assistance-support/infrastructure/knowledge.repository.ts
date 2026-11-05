@@ -10,6 +10,13 @@ function mapDocument(row: Record<string, unknown>) {
 
 export class KnowledgeRepository {
   constructor(private readonly pool: Pool, private readonly storage?: PrivateStoragePort, private readonly limits = { maxFileBytes: 10_485_760, maxChunks: 500, maxChunkBytes: 12_000, allowedMimeTypes: ['application/pdf', 'text/plain'] }) {}
+  capabilities() { return {maxFileBytes:Math.min(this.limits.maxFileBytes,10_485_760),allowedMimeTypes:this.limits.allowedMimeTypes}; }
+  async chunk(actor:AuthPrincipal,documentId:string,chunkId:string) {
+    const document=await this.detail(actor,documentId);
+    const result=await this.pool.query<{id:string;content:string;chunk_index:number}>('SELECT id,content,chunk_index FROM knowledge_chunks WHERE id=$1 AND document_id=$2',[chunkId,documentId]);
+    if (!result.rows[0]) throw new Error('KNOWLEDGE_DOCUMENT_NOT_FOUND');
+    return {documentId,documentTitle:document.title,documentVersion:document.version,chunkId,content:result.rows[0].content,chunkIndex:result.rows[0].chunk_index};
+  }
   async create(actor: AuthPrincipal, input: { chunks?: string[]; file?: { originalname: string; mimetype: string; size: number; buffer: Buffer }; logicalDocumentKey: string; productId: string; sourceType: string; title: string; version?: number }) {
     const client = await this.pool.connect();
     let storageKey: string | null = null;
@@ -22,7 +29,9 @@ export class KnowledgeRepository {
        const version = input.version ?? Number(versions.rows[0]?.next_version ?? 1);
        const duplicate = await client.query('SELECT id FROM knowledge_documents WHERE product_id = $1 AND logical_document_key = $2 AND version = $3', [input.productId, input.logicalDocumentKey, version]);
        if (duplicate.rows[0]) throw new Error('KNOWLEDGE_VERSION_EXISTS');
-       if (input.file && (!this.storage || input.file.size > this.limits.maxFileBytes || !this.limits.allowedMimeTypes.includes(input.file.mimetype) || !validFile(input.file) || (input.sourceType === 'PDF' && input.file.mimetype !== 'application/pdf') || (input.sourceType === 'TXT' && input.file.mimetype !== 'text/plain'))) throw new Error('KNOWLEDGE_FILE_NOT_ALLOWED');
+       if (input.file && !this.storage) throw new Error('KNOWLEDGE_STORAGE_UNAVAILABLE');
+       if (input.file && input.file.size > this.capabilities().maxFileBytes) throw new Error('KNOWLEDGE_FILE_TOO_LARGE');
+       if (input.file && (!this.limits.allowedMimeTypes.includes(input.file.mimetype) || !validFile(input.file) || (input.sourceType === 'PDF' && input.file.mimetype !== 'application/pdf') || (input.sourceType === 'TXT' && input.file.mimetype !== 'text/plain'))) throw new Error('KNOWLEDGE_FILE_NOT_ALLOWED');
         const chunks = input.chunks ?? (input.file ? await extractChunks(input.file, this.limits.maxChunkBytes) : []);
        if (chunks.length === 0 || chunks.length > this.limits.maxChunks || chunks.some((chunk) => Buffer.byteLength(chunk, 'utf8') > this.limits.maxChunkBytes)) throw new Error('KNOWLEDGE_CHUNK_LIMIT');
        storageKey = input.file ? `knowledge/${actor.sub}/${input.productId}/${input.logicalDocumentKey}/${version}-${createHash('sha256').update(input.file.buffer).digest('hex')}` : null;
@@ -78,8 +87,8 @@ export class KnowledgeRepository {
     } catch (error) { await client.query('ROLLBACK'); throw error; } finally { client.release(); }
   }
   async search(actor: AuthPrincipal, question: string): Promise<Array<{ id: string; content: string }>> {
-    const result = await this.pool.query<{ id: string; content: string }>(
-      `SELECT kc.id::text AS id, kc.content
+    const result = await this.pool.query<{ id: string; content: string; documentId:string;documentTitle:string;documentVersion:number;chunkIndex:number }>(
+      `SELECT kc.id::text AS id, kc.content, kd.id AS "documentId",kd.title AS "documentTitle",kd.version AS "documentVersion",kc.chunk_index AS "chunkIndex"
        FROM knowledge_chunks kc
        JOIN knowledge_documents kd ON kd.id = kc.document_id
        WHERE kd.status = 'READY' AND kd.is_current
@@ -98,9 +107,9 @@ export class KnowledgeRepository {
     return result.rows;
   }
 
-  async searchForConversation(input: { conversationId: string; customerUserId: string; question: string }): Promise<Array<{ id: string; content: string }>> {
-    const result = await this.pool.query<{ id: string; content: string }>(
-      `SELECT kc.id::text AS id, kc.content
+  async searchForConversation(input: { conversationId: string; customerUserId: string; question: string }) {
+    const result = await this.pool.query<{ id: string; content: string; documentId:string;documentTitle:string;documentVersion:number;chunkIndex:number }>(
+      `SELECT kc.id::text AS id, kc.content, kd.id AS "documentId",kd.title AS "documentTitle",kd.version AS "documentVersion",kc.chunk_index AS "chunkIndex"
        FROM knowledge_chunks kc
        JOIN knowledge_documents kd ON kd.id = kc.document_id
        JOIN conversations c ON c.id = $1 AND c.customer_user_id = $2

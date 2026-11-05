@@ -15,7 +15,7 @@ import { activationCommitment } from '../../platform/crypto/license-crypto.js';
 import type { AuthPrincipal } from '../identity-access/identity.types.js';
 import type { IdentityService } from '../identity-access/identity.service.js';
 import type { ActivationEnvelopePort } from '../blockchain/application/ports/activation-envelope.port.js';
-import type { LicenseProjectionRepository } from '../blockchain/infrastructure/license-projection.repository.js';
+import type { LicenseProjectionReader } from '../blockchain/application/license-projection-reader.js';
 import type {
   LicenseCommandConfig,
   LicensingRepository,
@@ -39,14 +39,23 @@ const ENTITLEMENT_ISSUER = 'emukey-licensing';
 export class LicensingService {
   constructor(
     private readonly repository: LicensingRepository,
-    private readonly projection: LicenseProjectionRepository,
+    private readonly projection: LicenseProjectionReader,
     private readonly envelopes: ActivationEnvelopePort,
     private readonly redis: Redis,
     private readonly jwtSecret: Uint8Array,
     private readonly chain: LicenseCommandConfig,
     private readonly identity?: IdentityService,
     private readonly publicActivationRateLimit = 30,
+    private readonly handoff?: import('./application/provider-handoff.service.js').ProviderHandoffService,
   ) {}
+
+  async updateDeviceMetadata(actor:AuthPrincipal,licenseId:string,deviceId:string,input:{displayName?:string;platform?:string}) {
+    this.requireCustomer(actor);
+    await this.handoff?.rejectProductUse(licenseId);
+    const result=await this.repository.updateDeviceMetadata(actor.sub,licenseId,deviceId,input);
+    if (!result) this.notFound();
+    return result;
+  }
 
   async limitPublicActivation(subject: string): Promise<void> {
     const key = `rate:public-activation:${createHash('sha256').update(subject).digest('hex')}`;
@@ -109,6 +118,7 @@ export class LicensingService {
       license = await this.repository.findSecurity(dto.licenseId, actor.sub);
       if (!license) this.notFound();
     }
+    await this.handoff?.rejectProductUse(license.id);
     return this.issueChallenge(license, { ...dto, licenseId: license.id });
   }
 
@@ -140,6 +150,7 @@ export class LicensingService {
 
   async activate(actor: AuthPrincipal | null, dto: ActivateDeviceDto) {
     const license = await this.repository.findActivationLicense(activationCommitment(dto.activationKey));
+    if (license) await this.handoff?.rejectProductUse(license.id);
     if (!license) this.invalidActivationCredential();
     this.verifyBearerKey(dto.activationKey, license.activationCommitment);
     this.requireActive(license.status, license.expiresAt);
@@ -170,6 +181,7 @@ export class LicensingService {
 
   async revokeDevice(actor: AuthPrincipal, licenseId: string, deviceId: string, dto: RevokeDeviceDto) {
     this.requireCustomer(actor);
+    await this.handoff?.rejectProductUse(licenseId);
     const license = await this.repository.findSecurity(licenseId, actor.sub);
     const device = await this.repository.findDeviceById(licenseId, deviceId);
     if (!license || !device) this.notFound();
@@ -194,6 +206,7 @@ export class LicensingService {
 
   async remoteRevokeDevice(actor: AuthPrincipal, licenseId: string, deviceId: string, dto: RemoteRevokeDeviceDto) {
     this.requireCustomer(actor);
+    await this.handoff?.rejectProductUse(licenseId);
     const license = await this.repository.findSecurity(licenseId, actor.sub);
     const device = await this.repository.findDeviceById(licenseId, deviceId);
     if (!license || !device) this.notFound();
@@ -224,8 +237,8 @@ export class LicensingService {
     await this.consumeActionToken(actor, dto.actionToken, licenseId, 'ROTATE_KEY');
     const secret: `0x${string}` = `0x${randomBytes(32).toString('hex')}`;
     const commitment = activationCommitment(secret);
-    const command = await this.repository.createRotationCommand(actor.sub, licenseId, commitment, license.activationKeyVersion + 1, this.chain);
-    if (!command.reused) {
+    const command = await this.repository.createRotationCommand(actor.sub, licenseId, commitment, license.activationKeyVersion + 1, this.chain, secret);
+    if (!command.reused && !await this.handoff?.isProviderManaged(licenseId)) {
       await this.envelopes.prepare({
         commandId: command.commandId,
         commitment,
@@ -257,8 +270,9 @@ export class LicensingService {
       commitment,
       license.activationKeyVersion + 1,
       this.chain,
+      secret,
     );
-    if (!command.reused) {
+    if (!command.reused && !await this.handoff?.isProviderManaged(licenseId)) {
       await this.envelopes.prepare({
         commandId: command.commandId,
         commitment,
@@ -326,6 +340,7 @@ export class LicensingService {
         message: 'The entitlement token has an invalid payload.',
       });
     }
+    await this.handoff?.rejectProductUse(licenseId);
     const context = await this.projection.entitlementContext(
       licenseId,
       deviceId,
@@ -359,6 +374,7 @@ export class LicensingService {
 
   private async signEntitlement(dto: import('./licensing.dto.js').EntitlementRefreshDto, purpose: 'ISSUE_ENTITLEMENT' | 'REFRESH_ENTITLEMENT') {
     const { licenseId, deviceId } = dto;
+    await this.handoff?.rejectProductUse(licenseId);
     const context = await this.projection.entitlementContext(licenseId, deviceId);
     if (!context) this.notFound();
      if (context.status !== 'ACTIVE' || context.deviceStatus !== 'ACTIVE' || context.licenseFinality !== 'CONFIRMED' || context.expiresAt.getTime() <= Date.now()) {

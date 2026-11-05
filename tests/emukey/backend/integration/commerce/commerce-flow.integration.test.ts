@@ -1,7 +1,15 @@
+import { NotificationRepository } from '../../../../../EmuKey/backend/src/modules/operations/infrastructure/notification.repository.js';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException, UnauthorizedException, ValidationPipe } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import request from 'supertest';
+import type { Server } from 'node:http';
+import { CommerceController, PaymentController } from '../../../../../EmuKey/backend/src/modules/commerce-payment/presentation/commerce.controller.js';
+import { IdentityService } from '../../../../../EmuKey/backend/src/modules/identity-access/identity.service.js';
+import type { AuthPrincipal } from '../../../../../EmuKey/backend/src/modules/identity-access/identity.types.js';
+import { ApiExceptionFilter } from '../../../../../EmuKey/backend/src/platform/http/api-exception.filter.js';
 import {
   PostgreSqlContainer,
   type StartedPostgreSqlContainer,
@@ -26,6 +34,38 @@ import { providerNamespaceDigest } from '../../../../../EmuKey/backend/src/platf
 import { randomUUID } from 'node:crypto';
 
 describe('customer commerce and payment flow', () => {
+  it('records refund evidence explicitly and never accepts an amount mismatch by an ambiguous status', async () => {
+    const order = await service.createOrder(customer, randomUUID(), undefined, { planId });
+    const terms = await service.getServiceTerms(customer, order.id);
+    await service.acceptServiceTerms(customer, order.id, { accepted: true, version: terms.version, hash: terms.hash });
+    const attempt = await service.checkout(customer, order.id);
+    const occurred = await pool.query('SELECT statement_timestamp() AS at');
+    const payment = await service.ingestIpn({ amountVnd: order.priceVndSnapshot + 1, eventId: randomUUID(), occurredAt: occurred.rows[0].at.toISOString(), providerReference: attempt.checkoutReference }, webhookSecret);
+    await expect(service.reviewPayment(admin, payment.transactionId, { resolution: 'ACCEPT_AND_FULFILL', orderId: order.id, paymentAttemptId: attempt.attemptId, reason: 'Not eligible' })).rejects.toBeDefined();
+    const result = await service.reviewPayment(admin, payment.transactionId, { resolution: 'REFUND_CONFIRMED', refundReference: 'BANK-REFUND-1', reason: 'Refund confirmed by bank' });
+    expect(result).toMatchObject({ reviewStatus: 'RESOLVED', reviewResolution: 'REFUND_CONFIRMED' });
+    const stored = await pool.query('SELECT review_evidence FROM payment_transactions WHERE id=$1', [payment.transactionId]);
+    expect(stored.rows[0].review_evidence).toMatchObject({ refundReference: 'BANK-REFUND-1' });
+    expect((await service.findOrder(customer, order.id)).licenseId).toBeNull();
+    await expect(pool.query("UPDATE payment_transactions SET review_evidence='{}'::jsonb WHERE id=$1", [payment.transactionId])).rejects.toThrow('Review evidence');
+    await expect(service.reviewPayment(admin, payment.transactionId, { resolution: 'REFUND_CONFIRMED', refundReference: 'BANK-REFUND-1', reason: 'Refund confirmed by bank' })).resolves.toMatchObject({ reviewResolution: 'REFUND_CONFIRMED' });
+    await expect(service.reviewPayment(admin, payment.transactionId, { resolution: 'NO_ACTION', reason: 'Changed decision' })).rejects.toBeDefined();
+  });
+
+  it('rematches one verified transfer exactly once under simultaneous admin resolutions', async () => {
+    const order = await service.createOrder(customer, randomUUID(), undefined, { planId });
+    await acceptTerms(order.id);
+    const checkout = await service.checkout(customer, order.id);
+    const at = (await pool.query('SELECT statement_timestamp() AS at')).rows[0].at.toISOString();
+    const payment = await service.ingestIpn({ amountVnd: order.priceVndSnapshot, eventId: randomUUID(), occurredAt: at, providerReference: 'unknown-reference' }, webhookSecret);
+    const input = { resolution: 'REMATCHED' as const, orderId: order.id, paymentAttemptId: checkout.attemptId, reason: 'Bank reference verified against original transfer' };
+    const results = await Promise.allSettled([service.reviewPayment(admin, payment.transactionId, input), service.reviewPayment(admin, payment.transactionId, input)]);
+    expect(results.filter((result) => result.status === 'fulfilled').length).toBeGreaterThan(0);
+    expect((await pool.query('SELECT count(*)::int AS count FROM licenses WHERE origin_order_id=$1', [order.id])).rows[0].count).toBe(1);
+    expect((await pool.query('SELECT count(*)::int AS count FROM chain_commands WHERE order_id=$1', [order.id])).rows[0].count).toBe(1);
+    expect((await service.findOrder(customer, order.id)).orderStatus).toBe('PAYMENT_ACCEPTED');
+    await expect(service.reviewPayment(admin, payment.transactionId, input)).resolves.toMatchObject({ reviewResolution: 'REMATCHED' });
+  });
   let postgres: StartedPostgreSqlContainer;
   let redisContainer: StartedRedisContainer;
   let pool: Pool;
@@ -38,7 +78,7 @@ describe('customer commerce and payment flow', () => {
   const admin = { role: 'SYSTEM_ADMIN' as const, sessionVersion: 1, sub: '00000000-0000-4000-8000-000000000001' };
   function sandboxService(receiptTiming: boolean) {
     const envelopes = new RedisActivationEnvelope(redis, '00'.repeat(32));
-    return new CommerceService(new CommerceRepository(pool), new SePayPaymentGateway({ environment: 'sandbox', merchantId: 'test', secretKey: webhookSecret, webAppUrl: 'https://demo.test', sandboxReceiptTiming: receiptTiming }), envelopes, new ActivationEnvelopeRecoveryService(new ChainCommandRepository(pool), envelopes), { chainId: 11155111, contractAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3', network: 'sepolia' });
+    return new CommerceService(new CommerceRepository(pool, 86_400, new NotificationRepository(pool)), new SePayPaymentGateway({ environment: 'sandbox', merchantId: 'test', secretKey: webhookSecret, webAppUrl: 'https://demo.test', sandboxReceiptTiming: receiptTiming }), envelopes, new ActivationEnvelopeRecoveryService(new ChainCommandRepository(pool), envelopes), { chainId: 11155111, contractAddress: '0x5FbDB2315678afecb367f032d93F642f64180aa3', network: 'sepolia' });
   }
   function sandboxPayload(reference: string, amount: number, eventId: string) {
     return { notification_type: 'ORDER_PAID', order: { order_amount: String(amount), order_currency: 'VND', order_invoice_number: reference, order_status: 'CAPTURED' }, transaction: { id: eventId, transaction_amount: String(amount), transaction_currency: 'VND', transaction_id: `bank-${eventId}`, transaction_status: 'APPROVED', transaction_type: 'PAYMENT', transaction_date: '2025-09-01 00:00:15' } };
@@ -67,7 +107,7 @@ describe('customer commerce and payment flow', () => {
     redis = new Redis(redisContainer.getConnectionUrl());
     const envelopes = new RedisActivationEnvelope(redis, '00'.repeat(32));
     service = new CommerceService(
-      new CommerceRepository(pool),
+      new CommerceRepository(pool, 86_400, new NotificationRepository(pool)),
       new FakePaymentGateway(webhookSecret),
       envelopes,
       new ActivationEnvelopeRecoveryService(new ChainCommandRepository(pool), envelopes),
@@ -78,6 +118,80 @@ describe('customer commerce and payment flow', () => {
       },
     );
   }, 120_000);
+
+  it('enforces payment review roles, validation, fulfillment gates and concurrent replay through HTTP', async () => {
+    const secondAdmin = { ...admin, sub: randomUUID() };
+    await pool.query("INSERT INTO users(id,email,password_hash,display_name,role,status) VALUES ($1,$2,'hash','Review admin','SYSTEM_ADMIN','ACTIVE')", [secondAdmin.sub, `review-${secondAdmin.sub}@example.test`]);
+    const actors: Record<string, AuthPrincipal> = { customer, admin, secondAdmin,
+      provider: { ...customer, role: 'PROVIDER_ADMIN' }, support: { ...customer, role: 'SUPPORT_STAFF' } };
+    const module = await Test.createTestingModule({ controllers: [CommerceController, PaymentController], providers: [
+      { provide: CommerceService, useValue: service },
+      { provide: IdentityService, useValue: { authenticate: async (token: string) => {
+        if (!actors[token]) throw new UnauthorizedException(); return actors[token];
+      } } },
+    ] }).compile();
+    const app = module.createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }));
+    app.useGlobalFilters(new ApiExceptionFilter()); await app.init();
+    const http = request(app.getHttpServer() as Server);
+    const create = async () => (await http.post('/orders').auth('customer', { type: 'bearer' }).set('Idempotency-Key', randomUUID()).send({ planId }).expect(201)).body;
+    const checkout = async (id: string) => {
+      const terms = (await http.get(`/orders/${id}/service-terms`).auth('customer', { type: 'bearer' }).expect(200)).body;
+      await http.post(`/orders/${id}/accept-service-terms`).auth('customer', { type: 'bearer' }).send({ accepted: true, hash: terms.hash, version: terms.version }).expect(200);
+      return (await http.post(`/orders/${id}/checkout`).auth('customer', { type: 'bearer' }).send({}).expect(200)).body;
+    };
+    const payment = async (amountVnd: number, providerReference = 'unmatched-http-reference', occurredAt?: string) => {
+      const at = occurredAt ?? (await pool.query("SELECT statement_timestamp()+interval '1 second' AS at")).rows[0].at.toISOString();
+      return (await http.post('/payments/ipn').set('x-secret-key', webhookSecret).send({ amountVnd, providerReference, occurredAt: at, eventId: randomUUID() }).expect(200)).body;
+    };
+    const review = (id: string, body: Record<string, unknown>, token = 'admin') => http.post(`/payments/review/${id}`).auth(token, { type: 'bearer' }).send(body);
+    const noEffect = async (id: string) => {
+      expect((await pool.query('SELECT count(*)::int AS count FROM licenses WHERE origin_order_id=$1', [id])).rows[0].count).toBe(0);
+      expect((await pool.query('SELECT count(*)::int AS count FROM chain_commands WHERE order_id=$1', [id])).rows[0].count).toBe(0);
+    };
+    try {
+      const order = await create(); const attempt = await checkout(order.id);
+      const mismatch = await payment(order.priceVndSnapshot + 1, attempt.checkoutReference);
+      const target = { orderId: order.id, paymentAttemptId: attempt.attemptId, reason: 'Verified bank evidence' };
+      await http.post(`/payments/review/${mismatch.transactionId}`).send({ resolution: 'NO_ACTION', reason: 'Review' }).expect(401);
+      for (const role of ['customer', 'provider', 'support']) await review(mismatch.transactionId, { resolution: 'NO_ACTION', reason: 'Review' }, role).expect(403);
+      await review(mismatch.transactionId, { status: 'RESOLVED', reason: 'Legacy client' }).expect(400);
+      await review(mismatch.transactionId, { resolution: 'REFUND_CONFIRMED', reason: 'Refund' }).expect(400);
+      await review(mismatch.transactionId, { resolution: 'REMATCHED', reason: 'No target' }).expect(400);
+      await review(mismatch.transactionId, { ...target, resolution: 'ACCEPT_AND_FULFILL' }).expect(409);
+      await review(mismatch.transactionId, { ...target, resolution: 'REMATCHED' }).expect(409);
+      await noEffect(order.id);
+      const refund = { resolution: 'REFUND_CONFIRMED', refundReference: 'HTTP-BANK-REFUND', reason: 'Bank refund confirmed' };
+      expect((await review(mismatch.transactionId, refund).expect(200)).body).toMatchObject({ reviewStatus: 'RESOLVED', reviewResolution: 'REFUND_CONFIRMED' });
+      await review(mismatch.transactionId, refund).expect(200);
+      await review(mismatch.transactionId, { resolution: 'NO_ACTION', reason: 'Changed outcome' }).expect(409);
+      await noEffect(order.id);
+
+      const ready = await create(); const readyAttempt = await checkout(ready.id);
+      const verified = await payment(ready.priceVndSnapshot);
+      const rematch = { resolution: 'REMATCHED', orderId: ready.id, paymentAttemptId: readyAttempt.attemptId, reason: 'Bank reference verified' };
+      const concurrent = await Promise.all([review(verified.transactionId, rematch), review(verified.transactionId, rematch, 'secondAdmin')]);
+      expect(concurrent.some((response) => response.status === 200)).toBe(true);
+      expect(concurrent.every((response) => [200, 409].includes(response.status))).toBe(true);
+      await review(verified.transactionId, rematch).expect(200);
+      expect((await http.get(`/orders/${ready.id}`).auth('customer', { type: 'bearer' }).expect(200)).body.orderStatus).toBe('PAYMENT_ACCEPTED');
+      expect((await pool.query('SELECT count(*)::int AS count FROM licenses WHERE origin_order_id=$1', [ready.id])).rows[0].count).toBe(1);
+      expect((await pool.query('SELECT count(*)::int AS count FROM chain_commands WHERE order_id=$1', [ready.id])).rows[0].count).toBe(1);
+
+      const pendingTerms = await create();
+      await http.post(`/orders/${pendingTerms.id}/checkout`).auth('customer', { type: 'bearer' }).send({}).expect(409);
+      await review(verified.transactionId, { ...rematch, orderId: pendingTerms.id }).expect(409);
+      await noEffect(pendingTerms.id);
+      for (const condition of ['terminal', 'failed-attempt', 'deadline']) {
+        const blocked = await create(); const blockedAttempt = await checkout(blocked.id);
+        const evidence = await payment(blocked.priceVndSnapshot, 'unmatched-http-reference', condition === 'deadline' ? blocked.paymentDueAt : undefined);
+        if (condition === 'terminal') await http.post(`/orders/${blocked.id}/cancel`).auth('customer', { type: 'bearer' }).send({}).expect(200);
+        if (condition === 'failed-attempt') await pool.query("UPDATE payment_attempts SET status='FAILED' WHERE id=$1", [blockedAttempt.attemptId]);
+        await review(evidence.transactionId, { resolution: 'REMATCHED', orderId: blocked.id, paymentAttemptId: blockedAttempt.attemptId, reason: 'Outside fulfillment gate' }).expect(409);
+        await noEffect(blocked.id);
+      }
+    } finally { await app.close(); }
+  });
 
   it('blocks unavailable namespace sales and keeps issuance and renewals on their own registry', async () => {
     const provider = { role: 'PROVIDER_ADMIN' as const, sessionVersion: 1, sub: randomUUID() };
@@ -93,14 +207,15 @@ describe('customer commerce and payment flow', () => {
     const chain = { chainId: 11155111, network: 'sepolia', contractAddress: `0x${'12'.repeat(20)}`, namespaceContractAddress: `0x${'34'.repeat(20)}` };
     const envelopes = new RedisActivationEnvelope(redis, '00'.repeat(32));
     const commands = new ChainCommandRepository(pool);
-    const enabled = (namespaceContractAddress = chain.namespaceContractAddress) => new CommerceService(new CommerceRepository(pool), new FakePaymentGateway(webhookSecret), envelopes, new ActivationEnvelopeRecoveryService(commands, envelopes), { ...chain, namespaceContractAddress });
+    const enabled = (namespaceContractAddress = chain.namespaceContractAddress) => new CommerceService(new CommerceRepository(pool, 86_400, new NotificationRepository(pool)), new FakePaymentGateway(webhookSecret), envelopes, new ActivationEnvelopeRecoveryService(commands, envelopes), { ...chain, namespaceContractAddress });
     const namespaceService = enabled();
     const order = await namespaceService.createOrder(customer, randomUUID(), undefined, { planId: plan.id });
     const terms = await namespaceService.getServiceTerms(customer, order.id);
     await namespaceService.acceptServiceTerms(customer, order.id, { accepted: true, hash: terms.hash, version: terms.version });
     await expect(service.checkout(customer, order.id)).rejects.toMatchObject({ response: { code: 'PROVIDER_NAMESPACE_CAPABILITY_NOT_CONFIGURED' } });
     const checkout = await namespaceService.checkout(customer, order.id);
-    const payment = await namespaceService.ingestIpn({ amountVnd: order.priceVndSnapshot, eventId: randomUUID(), occurredAt: new Date().toISOString(), providerReference: checkout.checkoutReference }, webhookSecret);
+    const issuanceTime = (await pool.query("SELECT statement_timestamp()+interval '1 second' AS at")).rows[0].at.toISOString();
+    const payment = await namespaceService.ingestIpn({ amountVnd: order.priceVndSnapshot, eventId: randomUUID(), occurredAt: issuanceTime, providerReference: checkout.checkoutReference }, webhookSecret);
     const command = (await pool.query('SELECT * FROM chain_commands WHERE id=$1', [payment.commandId])).rows[0];
     expect(command.contract_address).toBe(chain.namespaceContractAddress);
     expect(command.payload).toMatchObject({ providerNamespace: providerNamespaceDigest(namespace), protocolVersion: 3 });
@@ -125,7 +240,8 @@ describe('customer commerce and payment flow', () => {
     await expect(service.checkout(customer, renewal.id)).rejects.toMatchObject({ response: { code: 'PROVIDER_NAMESPACE_CAPABILITY_NOT_CONFIGURED' } });
     expect((await pool.query('SELECT count(*)::int AS count FROM payment_attempts WHERE order_id=$1', [renewal.id])).rows[0].count).toBe(0);
     const renewalCheckout = await moved.checkout(customer, renewal.id);
-    const renewed = await moved.ingestIpn({ amountVnd: renewal.priceVndSnapshot, eventId: randomUUID(), occurredAt: new Date().toISOString(), providerReference: renewalCheckout.checkoutReference }, webhookSecret);
+    const renewalTime = (await pool.query("SELECT statement_timestamp()+interval '1 second' AS at")).rows[0].at.toISOString();
+    const renewed = await moved.ingestIpn({ amountVnd: renewal.priceVndSnapshot, eventId: randomUUID(), occurredAt: renewalTime, providerReference: renewalCheckout.checkoutReference }, webhookSecret);
     expect((await pool.query('SELECT contract_address FROM chain_commands WHERE id=$1', [renewed.commandId])).rows[0].contract_address).toBe(chain.namespaceContractAddress);
     const checkpoints = new ChainIndexerCheckpointRepository(pool);
     const checkpointOnlyAddress = `0x${'79'.repeat(20)}`;
@@ -193,7 +309,7 @@ describe('customer commerce and payment flow', () => {
     await expect(service.paymentRetryDecision(customer, order.id)).resolves.toMatchObject({ allowed: false, canResume: false, reason: 'PAYMENT_REVIEW' });
     await expect(service.checkout(customer, order.id)).rejects.toThrow();
     const provider = { ...customer, role: 'PROVIDER_ADMIN' as const, sub: order.providerUserId };
-    const repository = new CommerceRepository(pool);
+    const repository = new CommerceRepository(pool, 86_400, new NotificationRepository(pool));
     expect((await repository.listPaymentHistory(provider)).some((row) => row.orderId === order.id && row.classification === 'AMOUNT_MISMATCH')).toBe(true);
     expect((await repository.listPaymentHistory({ ...provider, sub: otherCustomer.sub })).some((row) => row.orderId === order.id)).toBe(false);
   });
@@ -201,7 +317,7 @@ describe('customer commerce and payment flow', () => {
   it('permits a definitive failed checkout but rechecks payment accepted after eligibility was read', async () => {
     const order = await service.createOrder(customer, '00000000-0000-4000-8000-000000000782', undefined, { planId });
     await acceptTerms(order.id);
-    const repository = new CommerceRepository(pool);
+    const repository = new CommerceRepository(pool, 86_400, new NotificationRepository(pool));
     const first = await service.checkout(customer, order.id);
     await repository.failCheckout(first.attemptId);
     await expect(service.paymentRetryDecision(customer, order.id)).resolves.toMatchObject({ allowed: true, canResume: false, reason: 'READY' });
@@ -242,7 +358,7 @@ describe('customer commerce and payment flow', () => {
   });
 
   it('auto-cancels overdue unpaid orders once and accepts only an on-time delayed payment', async () => {
-    const repo = new CommerceRepository(pool);
+    const repo = new CommerceRepository(pool, 86_400, new NotificationRepository(pool));
     const original = await service.createOrder(customer, '00000000-0000-4000-8000-000000000710', undefined, { planId });
     expect(original.paymentDueAt.getTime() - original.createdAt.getTime()).toBe(30 * 60_000);
     const overdueId = '00000000-0000-4000-8000-000000000711';

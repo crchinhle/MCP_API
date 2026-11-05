@@ -5,6 +5,28 @@ import { App } from '../../../EmuKey/frontend/src/presentation/app/App';
 afterEach(cleanup);
 
 describe('completed API-backed flows', () => {
+  it('requires an explicit confirmation before recovering a dead-letter command', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    const commandId = '00000000-0000-4000-8000-000000000077';
+    let submitted: unknown;
+    vi.mocked(fetch).mockImplementation((input, init) => {
+      if (String(input).endsWith(`/dead-letters/${commandId}/recover`)) {
+        submitted = JSON.parse(String(init?.body));
+        return Promise.resolve(Response.json({ commandId, licenseId: 'license', status: 'PENDING' }));
+      }
+      return original(input, init);
+    });
+    try {
+      render(<App initialEntries={['/system/console?view=blockchain']} />);
+      fireEvent.change(await screen.findByLabelText('Mã lệnh cần xử lý'), { target: { value: commandId } });
+      fireEvent.change(screen.getByLabelText('Lý do phục hồi lệnh'), { target: { value: 'Đã kiểm tra chưa gửi giao dịch' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Kiểm tra và phục hồi lệnh' }));
+      expect(submitted).toBeUndefined();
+      fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Xác nhận phục hồi' }));
+      await waitFor(() => expect(submitted).toEqual({ mode: 'REQUEUE_NO_SUBMISSION', reason: 'Đã kiểm tra chưa gửi giao dịch' }));
+      expect(await screen.findByText('Backend đã xử lý yêu cầu. Trạng thái lệnh: PENDING')).toBeTruthy();
+    } finally { vi.mocked(fetch).mockImplementation(original); }
+  });
   it('opens the overview for the removed audit URL without fetching audit data', async () => {
     render(<App initialEntries={['/system/console?view=audit']} />);
     expect(await screen.findByRole('heading', { name: 'Tổng quan hệ thống' })).toBeTruthy();
@@ -140,7 +162,7 @@ describe('completed API-backed flows', () => {
       expect(save.disabled).toBe(true);
       fireEvent.change(reason, { target: { value: 'Đã kiểm tra chứng từ' } });
       fireEvent.click(save);
-      await waitFor(() => expect(submitted).toEqual({ status: 'RESOLVED', reason: 'Đã kiểm tra chứng từ' }));
+      await waitFor(() => expect(submitted).toEqual({ resolution: 'NO_ACTION', reason: 'Đã kiểm tra chứng từ' }));
       expect(await screen.findByText('Đã lưu kết quả kiểm tra.')).toBeTruthy();
     } finally { vi.mocked(fetch).mockImplementation(original); }
   });

@@ -14,7 +14,7 @@ export const buyerShell: RoleShellConfig = {
     { label: 'Tổng quan', to: '/buyer', end: true },
     { label: 'Sản phẩm & gói', to: '/buyer/products' },
     { label: 'Đơn hàng & thanh toán', ariaLabel: 'Đơn hàng', to: '/buyer/orders' },
-    { label: 'Bản quyền & thiết bị', to: '/buyer/licenses' },
+    { label: 'Bản quyền', to: '/buyer/licenses' },
     { label: 'Hỗ trợ & AI', to: '/buyer/support' },
   ],
 };

@@ -10,6 +10,28 @@ function bytes16(value: string): Hex {
 }
 
 describe('RpcChainIndexerService', () => {
+  it('indexes an owned receipt ahead of backfill without advancing the historical cursor', async () => {
+    const commandId='00000000-0000-4000-8000-000000000901';
+    const licenseId='00000000-0000-4000-8000-000000000401';
+    const checkpoints={
+      pendingReceiptBlocks:vi.fn().mockResolvedValue([1000]),
+      claimRange:vi.fn().mockResolvedValue({fromBlock:10,toBlock:19}),
+      commandContext:vi.fn().mockResolvedValue({commandId,licenseId,providerUserId:'00000000-0000-4000-8000-000000000002'}),
+      completeRange:vi.fn(),eventIdentities:vi.fn().mockResolvedValue([]),release:vi.fn(),
+    };
+    const indexer={ingest:vi.fn().mockResolvedValue({id:'receipt-event',created:true}),markReorged:vi.fn()};
+    const rpc={latestBlock:vi.fn().mockResolvedValue(1002),blockHash:vi.fn().mockResolvedValue(`0x${'15'.repeat(32)}`),blockTimestamp:vi.fn(),contractEvents:vi.fn().mockImplementation(async(from:number)=>from===1000?[{
+      args:{commandId:bytes16(commandId),licenseId:bytes16(licenseId),activationCommitment:`0x${'11'.repeat(32)}`,activationKeyVersion:1n,expiresAt:1800000000n,planCommitment:`0x${'22'.repeat(32)}`,provider:`0x${'33'.repeat(20)}`},
+      blockHash:`0x${'15'.repeat(32)}`,blockNumber:1000n,eventName:'LicenseIssued',logIndex:0,transactionHash:`0x${'77'.repeat(32)}`,
+    }]:[])};
+    const service=new RpcChainIndexerService(checkpoints,indexer,rpc,{batchSize:10,chainId:11155111,contractAddress:`0x${'12'.repeat(20)}`,deploymentBlock:1,network:'sepolia',requiredConfirmations:2});
+    await expect(service.poll('worker-receipt')).resolves.toBe(1);
+    expect(rpc.contractEvents).toHaveBeenCalledWith(1000,1000);
+    expect(rpc.contractEvents).toHaveBeenCalledWith(10,19);
+    expect(indexer.ingest).toHaveBeenCalledWith(expect.objectContaining({chainCommandId:commandId,confirmationCount:3}));
+    expect(checkpoints.completeRange).toHaveBeenCalledExactlyOnceWith(expect.any(Object),'worker-receipt',{fromBlock:10,toBlock:19},expect.any(String));
+  });
+
   it('polls both registries independently and preserves legacy chain time', async () => {
     const time = new Date('2026-10-21T00:00:00Z');
     const legacy = { canonicalTime: vi.fn().mockResolvedValue(time), poll: vi.fn().mockResolvedValueOnce(2).mockResolvedValueOnce(null) };

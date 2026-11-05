@@ -1,3 +1,4 @@
+import type { CitationDetail } from '../application/ports/ai-gateway.port.js';
 import { createHash } from 'node:crypto';
 import { Pool, type PoolClient } from 'pg';
 
@@ -16,10 +17,12 @@ import type {
   MessageRecord,
   MessageSenderType,
 } from '../assistance-support.types.js';
-import { NotificationRepository } from '../../operations/infrastructure/notification.repository.js';
+import type { NotificationWriter } from '../../operations/application/notification-writer.js';
 
 function mapConversation(row: Record<string, unknown>): ConversationRecord {
   return {
+    claimVersion: Number(row.claim_version ?? 0),
+    claimExpiresAt: row.claim_expires_at instanceof Date ? row.claim_expires_at.toISOString() : null,
     assignedSupportUserId: typeof row.assigned_support_user_id === 'string' ? row.assigned_support_user_id : null,
     contextId: (row.product_id ?? row.plan_id ?? row.order_id ?? row.license_id ?? null) as string | null,
     contextType: row.product_id ? 'PRODUCT' : row.plan_id ? 'PLAN' : row.order_id ? 'ORDER' : row.license_id ? 'LICENSE' : 'GENERAL',
@@ -33,6 +36,7 @@ function mapConversation(row: Record<string, unknown>): ConversationRecord {
 
 function mapMessage(row: Record<string, unknown>): MessageRecord {
   return {
+    citationDetails:Array.isArray(row.citation_details)?row.citation_details as CitationDetail[]:[],
     clientMessageId: String(row.client_message_id),
     content: String(row.content),
     conversationId: String(row.conversation_id),
@@ -50,7 +54,7 @@ function mapMessage(row: Record<string, unknown>): MessageRecord {
 export class AssistanceSupportRepository {
   constructor(
     private readonly pool: Pool,
-    private readonly notifications = new NotificationRepository(pool),
+    private readonly notifications: NotificationWriter,
   ) {}
 
   async createConversation(customerUserId: string, input: { contextId?: string; contextType?: ConversationContextType; title?: string }) {
@@ -177,23 +181,24 @@ export class AssistanceSupportRepository {
       );
       const current = locked.rows[0] ? mapConversation(locked.rows[0]) : null;
       if (!current) throw new Error('CONVERSATION_NOT_FOUND');
-      if (current.status === 'CLOSED' || (current.assignedSupportUserId && current.assignedSupportUserId !== supportUserId)) {
+      if (current.status !== 'WAITING_SUPPORT') {
         throw new Error('CONVERSATION_ALREADY_CLAIMED');
       }
       const result = await client.query<Record<string, unknown>>(
         `UPDATE conversations
          SET assigned_support_user_id = $2, claimed_at = COALESCE(claimed_at, now()),
-             status = 'SUPPORT_ACTIVE', version = version + 1, updated_at = now()
+             status = 'SUPPORT_ACTIVE', version = version + 1, updated_at = now(),
+             claim_version=claim_version+1, claim_expires_at=statement_timestamp()+interval '120 seconds'
          WHERE id = $1 RETURNING *`,
         [conversationId, supportUserId],
       );
       const conversation = mapConversation(result.rows[0]!);
-      await this.appendSystemMessageInTransaction(client, conversationId, `Support agent ${supportUserId} claimed this conversation`);
+      await this.appendSystemMessageInTransaction(client, conversationId, `Support agent ${supportUserId} claimed this conversation`, `claimed:${conversation.claimVersion}`);
       await this.notifications.enqueueInTransaction(client, {
         channel: 'IN_APP',
         content: 'Hội thoại của bạn đã được nhân viên hỗ trợ tiếp nhận.',
         data: { conversationId },
-        eventKey: `conversation:${conversationId}:claimed:${supportUserId}`,
+        eventKey: `conversation:${conversationId}:claimed:${conversation.claimVersion}`,
         title: 'Đã tiếp nhận yêu cầu hỗ trợ',
         type: 'SUPPORT_ASSIGNED',
         userId: conversation.customerUserId,
@@ -202,40 +207,73 @@ export class AssistanceSupportRepository {
     });
   }
 
-  async releaseConversation(supportUserId: string, conversationId: string) {
+  async heartbeat(supportUserId: string, conversationId: string, claimVersion: number) {
     return this.transaction(async (client) => {
-      const locked = await client.query<Record<string, unknown>>(
-        'SELECT * FROM conversations WHERE id = $1 FOR UPDATE',
-        [conversationId],
-      );
+      await this.lockConversation(client, conversationId);
+      const result = await client.query<Record<string,unknown>>(`UPDATE conversations
+        SET claim_expires_at=statement_timestamp()+interval '120 seconds'
+        WHERE id=$1 AND assigned_support_user_id=$2 AND claim_version=$3 AND status='SUPPORT_ACTIVE'
+        AND claim_expires_at>statement_timestamp() RETURNING *`, [conversationId,supportUserId,claimVersion]);
+      if (!result.rows[0]) throw new Error('CONVERSATION_CLAIM_EXPIRED');
+      return mapConversation(result.rows[0]);
+    });
+  }
+
+  async requeueExpiredClaims(): Promise<number> {
+    return this.transaction(async (client) => {
+      const result=await client.query<{id:string;claim_version:string}>(`UPDATE conversations SET assigned_support_user_id=NULL,
+        claimed_at=NULL,claim_expires_at=NULL,status='WAITING_SUPPORT',version=version+1,updated_at=statement_timestamp()
+        WHERE status='SUPPORT_ACTIVE' AND (claim_expires_at IS NULL OR claim_expires_at<=statement_timestamp()) RETURNING id,claim_version`);
+      for (const row of result.rows) await this.appendSystemMessageInTransaction(client,row.id,'Support session expired; returned to the shared queue.',`expired:${row.claim_version}`);
+      return result.rows.length;
+    });
+  }
+
+  async releaseConversation(supportUserId: string, conversationId: string, claimVersion?: number) {
+    return this.transaction(async (client) => {
+      const locked = await this.lockConversation(client, conversationId);
       const current = locked.rows[0] ? mapConversation(locked.rows[0]) : null;
       if (!current) throw new Error('CONVERSATION_NOT_FOUND');
+      const releaseEvent = `released:${supportUserId}:${claimVersion}`;
+      if (current.status === 'WAITING_SUPPORT' && current.claimVersion === claimVersion) {
+        const previous = await client.query(`SELECT 1 FROM messages WHERE conversation_id=$1 AND client_message_id=$2 AND sender_type='SYSTEM'`,
+          [conversationId, stableEventUuid(`${conversationId}:${releaseEvent}`)]);
+        if (previous.rows[0]) return current;
+      }
       if (current.status !== 'SUPPORT_ACTIVE' || current.assignedSupportUserId !== supportUserId) {
         throw new Error('CONVERSATION_STATE_INVALID');
       }
+      if (current.claimVersion!==claimVersion || locked.rows[0]?.claim_valid !== true) throw new Error('CONVERSATION_CLAIM_EXPIRED');
       const result = await client.query<Record<string, unknown>>(
         `UPDATE conversations
-         SET assigned_support_user_id = NULL, claimed_at = NULL,
+         SET assigned_support_user_id = NULL, claimed_at = NULL, claim_expires_at=NULL,
              status = 'WAITING_SUPPORT', version = version + 1, updated_at = now()
          WHERE id = $1 AND assigned_support_user_id = $2 RETURNING *`,
         [conversationId, supportUserId],
       );
       if (!result.rows[0]) throw new Error('CONVERSATION_STATE_INVALID');
-      await this.appendSystemMessageInTransaction(client, conversationId, `Support agent ${supportUserId} released this conversation back to the queue`);
+      await this.appendSystemMessageInTransaction(client, conversationId, `Support agent ${supportUserId} released this conversation back to the queue`, releaseEvent);
       return mapConversation(result.rows[0]);
     });
   }
 
-  async closeConversation(actor: ConversationActor, conversationId: string) {
+  async closeConversation(actor: ConversationActor, conversationId: string, claimVersion?: number) {
     return this.transaction(async (client) => {
+      const locked = await client.query<Record<string, unknown>>(`SELECT * FROM conversations
+        WHERE id=$1 AND (($2='CUSTOMER' AND customer_user_id=$3) OR $2='SYSTEM_ADMIN'
+          OR ($2='SUPPORT_STAFF' AND assigned_support_user_id=$3 AND claim_version=$4
+            AND (status='CLOSED' OR claim_expires_at>statement_timestamp()))) FOR UPDATE`,
+        [conversationId,actor.role,actor.sub,claimVersion ?? null]);
+      if (!locked.rows[0]) throw new Error('CONVERSATION_CLOSE_NOT_ALLOWED');
+      if (locked.rows[0].status === 'CLOSED') return mapConversation(locked.rows[0]);
       const result = await client.query<Record<string, unknown>>(
         `UPDATE conversations SET status = 'CLOSED', closed_at = now(), version = version + 1, updated_at = now()
          WHERE id = $1 AND status <> 'CLOSED' AND (
            ($2 = 'CUSTOMER' AND customer_user_id = $3) OR
-           ($2 = 'SUPPORT_STAFF' AND assigned_support_user_id = $3) OR
+           ($2 = 'SUPPORT_STAFF' AND assigned_support_user_id = $3 AND claim_version=$4 AND claim_expires_at>statement_timestamp()) OR
            $2 = 'SYSTEM_ADMIN'
          ) RETURNING *`,
-        [conversationId, actor.role, actor.sub],
+        [conversationId, actor.role, actor.sub, claimVersion ?? null],
       );
       if (!result.rows[0]) throw new Error('CONVERSATION_CLOSE_NOT_ALLOWED');
       return mapConversation(result.rows[0]);
@@ -243,6 +281,7 @@ export class AssistanceSupportRepository {
   }
 
   async appendMessage(input: {
+    claimVersion?: number;
     actorUserId: string;
     clientMessageId: string;
     content: string;
@@ -250,15 +289,13 @@ export class AssistanceSupportRepository {
     senderType: Extract<MessageSenderType, 'CUSTOMER' | 'SUPPORT'>;
   }) {
     return this.transaction(async (client) => {
-      const locked = await client.query<Record<string, unknown>>(
-        'SELECT * FROM conversations WHERE id = $1 FOR UPDATE',
-        [input.conversationId],
-      );
+      const locked = await this.lockConversation(client, input.conversationId);
       const conversation = locked.rows[0] ? mapConversation(locked.rows[0]) : null;
       if (!conversation) throw new Error('CONVERSATION_NOT_FOUND');
       if (conversation.status === 'CLOSED') throw new Error('CONVERSATION_CLOSED');
       if (input.senderType === 'CUSTOMER' && conversation.customerUserId !== input.actorUserId) throw new Error('CONVERSATION_ACCESS_DENIED');
       if (input.senderType === 'SUPPORT' && conversation.assignedSupportUserId !== input.actorUserId) throw new Error('CONVERSATION_ACCESS_DENIED');
+      if (input.senderType==='SUPPORT' && (conversation.claimVersion!==input.claimVersion || locked.rows[0]?.claim_valid !== true)) throw new Error('CONVERSATION_CLAIM_EXPIRED');
       if (input.senderType === 'CUSTOMER' && conversation.status === 'AI_ACTIVE') {
         await this.appendSystemMessageInTransaction(client, input.conversationId, 'Customer sent a message in AI conversation — escalated to support queue');
       }
@@ -291,23 +328,26 @@ export class AssistanceSupportRepository {
           version = version + 1 WHERE id = $1`,
         [input.conversationId, input.senderType],
       );
+      if (input.senderType==='SUPPORT') await this.notifications.enqueueInTransaction(client,{channel:'IN_APP',
+        type:'SUPPORT_REPLY',title:'Nhân viên hỗ trợ đã phản hồi',content:'Mở hội thoại để xem phản hồi.',
+        userId:conversation.customerUserId,eventKey:`support-reply:${String(inserted.rows[0]!.id)}:${conversation.customerUserId}`,data:{conversationId:input.conversationId}});
       return mapMessage(inserted.rows[0]!);
     });
   }
 
-  async appendAiMessage(input: { clientMessageId: string; conversationId: string; content: string; citedSourceIds: string[]; grounded: boolean }) {
+  async appendAiMessage(input: { clientMessageId: string; conversationId: string; content: string; citedSourceIds: string[]; grounded: boolean;citationDetails?:CitationDetail[] }) {
     return this.transaction(async (client) => {
       const locked = await client.query<{ status: string }>('SELECT status FROM conversations WHERE id = $1 FOR UPDATE', [input.conversationId]);
       if (!locked.rows[0]) throw new Error('CONVERSATION_NOT_FOUND');
       if (locked.rows[0].status === 'CLOSED') throw new Error('CONVERSATION_CLOSED');
       if (locked.rows[0].status !== 'AI_ACTIVE') throw new Error('CONVERSATION_STATE_INVALID');
       const result = await client.query<Record<string, unknown>>(
-        `INSERT INTO messages (conversation_id, sender_type, client_message_id, server_sequence, content, grounded, sources)
-         SELECT $1, 'AI', $2, COALESCE(MAX(server_sequence), 0) + 1, $3, $4, $5::jsonb
+        `INSERT INTO messages (conversation_id, sender_type, client_message_id, server_sequence, content, grounded, sources, citation_details)
+         SELECT $1, 'AI', $2, COALESCE(MAX(server_sequence), 0) + 1, $3, $4, $5::jsonb, $6::jsonb
          FROM messages WHERE conversation_id = $1
          ON CONFLICT (conversation_id, client_message_id) DO UPDATE SET content = messages.content
          RETURNING *`,
-        [input.conversationId, input.clientMessageId, input.content, input.grounded, JSON.stringify(input.citedSourceIds)],
+        [input.conversationId, input.clientMessageId, input.content, input.grounded, JSON.stringify(input.citedSourceIds),JSON.stringify(input.citationDetails??[])],
       );
       return mapMessage(result.rows[0]!);
     });
@@ -356,8 +396,16 @@ export class AssistanceSupportRepository {
     });
   }
 
-  private async appendSystemMessageInTransaction(client: PoolClient, conversationId: string, content: string): Promise<void> {
-    const clientMessageId = stableEventUuid(`${conversationId}:${content}`);
+  private async lockConversation(client: PoolClient, conversationId: string) {
+    await client.query('SELECT id FROM conversations WHERE id=$1 FOR UPDATE', [conversationId]);
+    // Check the clock after acquiring the row lock. A timestamp evaluated in
+    // the locking SELECT can precede a long lock wait and revive an expired claim.
+    return client.query<Record<string, unknown>>(
+      'SELECT *, claim_expires_at>clock_timestamp() AS claim_valid FROM conversations WHERE id=$1', [conversationId]);
+  }
+
+  private async appendSystemMessageInTransaction(client: PoolClient, conversationId: string, content: string, eventKey = content): Promise<void> {
+    const clientMessageId = stableEventUuid(`${conversationId}:${eventKey}`);
     await client.query(
       `INSERT INTO messages (conversation_id, sender_type, client_message_id, server_sequence, content)
        VALUES ($1, 'SYSTEM', $2, COALESCE((SELECT MAX(server_sequence) + 1 FROM messages WHERE conversation_id = $1), 1), $3)

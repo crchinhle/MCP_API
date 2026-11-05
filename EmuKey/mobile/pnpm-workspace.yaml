@@ -1,4 +1,6 @@
 packages: []
+# Keep generated Android CMake/codegen paths within Windows toolchain limits.
+nodeLinker: hoisted
 savePrefix: ''
 engineStrict: true
 autoInstallPeers: true

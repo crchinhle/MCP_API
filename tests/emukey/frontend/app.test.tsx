@@ -118,7 +118,7 @@ describe('Emukey public web screens', () => {
   it('provides public guides without requiring login to read them', () => {
     render(<App initialEntries={['/help']} />);
     expect(screen.getByRole('heading', { name: 'Hướng dẫn sử dụng EmuKey' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: '3. Nhận mã và kích hoạt phần mềm' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: '3. Nhận mã và sử dụng sản phẩm' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: '5. Xác minh công khai' })).toBeTruthy();
   });
 
@@ -142,7 +142,7 @@ describe('Emukey public web screens', () => {
   it('offers customer registration and navigates to the catalog', async () => {
     render(<App initialEntries={['/auth']} />);
     expect(screen.getByRole('heading', { name: 'Quản lý bản quyền phần mềm đa Provider bằng Blockchain' })).toBeTruthy();
-    expect(screen.getByText('Quản lý License và thiết bị')).toBeTruthy();
+    expect(screen.getByText('Quản lý bản quyền đã mua')).toBeTruthy();
     expect(screen.getByText('Theo dõi đơn hàng và thanh toán')).toBeTruthy();
     expect(screen.getByText('Xác minh công khai trên Blockchain')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Đăng ký' })).toBeTruthy();

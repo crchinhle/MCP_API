@@ -50,7 +50,7 @@ export function SiteHeader() {
         { key: 'shopping', label: <Link to="/catalog">Mua sắm</Link> },
         ...(user.role === 'CUSTOMER' ? [
           { key: 'orders', label: <Link to="/buyer/orders">Đơn hàng</Link> },
-          { key: 'licenses', label: <Link to="/buyer/licenses">Bản quyền & thiết bị</Link> },
+          { key: 'licenses', label: <Link to="/buyer/licenses">Bản quyền</Link> },
         ] : []),
         { type: 'divider' },
         { key: 'logout', label: <button className="menu-link-button" onClick={() => void auth?.logout()} type="button">Đăng xuất</button> },
@@ -132,7 +132,7 @@ export function SiteHeader() {
               <Link to="/verify">Xác minh</Link>
               <Link to="/help">Tài liệu</Link>
               {user ? <Link onClick={() => setMenuOpen(false)} to={roleHomePath(user.role)}>Tổng quan</Link> : null}
-              {user?.role === 'CUSTOMER' ? <><Link to="/buyer/orders">Đơn hàng</Link><Link to="/buyer/licenses">Bản quyền & thiết bị</Link></> : null}
+              {user?.role === 'CUSTOMER' ? <><Link to="/buyer/orders">Đơn hàng</Link><Link to="/buyer/licenses">Bản quyền</Link></> : null}
             </nav>
             <div className="mobile-menu-actions">
               {user ? (

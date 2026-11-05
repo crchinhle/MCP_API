@@ -18,11 +18,12 @@ test('password change sends the authenticated session', async ({ page }) => {
 });
 
 test('notification overflow stays available in the current workspace', async ({ page }) => {
-  await page.route('**/api/v1/notifications?*', (route) => {
+  await page.route(/\/api\/v1\/notifications(?:\?.*)?$/, (route) => {
     const next = new URL(route.request().url()).searchParams.has('cursor');
     return route.fulfill({ json: {
       items: Array.from({ length: next ? 1 : 8 }, (_, i) => ({ id: `notice-${next ? 8 : i}`, title: `Notice ${next ? 8 : i}`, content: `Content ${i}`, isRead: false })),
       nextCursor: next ? null : 'page-2',
+      unreadCount: 9,
     } });
   });
   await page.goto('/buyer');
@@ -64,7 +65,8 @@ test('email action lookup can retry a network failure without turning device rev
   await page.goto('/buyer/licenses?actionToken=device-email-token');
   await expect(page.getByText('Chưa thể kiểm tra liên kết email. Vui lòng thử lại.')).toBeVisible();
   await page.getByRole('button', { name: 'Thử lại', exact: true }).click();
-  await expect(page.getByText('Liên kết này dành cho thao tác thiết bị hoặc đổi mã.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Thu hồi thiết bị từ xa' })).toBeVisible();
+  await expect(page.getByLabel('Mật khẩu xác nhận thao tác')).toBeVisible();
   await expect(page.getByLabel('Mã xác nhận khôi phục', { exact: true })).toHaveCount(0);
   expect(page.url()).not.toContain('device-email-token');
 });
@@ -151,6 +153,7 @@ test('login email and password controls have matching dimensions', async ({ page
 });
 const license = {
   id: 'license-one', productName: 'SecureDesk Pro', status: 'ACTIVE',
+  keyVersion: 1, activationKeyTrustStatus: 'TRUSTED', finality: 'CHAIN_CONFIRMED',
   plan: { name: 'Business', version: 1 }, publicLicenseId: 'EMU-TEST',
   maxActiveDevices: 3, expiresAt: '2027-09-08', activationKeyAvailable: true,
 };
@@ -164,7 +167,9 @@ test.beforeEach(async ({ page }) => {
       user: { id: 'customer', email: 'test@example.com', displayName: 'Test', role: 'CUSTOMER', status: 'ACTIVE' },
     };
     if (path === '/licenses') body = [license, { ...license, id: 'license-two', productName: 'Other product', activationKeyAvailable: false }];
-    if (path.endsWith('/activation-key/retrieve')) body = { activationKey, keyVersion: 1 };
+    if (path === '/licenses/license-one') body = license;
+    if (path === '/notifications') body = { items: [], nextCursor: null, unreadCount: 0 };
+    if (path.endsWith('/activation-key/retrieve')) body = { activationKey, keyVersion: 1, deliveryId: route.request().postDataJSON().deliveryId, retryUntil: '2099-01-01T00:00:00Z' };
     await route.fulfill({ json: body });
   });
 });
@@ -172,6 +177,8 @@ test.beforeEach(async ({ page }) => {
 test('recovers only after final confirmation and resumes polling after reload', async ({ page }) => {
   let confirmed = false;
   let retrieved = 0;
+  await page.route('**/api/v1/licenses', (route) => route.fulfill({ json: [{ ...license, keyVersion: confirmed ? 2 : 1 }] }));
+  await page.route('**/api/v1/licenses/license-one', (route) => route.fulfill({ json: { ...license, keyVersion: confirmed ? 2 : 1 } }));
   await page.route('**/api/v1/licenses/action-verification', (route) => route.fulfill({ json: { accepted: true } }));
   await page.route('**/api/v1/licenses/license-one/activation-key/recover', async (route) => {
     expect(route.request().postDataJSON()).toEqual({ actionToken: 'email-token', currentPassword: 'current-password' });
@@ -180,7 +187,7 @@ test('recovers only after final confirmation and resumes polling after reload', 
   await page.route('**/api/v1/commands/recovery-command', (route) => route.fulfill({ json: { commandId: 'recovery-command', licenseId: 'license-one', status: confirmed ? 'CONFIRMED' : 'PENDING' } }));
   await page.route('**/api/v1/licenses/license-one/activation-key/retrieve', async (route) => {
     retrieved++;
-    await route.fulfill({ json: { activationKey, keyVersion: 2 } });
+    await route.fulfill({ json: { activationKey, keyVersion: 2, deliveryId: route.request().postDataJSON().deliveryId, retryUntil: '2099-01-01T00:00:00Z' } });
   });
   await page.goto('/buyer/licenses?licenseId=license-one&recover=1');
   await page.getByRole('button', { name: 'Gửi email khôi phục', exact: true }).click();

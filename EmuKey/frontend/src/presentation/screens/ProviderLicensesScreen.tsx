@@ -297,9 +297,9 @@ export function ProviderLicensesScreen() {
     </div>
   );
   const devices = (license: LicenseProjectionDto) => (
-    <Tooltip title="Số thiết bị đang kích hoạt / giới hạn thiết bị cho phép">
+    <Tooltip title={license.fulfillmentMode==='PROVIDER_HANDOFF'?'Nhà cung cấp thực thi giới hạn trong sản phẩm':'Số thiết bị đang kích hoạt / giới hạn thiết bị cho phép'}>
       <span className="provider-license-devices">
-        {license.activeDeviceCount}/{license.maxActiveDevices}
+        {license.fulfillmentMode==='PROVIDER_HANDOFF'?`Tối đa ${license.maxActiveDevices}`:`${license.activeDeviceCount}/${license.maxActiveDevices}`}
       </span>
     </Tooltip>
   );

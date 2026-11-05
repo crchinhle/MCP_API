@@ -7,8 +7,9 @@ const source = await readFile(path, 'utf8');
 const replacements = new Map([
   ['JWT_SECRET', randomBytes(48).toString('base64url')],
   ['SESSION_SECRET', randomBytes(48).toString('base64url')],
-  ['ACTIVATION_ENVELOPE_KEY', randomBytes(32).toString('hex')],
 ]);
+// This key also encrypts durable PostgreSQL license material and provider tokens.
+// Replacing it requires a separate verified re-encryption migration.
 const lines = source.split(/\r?\n/).map((line) => {
   const key = line.match(/^([A-Z][A-Z0-9_]*)=/)?.[1];
   return key && replacements.has(key) ? `${key}=${replacements.get(key)}` : line;

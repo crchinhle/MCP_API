@@ -2,7 +2,10 @@
 -- DESTRUCTIVE DEFAULT: drop public and its dependent objects, then rebuild the final schema.
 -- Run only against the intended database with the API and worker stopped.
 -- This resets the selected database's application schema, not the database/roles themselves.
--- No historical migrations or maintenance dispatcher; normal application startup never runs this.
+-- Explicit approved upgrade sections appear below; normal application startup never runs this.
+-- Existing cf17043 database: pnpm db:upgrade --from=cf17043 --to=continuity_20261101.
+-- Approved PostgreSQL 18 9ed5729 database: pnpm db:upgrade --from=9ed5729 --to=provider_handoff_20261104.
+-- Prefer the guarded CLI initializer for a new database; raw SQL below remains destructive.
 -- CLI: pnpm db:initialize (db:reset is an alias); pnpm db:verify.
 -- Optional demo: pnpm db:initialize --demo; seed existing schema: pnpm db:seed:demo.
 -- SQL editor: add SET LOCAL emukey.seed_demo='true'; and
@@ -23,7 +26,7 @@ SET LOCAL search_path = public;
 -- License Management — account-linked Customer, relayer-only blockchain schema v7.3
 -- PostgreSQL 15+
 -- Target baseline reviewed 17/09/2026.
--- This target schema has 19 tables. Customer accounts are retained; Customer Controller/KMS are removed.
+-- This target schema has 24 tables. Customer accounts are retained; Customer Controller/KMS are removed.
 -- Smart-contract policy/ABI is authoritative for License/Device rights.
 -- PostgreSQL owns private identity/catalog/commerce plus chain projection/evidence.
 -- Global License Terms content is a versioned application artefact, not a DB table.
@@ -3241,6 +3244,556 @@ CREATE INDEX ix_notifications_delivery ON notification_deliveries (delivery_stat
     WHERE delivery_status IN ('PENDING', 'RETRYABLE_FAILED');
 CREATE INDEX ix_notifications_inbox ON notifications (user_id, created_at DESC) WHERE inbox_visible AND read_at IS NULL;
 CREATE INDEX ix_mobile_push_tokens_user ON mobile_push_tokens (user_id, status);
+
+-- Continuity release: additive metadata; legacy secrets remain outside PostgreSQL.
+CREATE TABLE schema_versions (
+    version VARCHAR(40) PRIMARY KEY,
+    checksum VARCHAR(64) NOT NULL,
+    schema_fingerprint VARCHAR(64) NOT NULL,
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp()
+);
+CREATE TABLE license_key_deliveries (
+    license_id UUID NOT NULL,
+    key_version INT NOT NULL CHECK (key_version > 0),
+    customer_user_id UUID NOT NULL,
+    command_id UUID NOT NULL REFERENCES chain_commands(id) ON DELETE RESTRICT,
+    delivery_id UUID NOT NULL UNIQUE,
+    claimed_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+    retry_until TIMESTAMPTZ NOT NULL,
+    acknowledged_at TIMESTAMPTZ,
+    PRIMARY KEY (license_id, key_version),
+    FOREIGN KEY (license_id, customer_user_id) REFERENCES licenses(id, customer_user_id) ON DELETE RESTRICT,
+    CHECK (retry_until > claimed_at AND retry_until <= claimed_at + interval '5 minutes'),
+    CHECK (acknowledged_at IS NULL OR acknowledged_at >= claimed_at)
+);
+ALTER TABLE license_devices
+    ADD COLUMN display_name VARCHAR(80),
+    ADD COLUMN platform VARCHAR(12) NOT NULL DEFAULT 'UNKNOWN'
+        CHECK (platform IN ('ANDROID','IOS','WINDOWS','MACOS','LINUX','WEB','UNKNOWN'));
+ALTER TABLE conversations
+    ADD COLUMN claim_version BIGINT NOT NULL DEFAULT 0 CHECK (claim_version >= 0),
+    ADD COLUMN claim_expires_at TIMESTAMPTZ;
+ALTER TABLE messages ADD COLUMN citation_details JSONB NOT NULL DEFAULT '[]'::jsonb
+    CHECK (jsonb_typeof(citation_details) = 'array');
+ALTER TABLE payment_transactions ADD COLUMN review_evidence JSONB NOT NULL DEFAULT '{}'::jsonb
+    CHECK (jsonb_typeof(review_evidence) = 'object');
+CREATE INDEX idx_conversations_expired_claim ON conversations(claim_expires_at)
+    WHERE status='SUPPORT_ACTIVE';
+
+CREATE FUNCTION guard_payment_review_evidence()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.review_evidence IS DISTINCT FROM OLD.review_evidence AND
+       NOT (COALESCE(OLD.review_status,'')='OPEN' AND COALESCE(NEW.review_status,'') IN ('RESOLVED','CLOSED_NO_ACTION')) THEN
+        RAISE EXCEPTION 'Review evidence may only be recorded when resolving an open review';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER trg_payment_review_evidence
+BEFORE UPDATE ON payment_transactions
+FOR EACH ROW EXECUTE FUNCTION guard_payment_review_evidence();
+
+
+-- emukey:handoff-ddl:begin
+ALTER TABLE knowledge_chunks ADD COLUMN IF NOT EXISTS token_count INT;
+ALTER TABLE knowledge_chunks ADD CONSTRAINT ck_knowledge_chunks_tokens
+    CHECK (token_count IS NULL OR token_count >= 0);
+ALTER TABLE orders ADD COLUMN fulfillment_mode VARCHAR(24) NOT NULL DEFAULT 'LEGACY_DEVICE'
+    CHECK (fulfillment_mode IN ('LEGACY_DEVICE','PROVIDER_HANDOFF'));
+ALTER TABLE licenses ADD COLUMN fulfillment_mode VARCHAR(24) NOT NULL DEFAULT 'LEGACY_DEVICE'
+    CHECK (fulfillment_mode IN ('LEGACY_DEVICE','PROVIDER_HANDOFF'));
+ALTER TABLE licenses ADD COLUMN provider_revision BIGINT NOT NULL DEFAULT 0
+    CHECK (provider_revision BETWEEN 0 AND 9007199254740991);
+
+CREATE TABLE provider_integrations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    provider_user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE RESTRICT,
+    endpoint_url TEXT NOT NULL,
+    credential_ciphertext TEXT NOT NULL,
+    credential_iv TEXT NOT NULL,
+    credential_tag TEXT NOT NULL,
+    encryption_key_id VARCHAR(40) NOT NULL,
+    config_version INT NOT NULL DEFAULT 1 CHECK (config_version > 0),
+    status VARCHAR(12) NOT NULL DEFAULT 'DISABLED' CHECK (status IN ('ENABLED','DISABLED')),
+    authorized_at TIMESTAMPTZ NOT NULL,
+    authorization_version VARCHAR(40) NOT NULL,
+    verified_at TIMESTAMPTZ,
+    verified_config_version INT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (id, provider_user_id),
+    CHECK (status <> 'ENABLED' OR (verified_at IS NOT NULL AND verified_config_version=config_version))
+);
+CREATE TABLE license_key_materials (
+    license_id UUID NOT NULL REFERENCES licenses(id) ON DELETE RESTRICT,
+    key_version INT NOT NULL CHECK (key_version > 0),
+    command_id UUID NOT NULL UNIQUE REFERENCES chain_commands(id) ON DELETE RESTRICT,
+    commitment BYTEA NOT NULL CHECK (octet_length(commitment)=32),
+    ciphertext TEXT NOT NULL,
+    iv TEXT NOT NULL,
+    auth_tag TEXT NOT NULL,
+    encryption_key_id VARCHAR(40) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    retired_at TIMESTAMPTZ,
+    PRIMARY KEY (license_id,key_version)
+);
+CREATE TABLE provider_license_deliveries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    license_id UUID NOT NULL,
+    provider_user_id UUID NOT NULL,
+    integration_id UUID NOT NULL,
+    config_version INT NOT NULL CHECK (config_version > 0),
+    revision BIGINT NOT NULL CHECK (revision BETWEEN 1 AND 9007199254740991),
+    key_version INT NOT NULL CHECK (key_version > 0),
+    event_type VARCHAR(40) NOT NULL,
+    snapshot JSONB NOT NULL CHECK (jsonb_typeof(snapshot)='object' AND NOT (snapshot ? 'licenseKey')),
+    status VARCHAR(16) NOT NULL DEFAULT 'PENDING'
+        CHECK (status IN ('PENDING','SENDING','RETRY_WAIT','DELIVERED','FAILED','SUPERSEDED')),
+    attempt_count INT NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+    next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    lease_token UUID,
+    lease_expires_at TIMESTAMPTZ,
+    last_error_code VARCHAR(80),
+    receipt_id VARCHAR(200),
+    accepted_at TIMESTAMPTZ,
+    last_retry_reason VARCHAR(1000),
+    retried_by UUID REFERENCES users(id) ON DELETE RESTRICT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (license_id,revision),
+    FOREIGN KEY (license_id,provider_user_id) REFERENCES licenses(id,provider_user_id) ON DELETE RESTRICT,
+    FOREIGN KEY (integration_id,provider_user_id) REFERENCES provider_integrations(id,provider_user_id) ON DELETE RESTRICT,
+    FOREIGN KEY (license_id,key_version) REFERENCES license_key_materials(license_id,key_version) ON DELETE RESTRICT,
+    CHECK ((status='SENDING') = (lease_token IS NOT NULL AND lease_expires_at IS NOT NULL)),
+    CHECK (status <> 'DELIVERED' OR (receipt_id IS NOT NULL AND accepted_at IS NOT NULL))
+);
+CREATE INDEX ix_provider_deliveries_due ON provider_license_deliveries(next_attempt_at)
+    WHERE status IN ('PENDING','RETRY_WAIT','SENDING');
+CREATE FUNCTION guard_fulfillment_mode() RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.fulfillment_mode IS DISTINCT FROM OLD.fulfillment_mode THEN
+        RAISE EXCEPTION 'Fulfillment mode is immutable';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER trg_orders_fulfillment_mode BEFORE UPDATE ON orders
+    FOR EACH ROW EXECUTE FUNCTION guard_fulfillment_mode();
+CREATE TRIGGER trg_licenses_fulfillment_mode BEFORE UPDATE ON licenses
+    FOR EACH ROW EXECUTE FUNCTION guard_fulfillment_mode();
+-- emukey:handoff-ddl:end
+
+-- emukey:legacy-fingerprint:9ed5729:cdcb1277790ffa8d25d9b474c172f58d71ca5263c55a924de7712623b203782a
+-- Independently reproduced pg_dump/pg_restore of the same version on PostgreSQL 18.
+-- emukey:legacy-fingerprint:9ed5729:4ca145859378db700e02b38a0555740641f3b32bafb1d8420867beb0ee963181
+/* emukey:upgrade:9ed5729:cf17043:begin
+-- Pre-continuity baseline: preserve identities, prices, chain evidence and old delivery evidence.
+-- Stop API/worker first. Non-null unsupported legacy fields deliberately abort the upgrade.
+DO $legacy_preflight$
+BEGIN
+  IF EXISTS (SELECT 1 FROM provider_invitations WHERE display_name IS NOT NULL OR organization_name IS NOT NULL)
+    OR EXISTS (SELECT 1 FROM messages WHERE read_at IS NOT NULL)
+    OR EXISTS (SELECT 1 FROM chain_commands WHERE lease_owner IS NOT NULL OR lease_expires_at IS NOT NULL)
+    OR EXISTS (SELECT 1 FROM notifications WHERE channel='PUSH' OR lease_owner IS NOT NULL OR data ? '_emukey_legacy_delivery')
+    OR EXISTS (SELECT 1 FROM notifications GROUP BY user_id,event_key HAVING count(*)>1)
+    OR EXISTS (SELECT 1 FROM orders WHERE billing_cycle_snapshot IS DISTINCT FROM CASE duration_months_snapshot WHEN 1 THEN 'MONTHLY' WHEN 12 THEN 'YEARLY' END)
+  THEN RAISE EXCEPTION 'LEGACY_DATA_REQUIRES_EXPLICIT_ARCHIVAL: unsupported historical fields, push delivery, duplicate event or active lease';
+  END IF;
+END;
+$legacy_preflight$;
+
+ALTER TABLE provider_invitations DROP COLUMN display_name, DROP COLUMN organization_name,
+  ADD CONSTRAINT provider_invitations_accepted_user_id_key UNIQUE (accepted_user_id);
+ALTER TABLE orders DROP CONSTRAINT fk_orders_plan;
+ALTER TABLE licenses DROP CONSTRAINT fk_licenses_plan;
+ALTER TABLE plans DROP CONSTRAINT fk_plans_product, DROP CONSTRAINT fk_plans_provider,
+  DROP CONSTRAINT uq_plans_id_product_provider_commitment, DROP CONSTRAINT uq_plans_id_provider,
+  DROP CONSTRAINT ck_plans_billing_cycle, DROP CONSTRAINT ck_plans_duration;
+DROP INDEX ix_plans_provider;
+ALTER TABLE plans DROP COLUMN provider_user_id, DROP COLUMN provider_role, DROP COLUMN billing_cycle,
+  ADD CONSTRAINT fk_plans_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
+  ADD CONSTRAINT uq_plans_id_product_provider_commitment UNIQUE (id,product_id,plan_commitment),
+  ADD CONSTRAINT ck_plans_duration CHECK (duration_months IN (1,12));
+ALTER TABLE orders ADD CONSTRAINT fk_orders_plan FOREIGN KEY (plan_id,product_id,plan_commitment_snapshot)
+  REFERENCES plans(id,product_id,plan_commitment) ON DELETE RESTRICT;
+ALTER TABLE licenses ADD CONSTRAINT fk_licenses_plan FOREIGN KEY (plan_id,product_id,plan_commitment)
+  REFERENCES plans(id,product_id,plan_commitment) ON DELETE RESTRICT;
+CREATE FUNCTION guard_catalog_ownership() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_TABLE_NAME = 'products' THEN
+        IF NEW.provider_user_id IS DISTINCT FROM OLD.provider_user_id THEN
+            RAISE EXCEPTION 'Product ownership is immutable' USING ERRCODE='23514';
+        END IF;
+    ELSE
+        IF NEW.product_id IS DISTINCT FROM OLD.product_id THEN
+            RAISE EXCEPTION 'Plan product is immutable' USING ERRCODE='23514';
+        END IF;
+        IF OLD.status <> 'DRAFT' AND (
+            NEW.status = 'DRAFT' OR
+            ROW(NEW.code, NEW.version, NEW.name, NEW.duration_months, NEW.price_vnd,
+                NEW.max_active_devices, NEW.entitlements, NEW.plan_commitment)
+            IS DISTINCT FROM
+            ROW(OLD.code, OLD.version, OLD.name, OLD.duration_months, OLD.price_vnd,
+                OLD.max_active_devices, OLD.entitlements, OLD.plan_commitment)
+        ) THEN
+            RAISE EXCEPTION 'Published plan terms are immutable; create a version' USING ERRCODE='23514';
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER trg_products_ownership BEFORE UPDATE ON products FOR EACH ROW EXECUTE FUNCTION guard_catalog_ownership();
+CREATE TRIGGER trg_plans_ownership BEFORE UPDATE ON plans FOR EACH ROW EXECUTE FUNCTION guard_catalog_ownership();
+CREATE OR REPLACE FUNCTION guard_order_snapshot_and_lifecycle()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF ROW(NEW.id, NEW.order_number, NEW.idempotency_key,
+           NEW.customer_user_id, NEW.provider_user_id, NEW.product_id, NEW.plan_id,
+           NEW.target_license_id, NEW.order_type,
+           NEW.provider_name_snapshot, NEW.product_name_snapshot, NEW.plan_name_snapshot,
+           NEW.plan_version_snapshot, NEW.price_vnd_snapshot, NEW.currency,
+           NEW.duration_months_snapshot,
+            NEW.max_active_devices_snapshot, NEW.entitlements_snapshot,
+            NEW.plan_commitment_snapshot, NEW.payment_due_at, NEW.ipn_accept_until,
+           NEW.created_at,
+           NEW.service_terms_version_snapshot, NEW.service_terms_hash_snapshot,
+           NEW.service_terms_content_snapshot)
+       IS DISTINCT FROM
+       ROW(OLD.id, OLD.order_number, OLD.idempotency_key,
+           OLD.customer_user_id, OLD.provider_user_id, OLD.product_id, OLD.plan_id,
+           OLD.target_license_id, OLD.order_type,
+           OLD.provider_name_snapshot, OLD.product_name_snapshot, OLD.plan_name_snapshot,
+           OLD.plan_version_snapshot, OLD.price_vnd_snapshot, OLD.currency,
+           OLD.duration_months_snapshot,
+            OLD.max_active_devices_snapshot, OLD.entitlements_snapshot,
+            OLD.plan_commitment_snapshot, OLD.payment_due_at, OLD.ipn_accept_until,
+           OLD.created_at,
+           OLD.service_terms_version_snapshot, OLD.service_terms_hash_snapshot,
+           OLD.service_terms_content_snapshot) THEN
+        RAISE EXCEPTION 'Order identity, commercial snapshot and payment cutoffs are immutable';
+    END IF;
+
+    IF NEW.order_status IS DISTINCT FROM OLD.order_status AND NOT (
+        (OLD.order_status = 'WAITING_SERVICE_TERMS_ACCEPTANCE' AND
+            NEW.order_status IN ('WAITING_PAYMENT', 'CANCELLED', 'EXPIRED')) OR
+        (OLD.order_status = 'WAITING_PAYMENT' AND
+            NEW.order_status IN ('PAYMENT_ACCEPTED', 'CANCELLED', 'EXPIRED')) OR
+        (OLD.order_status = 'CANCELLED' AND OLD.auto_cancelled AND
+            OLD.service_terms_accepted_at IS NOT NULL AND NEW.order_status = 'PAYMENT_ACCEPTED' AND
+            statement_timestamp() < OLD.ipn_accept_until)
+    ) THEN
+        RAISE EXCEPTION 'Invalid Order status transition: % -> %',
+            OLD.order_status, NEW.order_status;
+    END IF;
+
+    IF NEW.auto_cancelled IS DISTINCT FROM OLD.auto_cancelled AND NOT (
+        NOT OLD.auto_cancelled AND NEW.auto_cancelled AND
+        OLD.order_status IN ('WAITING_SERVICE_TERMS_ACCEPTANCE', 'WAITING_PAYMENT') AND
+        NEW.order_status = 'CANCELLED' AND statement_timestamp() >= OLD.payment_due_at
+    ) THEN
+        RAISE EXCEPTION 'Automatic cancellation requires an unpaid overdue Order';
+    END IF;
+
+    IF OLD.order_status = 'WAITING_SERVICE_TERMS_ACCEPTANCE' AND
+       NEW.order_status IN ('WAITING_PAYMENT', 'CANCELLED') AND
+       NOT (NEW.order_status = 'CANCELLED' AND NEW.auto_cancelled) AND
+       statement_timestamp() >= OLD.payment_due_at THEN
+        RAISE EXCEPTION 'Terms acceptance or cancellation is closed at payment_due_at';
+    END IF;
+
+    IF OLD.order_status = 'WAITING_PAYMENT' AND
+       NEW.order_status = 'CANCELLED' AND
+       NOT NEW.auto_cancelled AND
+       statement_timestamp() >= OLD.payment_due_at THEN
+        RAISE EXCEPTION 'Order cancellation is closed at payment_due_at';
+    END IF;
+
+    IF OLD.order_status = 'WAITING_SERVICE_TERMS_ACCEPTANCE' AND
+       NEW.order_status = 'EXPIRED' AND
+       statement_timestamp() < OLD.payment_due_at THEN
+        RAISE EXCEPTION 'Terms-pending Order cannot expire before payment_due_at';
+    END IF;
+
+    IF OLD.order_status = 'WAITING_PAYMENT' AND
+       NEW.order_status = 'EXPIRED' AND
+       statement_timestamp() < OLD.ipn_accept_until THEN
+        RAISE EXCEPTION 'Payment-pending Order cannot expire before ipn_accept_until';
+    END IF;
+
+    IF NEW.order_status IS DISTINCT FROM OLD.order_status THEN
+        CASE NEW.order_status
+            WHEN 'WAITING_PAYMENT' THEN
+                NEW.service_terms_accepted_at := statement_timestamp();
+            WHEN 'PAYMENT_ACCEPTED' THEN
+                NEW.payment_accepted_at := statement_timestamp();
+            WHEN 'CANCELLED' THEN
+                NEW.cancelled_at := statement_timestamp();
+            WHEN 'EXPIRED' THEN
+                NEW.expired_at := statement_timestamp();
+            ELSE
+                NULL;
+        END CASE;
+    END IF;
+
+    IF OLD.service_terms_accepted_at IS NOT NULL AND
+       NEW.service_terms_accepted_at IS DISTINCT FROM OLD.service_terms_accepted_at THEN
+        RAISE EXCEPTION 'Accepted Service Terms timestamp is immutable';
+    END IF;
+
+    IF OLD.service_terms_accepted_at IS NULL AND NEW.service_terms_accepted_at IS NOT NULL AND NOT (
+        OLD.order_status = 'WAITING_SERVICE_TERMS_ACCEPTANCE' AND
+        NEW.order_status = 'WAITING_PAYMENT'
+    ) THEN
+        RAISE EXCEPTION 'Service Terms may be accepted only on WAITING_SERVICE_TERMS_ACCEPTANCE -> WAITING_PAYMENT';
+    END IF;
+
+    IF OLD.payment_accepted_at IS NOT NULL AND
+       NEW.payment_accepted_at IS DISTINCT FROM OLD.payment_accepted_at THEN
+        RAISE EXCEPTION 'Accepted payment timestamp is immutable';
+    END IF;
+
+    IF OLD.payment_accepted_at IS NULL AND NEW.payment_accepted_at IS NOT NULL AND NOT (
+        (OLD.order_status = 'WAITING_PAYMENT' OR (OLD.order_status = 'CANCELLED' AND OLD.auto_cancelled))
+        AND NEW.order_status = 'PAYMENT_ACCEPTED'
+    ) THEN
+        RAISE EXCEPTION 'Payment may be accepted only on WAITING_PAYMENT -> PAYMENT_ACCEPTED';
+    END IF;
+
+    IF OLD.cancelled_at IS NOT NULL AND NEW.cancelled_at IS DISTINCT FROM OLD.cancelled_at THEN
+        RAISE EXCEPTION 'Order cancellation timestamp is immutable';
+    END IF;
+
+    IF OLD.expired_at IS NOT NULL AND NEW.expired_at IS DISTINCT FROM OLD.expired_at THEN
+        RAISE EXCEPTION 'Order expiry timestamp is immutable';
+    END IF;
+
+    NEW.updated_at := statement_timestamp();
+
+    RETURN NEW;
+END;
+$$;
+ALTER TABLE orders DROP COLUMN billing_cycle_snapshot;
+ALTER TABLE chain_commands DROP CONSTRAINT fk_chain_commands_provider, DROP COLUMN lease_owner, DROP COLUMN lease_expires_at;
+ALTER TABLE chain_events DROP CONSTRAINT fk_chain_events_provider;
+ALTER TABLE knowledge_documents DROP CONSTRAINT fk_knowledge_documents_provider,
+  DROP CONSTRAINT fk_knowledge_documents_product, DROP CONSTRAINT uq_knowledge_documents_version;
+DROP INDEX uq_knowledge_documents_one_current;
+DROP INDEX ix_knowledge_documents_product;
+ALTER TABLE knowledge_documents DROP COLUMN provider_user_id,
+  ADD CONSTRAINT fk_knowledge_documents_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
+  ADD CONSTRAINT uq_knowledge_documents_version UNIQUE (product_id,logical_document_key,version);
+CREATE UNIQUE INDEX uq_knowledge_documents_one_current ON knowledge_documents(product_id,logical_document_key) WHERE is_current;
+CREATE INDEX ix_knowledge_documents_product ON knowledge_documents(product_id,status,is_current);
+ALTER TABLE knowledge_chunks DROP CONSTRAINT ck_knowledge_chunks_tokens;
+ALTER TABLE conversations ADD COLUMN product_id UUID REFERENCES products(id) ON DELETE RESTRICT,
+  ADD COLUMN plan_id UUID REFERENCES plans(id) ON DELETE RESTRICT,
+  ADD COLUMN order_id UUID, ADD COLUMN license_id UUID;
+UPDATE conversations SET product_id=CASE WHEN context_type='PRODUCT' THEN context_id END,
+  plan_id=CASE WHEN context_type='PLAN' THEN context_id END,
+  order_id=CASE WHEN context_type='ORDER' THEN context_id END,
+  license_id=CASE WHEN context_type='LICENSE' THEN context_id END;
+ALTER TABLE conversations DROP CONSTRAINT ck_conversations_context,
+  DROP COLUMN context_type, DROP COLUMN context_id,
+  ADD CONSTRAINT conversations_order_id_customer_user_id_fkey FOREIGN KEY (order_id,customer_user_id) REFERENCES orders(id,customer_user_id) ON DELETE RESTRICT,
+  ADD CONSTRAINT conversations_license_id_customer_user_id_fkey FOREIGN KEY (license_id,customer_user_id) REFERENCES licenses(id,customer_user_id) ON DELETE RESTRICT,
+  ADD CONSTRAINT ck_conversations_context CHECK (num_nonnulls(product_id,plan_id,order_id,license_id)<=1);
+ALTER TABLE messages DROP COLUMN read_at;
+ALTER TABLE mobile_push_tokens ADD COLUMN generation INT NOT NULL DEFAULT 1 CHECK (generation>0);
+CREATE TABLE notification_deliveries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    notification_id UUID NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,
+    channel VARCHAR(20) NOT NULL CHECK (channel IN ('EMAIL', 'PUSH')),
+    push_token_id UUID REFERENCES mobile_push_tokens(id) ON DELETE RESTRICT,
+    token_generation INT,
+    destination_key TEXT NOT NULL,
+    delivery_status VARCHAR(30) NOT NULL DEFAULT 'PENDING'
+        CHECK (delivery_status IN ('PENDING', 'RETRYABLE_FAILED', 'SENT', 'DEAD_LETTER', 'CANCELLED')),
+    attempt_count INT NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+    next_attempt_at TIMESTAMPTZ,
+    lease_owner VARCHAR(180),
+    lease_expires_at TIMESTAMPTZ,
+    last_error TEXT,
+    sent_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (notification_id, channel, destination_key),
+    CHECK ((channel = 'EMAIL' AND push_token_id IS NULL AND token_generation IS NULL) OR
+           (channel = 'PUSH' AND push_token_id IS NOT NULL AND token_generation > 0)),
+    CHECK ((delivery_status = 'SENT') = (sent_at IS NOT NULL)),
+    CHECK ((lease_owner IS NULL) = (lease_expires_at IS NULL))
+);
+INSERT INTO notification_deliveries(notification_id,channel,destination_key,delivery_status,attempt_count,next_attempt_at,
+  lease_owner,lease_expires_at,last_error,sent_at,created_at,updated_at)
+SELECT n.id,'EMAIL',u.email,n.delivery_status,n.attempt_count,n.next_attempt_at,
+  n.lease_owner,n.lease_expires_at,n.last_error,n.sent_at,n.created_at,n.updated_at
+FROM notifications n JOIN users u ON u.id=n.user_id WHERE n.channel='EMAIL';
+ALTER TABLE notifications ADD COLUMN inbox_visible BOOLEAN NOT NULL DEFAULT TRUE;
+UPDATE notifications SET inbox_visible=(channel='IN_APP'),
+  data=data || jsonb_build_object('_emukey_legacy_delivery',jsonb_build_object(
+    'channel',channel,'deliveryStatus',delivery_status,'attemptCount',attempt_count,'nextAttemptAt',next_attempt_at,
+    'leaseOwner',lease_owner,'leaseExpiresAt',lease_expires_at,'lastError',last_error,'isRead',is_read,
+    'sentAt',sent_at,'readAt',read_at)),
+  read_at=CASE WHEN is_read THEN coalesce(read_at,updated_at) ELSE read_at END;
+DROP INDEX ix_notifications_delivery;
+DROP INDEX ix_notifications_inbox;
+ALTER TABLE notifications DROP CONSTRAINT fk_notifications_user, DROP CONSTRAINT uq_notifications_event_channel,
+  DROP CONSTRAINT ck_notifications_data, DROP COLUMN channel, DROP COLUMN delivery_status,
+  DROP COLUMN attempt_count, DROP COLUMN next_attempt_at, DROP COLUMN lease_owner,
+  DROP COLUMN lease_expires_at, DROP COLUMN last_error, DROP COLUMN is_read, DROP COLUMN sent_at,
+  ADD CONSTRAINT notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  ADD CONSTRAINT notifications_data_check CHECK (jsonb_typeof(data)='object'),
+  ADD CONSTRAINT notifications_user_id_event_key_key UNIQUE (user_id,event_key);
+CREATE INDEX ix_notifications_delivery ON notification_deliveries(delivery_status,next_attempt_at,created_at)
+  WHERE delivery_status IN ('PENDING','RETRYABLE_FAILED');
+CREATE INDEX ix_notifications_inbox ON notifications(user_id,created_at DESC) WHERE inbox_visible AND read_at IS NULL;
+
+emukey:upgrade:end */
+
+-- emukey:legacy-fingerprint:cf17043:5b5a16d2bd7b0f6eba2bf6e8f642f0c2f108bc3f2600703c6af657ba57ba2a5b
+/* emukey:upgrade:cf17043:continuity_20261101:begin
+-- Continuity release: additive metadata; secrets remain outside PostgreSQL.
+CREATE TABLE schema_versions (
+    version VARCHAR(40) PRIMARY KEY,
+    checksum VARCHAR(64) NOT NULL,
+    schema_fingerprint VARCHAR(64) NOT NULL,
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp()
+);
+CREATE TABLE license_key_deliveries (
+    license_id UUID NOT NULL,
+    key_version INT NOT NULL CHECK (key_version > 0),
+    customer_user_id UUID NOT NULL,
+    command_id UUID NOT NULL REFERENCES chain_commands(id) ON DELETE RESTRICT,
+    delivery_id UUID NOT NULL UNIQUE,
+    claimed_at TIMESTAMPTZ NOT NULL DEFAULT statement_timestamp(),
+    retry_until TIMESTAMPTZ NOT NULL,
+    acknowledged_at TIMESTAMPTZ,
+    PRIMARY KEY (license_id, key_version),
+    FOREIGN KEY (license_id, customer_user_id) REFERENCES licenses(id, customer_user_id) ON DELETE RESTRICT,
+    CHECK (retry_until > claimed_at AND retry_until <= claimed_at + interval '5 minutes'),
+    CHECK (acknowledged_at IS NULL OR acknowledged_at >= claimed_at)
+);
+ALTER TABLE license_devices
+    ADD COLUMN display_name VARCHAR(80),
+    ADD COLUMN platform VARCHAR(12) NOT NULL DEFAULT 'UNKNOWN'
+        CHECK (platform IN ('ANDROID','IOS','WINDOWS','MACOS','LINUX','WEB','UNKNOWN'));
+ALTER TABLE conversations
+    ADD COLUMN claim_version BIGINT NOT NULL DEFAULT 0 CHECK (claim_version >= 0),
+    ADD COLUMN claim_expires_at TIMESTAMPTZ;
+ALTER TABLE messages ADD COLUMN citation_details JSONB NOT NULL DEFAULT '[]'::jsonb
+    CHECK (jsonb_typeof(citation_details) = 'array');
+ALTER TABLE payment_transactions ADD COLUMN review_evidence JSONB NOT NULL DEFAULT '{}'::jsonb
+    CHECK (jsonb_typeof(review_evidence) = 'object');
+CREATE INDEX idx_conversations_expired_claim ON conversations(claim_expires_at)
+    WHERE status='SUPPORT_ACTIVE';
+
+CREATE FUNCTION guard_payment_review_evidence()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.review_evidence IS DISTINCT FROM OLD.review_evidence AND
+       NOT (COALESCE(OLD.review_status,'')='OPEN' AND COALESCE(NEW.review_status,'') IN ('RESOLVED','CLOSED_NO_ACTION')) THEN
+        RAISE EXCEPTION 'Review evidence may only be recorded when resolving an open review';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER trg_payment_review_evidence
+BEFORE UPDATE ON payment_transactions
+FOR EACH ROW EXECUTE FUNCTION guard_payment_review_evidence();
+
+emukey:upgrade:end */
+
+-- emukey:legacy-fingerprint:continuity_20261101:d865f31d8b5f7f58113bddfa9f5c97e33483e5a73c2819027991b6fae3f277df
+/* emukey:upgrade:continuity_20261101:provider_handoff_20261104:begin
+ALTER TABLE knowledge_chunks ADD COLUMN IF NOT EXISTS token_count INT;
+ALTER TABLE knowledge_chunks ADD CONSTRAINT ck_knowledge_chunks_tokens
+    CHECK (token_count IS NULL OR token_count >= 0);
+ALTER TABLE orders ADD COLUMN fulfillment_mode VARCHAR(24) NOT NULL DEFAULT 'LEGACY_DEVICE'
+    CHECK (fulfillment_mode IN ('LEGACY_DEVICE','PROVIDER_HANDOFF'));
+ALTER TABLE licenses ADD COLUMN fulfillment_mode VARCHAR(24) NOT NULL DEFAULT 'LEGACY_DEVICE'
+    CHECK (fulfillment_mode IN ('LEGACY_DEVICE','PROVIDER_HANDOFF'));
+ALTER TABLE licenses ADD COLUMN provider_revision BIGINT NOT NULL DEFAULT 0
+    CHECK (provider_revision BETWEEN 0 AND 9007199254740991);
+
+CREATE TABLE provider_integrations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    provider_user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE RESTRICT,
+    endpoint_url TEXT NOT NULL,
+    credential_ciphertext TEXT NOT NULL,
+    credential_iv TEXT NOT NULL,
+    credential_tag TEXT NOT NULL,
+    encryption_key_id VARCHAR(40) NOT NULL,
+    config_version INT NOT NULL DEFAULT 1 CHECK (config_version > 0),
+    status VARCHAR(12) NOT NULL DEFAULT 'DISABLED' CHECK (status IN ('ENABLED','DISABLED')),
+    authorized_at TIMESTAMPTZ NOT NULL,
+    authorization_version VARCHAR(40) NOT NULL,
+    verified_at TIMESTAMPTZ,
+    verified_config_version INT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (id, provider_user_id),
+    CHECK (status <> 'ENABLED' OR (verified_at IS NOT NULL AND verified_config_version=config_version))
+);
+CREATE TABLE license_key_materials (
+    license_id UUID NOT NULL REFERENCES licenses(id) ON DELETE RESTRICT,
+    key_version INT NOT NULL CHECK (key_version > 0),
+    command_id UUID NOT NULL UNIQUE REFERENCES chain_commands(id) ON DELETE RESTRICT,
+    commitment BYTEA NOT NULL CHECK (octet_length(commitment)=32),
+    ciphertext TEXT NOT NULL,
+    iv TEXT NOT NULL,
+    auth_tag TEXT NOT NULL,
+    encryption_key_id VARCHAR(40) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    retired_at TIMESTAMPTZ,
+    PRIMARY KEY (license_id,key_version)
+);
+CREATE TABLE provider_license_deliveries (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    license_id UUID NOT NULL,
+    provider_user_id UUID NOT NULL,
+    integration_id UUID NOT NULL,
+    config_version INT NOT NULL CHECK (config_version > 0),
+    revision BIGINT NOT NULL CHECK (revision BETWEEN 1 AND 9007199254740991),
+    key_version INT NOT NULL CHECK (key_version > 0),
+    event_type VARCHAR(40) NOT NULL,
+    snapshot JSONB NOT NULL CHECK (jsonb_typeof(snapshot)='object' AND NOT (snapshot ? 'licenseKey')),
+    status VARCHAR(16) NOT NULL DEFAULT 'PENDING'
+        CHECK (status IN ('PENDING','SENDING','RETRY_WAIT','DELIVERED','FAILED','SUPERSEDED')),
+    attempt_count INT NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+    next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    lease_token UUID,
+    lease_expires_at TIMESTAMPTZ,
+    last_error_code VARCHAR(80),
+    receipt_id VARCHAR(200),
+    accepted_at TIMESTAMPTZ,
+    last_retry_reason VARCHAR(1000),
+    retried_by UUID REFERENCES users(id) ON DELETE RESTRICT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (license_id,revision),
+    FOREIGN KEY (license_id,provider_user_id) REFERENCES licenses(id,provider_user_id) ON DELETE RESTRICT,
+    FOREIGN KEY (integration_id,provider_user_id) REFERENCES provider_integrations(id,provider_user_id) ON DELETE RESTRICT,
+    FOREIGN KEY (license_id,key_version) REFERENCES license_key_materials(license_id,key_version) ON DELETE RESTRICT,
+    CHECK ((status='SENDING') = (lease_token IS NOT NULL AND lease_expires_at IS NOT NULL)),
+    CHECK (status <> 'DELIVERED' OR (receipt_id IS NOT NULL AND accepted_at IS NOT NULL))
+);
+CREATE INDEX ix_provider_deliveries_due ON provider_license_deliveries(next_attempt_at)
+    WHERE status IN ('PENDING','RETRY_WAIT','SENDING');
+CREATE FUNCTION guard_fulfillment_mode() RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.fulfillment_mode IS DISTINCT FROM OLD.fulfillment_mode THEN
+        RAISE EXCEPTION 'Fulfillment mode is immutable';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER trg_orders_fulfillment_mode BEFORE UPDATE ON orders
+    FOR EACH ROW EXECUTE FUNCTION guard_fulfillment_mode();
+CREATE TRIGGER trg_licenses_fulfillment_mode BEFORE UPDATE ON licenses
+    FOR EACH ROW EXECUTE FUNCTION guard_fulfillment_mode();
+emukey:upgrade:end */
 
 -- emukey:seed:begin
 DO $emukey_seed$

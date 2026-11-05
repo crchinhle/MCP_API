@@ -1,5 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsString, IsUUID, Length, MaxLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, IsUUID, Length, MaxLength, IsInt, Min } from 'class-validator';
+
+export class SupportClaimDto {
+  @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) claimVersion!: number;
+}
+export class CloseConversationDto {
+  @ApiPropertyOptional({ minimum: 1 }) @IsOptional() @IsInt() @Min(1) claimVersion?: number;
+}
 
 export class CreateConversationDto {
   @ApiPropertyOptional({ format: 'uuid' })
@@ -20,6 +27,7 @@ export class CreateConversationDto {
 }
 
 export class AppendMessageDto {
+  @ApiPropertyOptional({ minimum: 1 }) @IsOptional() @IsInt() @Min(1) claimVersion?: number;
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
   clientMessageId!: string;
@@ -49,6 +57,7 @@ export class RequestSupportDto {
 }
 
 export class AiAnswerDto {
+  @ApiProperty({type:()=>CitationDetailDto,isArray:true}) citationDetails!: CitationDetailDto[];
   @ApiProperty()
   answer!: string;
 
@@ -60,6 +69,8 @@ export class AiAnswerDto {
 }
 
 export class ConversationDto {
+  @ApiProperty() claimVersion!: number;
+  @ApiProperty({ nullable: true, type: String, format: 'date-time' }) claimExpiresAt!: string | null;
   @ApiProperty({ format: 'uuid' })
   id!: string;
 
@@ -83,6 +94,7 @@ export class ConversationDto {
 }
 
 export class MessageDto {
+  @ApiProperty({type:()=>CitationDetailDto,isArray:true}) citationDetails!: CitationDetailDto[];
   @ApiProperty({ format: 'uuid' })
   id!: string;
 
@@ -106,4 +118,13 @@ export class MessageDto {
 
   @ApiPropertyOptional({ type: String, isArray: true })
   sources?: string[];
+}
+
+export class CitationDetailDto {
+  @ApiProperty({format:'uuid'}) chunkId!:string;
+  @ApiProperty({format:'uuid'}) documentId!:string;
+  @ApiProperty() documentTitle!:string;
+  @ApiProperty() documentVersion!:number;
+  @ApiProperty() excerpt!:string;
+  @ApiProperty() chunkIndex!:number;
 }

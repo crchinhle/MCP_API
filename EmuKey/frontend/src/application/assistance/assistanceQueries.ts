@@ -1,9 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { requestJson } from '../auth/authContext';
+import type { AiAnswerDto, CitationDetailDto } from '../../infrastructure/api/generated';
 
 export interface ConversationDto {
   id: string;
+  claimVersion?: number;
+  claimExpiresAt?: string | null;
   customerUserId: string;
   assignedSupportUserId: string | null;
   status: 'AI_ACTIVE' | 'WAITING_SUPPORT' | 'SUPPORT_ACTIVE' | 'CLOSED';
@@ -13,6 +16,7 @@ export interface ConversationDto {
 }
 
 export interface MessageDto {
+  citationDetails?:CitationDetailDto[];
   id: string;
   conversationId: string;
   clientMessageId: string;
@@ -87,7 +91,7 @@ export function useAppendConversationMessage() {
 export function useAskAi() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ conversationId, question, clientMessageId }: { conversationId: string; question: string; clientMessageId: string }) => requestJson<{ answer: string; citedSourceIds: string[]; grounded: boolean }>(`/conversations/${encodeURIComponent(conversationId)}/ai-ask`, { method: 'POST', body: JSON.stringify({ clientMessageId, question }) }),
+    mutationFn: ({ conversationId, question, clientMessageId }: { conversationId: string; question: string; clientMessageId: string }) => requestJson<AiAnswerDto>(`/conversations/${encodeURIComponent(conversationId)}/ai-ask`, { method: 'POST', body: JSON.stringify({ clientMessageId, question }) }),
     onSuccess: (_answer, input) => { void queryClient.invalidateQueries({ queryKey: ['assistance', 'conversation', input.conversationId] }); void queryClient.invalidateQueries({ queryKey: ['assistance', 'messages', input.conversationId] }); },
   });
 }

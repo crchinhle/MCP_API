@@ -183,7 +183,7 @@ export class PaymentController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ReviewPaymentDto,
   ) {
-    return this.service.reviewPayment(actor, id, dto.status, dto.reason);
+    return this.service.reviewPayment(actor, id, dto);
   }
 
   @Get(':id/receipt')

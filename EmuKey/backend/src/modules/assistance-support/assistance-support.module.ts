@@ -11,6 +11,8 @@ import { Pool } from 'pg';
 import { AssistanceSupportController } from './assistance-support.controller.js';
 import { AssistanceSupportService } from './assistance-support.service.js';
 import { AssistanceSupportRepository } from './infrastructure/assistance-support.repository.js';
+import { NotificationWriter } from '../operations/application/notification-writer.js';
+import { OperationsModule } from '../operations/operations.module.js';
 import { IdentityModule } from '../identity-access/identity.module.js';
 import { AiAssistanceService } from './ai-assistance.service.js';
 import { KnowledgeController } from './knowledge.controller.js';
@@ -19,10 +21,10 @@ import { KnowledgeService } from './knowledge.service.js';
 import { PRIVATE_STORAGE, type PrivateStoragePort } from '../../platform/storage/private-storage.port.js';
 
 @Module({
-  imports: [IdentityModule],
+  imports: [IdentityModule, OperationsModule],
   controllers: [AssistanceSupportController, KnowledgeController],
   providers: [
-    { provide: AssistanceSupportRepository, inject: [Pool], useFactory: (pool: Pool) => new AssistanceSupportRepository(pool) },
+    { provide: AssistanceSupportRepository, inject: [Pool, NotificationWriter], useFactory: (pool: Pool, notifications: NotificationWriter) => new AssistanceSupportRepository(pool, notifications) },
      { provide: KnowledgeRepository, inject: [Pool, PRIVATE_STORAGE, ConfigService], useFactory: (pool: Pool, storage: PrivateStoragePort, config: ConfigService) => new KnowledgeRepository(pool, storage, {
        maxFileBytes: config.get<number>('KNOWLEDGE_MAX_FILE_BYTES') ?? 10_485_760,
        maxChunks: config.get<number>('KNOWLEDGE_MAX_CHUNKS') ?? 500,
@@ -56,6 +58,6 @@ import { PRIVATE_STORAGE, type PrivateStoragePort } from '../../platform/storage
       },
     },
   ],
-  exports: [AI_GATEWAY],
+  exports: [AI_GATEWAY, AssistanceSupportService],
 })
 export class AssistanceSupportModule {}

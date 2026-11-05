@@ -193,7 +193,8 @@ vi.stubGlobal(
     if (path === '/auth/users' && method === 'GET') return jsonResponse([]);
     if (path === '/auth/provider-invitations' && method === 'GET') return jsonResponse([]);
     if (path === '/auth/provider-invitations/inspect' && method === 'POST') return jsonResponse({ email: 'provider@example.test', expiresAt: '2026-10-22T00:00:00Z' });
-    if (method === 'GET' && path === '/notifications') return jsonResponse([]);
+    if (method === 'GET' && path === '/notifications') return jsonResponse({ items: [], nextCursor: null, unreadCount: 0 });
+    if (method === 'GET' && path === '/knowledge/capabilities') return jsonResponse({ maxFileBytes: 10_485_760, allowedMimeTypes: ['application/pdf', 'text/plain'] });
     if (method === 'GET' && path === '/knowledge/documents') return jsonResponse([]);
     if (method === 'GET' && path === '/payments/review') return jsonResponse([]);
     if (method === 'GET' && path === '/health/ready') return jsonResponse({ status: 'ok', dependencies: { postgres: 'up', redis: 'up', blockchain: 'up' } });

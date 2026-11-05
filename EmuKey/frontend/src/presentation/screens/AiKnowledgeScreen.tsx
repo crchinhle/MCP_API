@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { useAdminProducts } from '../../application/catalog/catalogQueries';
-import { knowledgeDocumentState, useCreateKnowledgeDocument, useKnowledgeDocument, useKnowledgeDocuments, usePublishKnowledgeDocument } from '../../application/assistance/knowledgeQueries';
+import { knowledgeDocumentState, useCreateKnowledgeDocument, useKnowledgeCapabilities, useKnowledgeDocument, useKnowledgeDocuments, usePublishKnowledgeDocument } from '../../application/assistance/knowledgeQueries';
 import type { KnowledgeDocumentDto } from '../../infrastructure/api/generated';
 import { PageLoading, PageHeader, StatusChip } from '../components/WorkspacePrimitives';
 import { describeApiError, useAuth } from '../../application/auth/authContext';
@@ -33,12 +33,15 @@ export function AiKnowledgeScreen() {
   const [messageApi, contextHolder] = message.useMessage();
   const products = useAdminProducts(!canApprove);
   const documents = useKnowledgeDocuments();
+  const capabilities = useKnowledgeCapabilities(!canApprove);
+  const maxFileBytes = capabilities.data?.maxFileBytes;
+  const maxFileLabel = maxFileBytes ? `${Number((maxFileBytes / 1024 / 1024).toFixed(2))} MiB` : 'đang tải giới hạn';
   const selected = documents.data?.find((document) => document.id === selectedSnapshot?.id) ?? selectedSnapshot;
   const detail = useKnowledgeDocument(selected?.id);
   const create = useCreateKnowledgeDocument();
   const beforeUpload: UploadProps['beforeUpload'] = (file) => {
-    if (!/\.(pdf|txt)$/i.test(file.name) || file.size > 10 * 1024 * 1024) {
-      void messageApi.error('Vui lòng chọn tệp PDF hoặc TXT không quá 10 MB.');
+    if (!maxFileBytes || !/\.(pdf|txt)$/i.test(file.name) || file.size > maxFileBytes || !capabilities.data?.allowedMimeTypes.includes(file.type)) {
+      void messageApi.error(`Vui lòng chọn tệp PDF hoặc TXT không quá ${maxFileLabel}.`);
       return Upload.LIST_IGNORE;
     }
     setFile(file);
@@ -73,7 +76,8 @@ export function AiKnowledgeScreen() {
         open={uploadOpen}
         title="Tải tài liệu sản phẩm"
       >
-        <p>Tải tài liệu hướng dẫn sử dụng để khách hàng và trợ lý AI cùng tham khảo sau khi System Admin duyệt. Chấp nhận PDF hoặc TXT tối đa 10 MB. Tải lại cùng tên cho cùng sản phẩm sẽ tạo phiên bản mới; phiên bản đang công bố vẫn được sử dụng cho đến khi bản mới được duyệt.</p>
+        <p>Tải tài liệu hướng dẫn sử dụng để khách hàng và trợ lý AI cùng tham khảo sau khi System Admin duyệt. Chấp nhận PDF hoặc TXT tối đa {maxFileLabel}. Tải lại cùng tên cho cùng sản phẩm sẽ tạo phiên bản mới; phiên bản đang công bố vẫn được sử dụng cho đến khi bản mới được duyệt.</p>
+        {capabilities.isError ? <Alert type="error" title="Không thể tải giới hạn tài liệu" action={<Button onClick={() => void capabilities.refetch()}>Thử lại</Button>} /> : null}
         <div className="file-picker">
           <Select aria-label="Sản phẩm của tài liệu" onChange={setProductId} options={(products.data ?? []).filter((product) => product.status !== 'ARCHIVED').map((product) => ({ label: product.name, value: product.id }))} placeholder="Chọn sản phẩm" {...(productId ? { value: productId } : {})} />
           <label htmlFor="knowledge-upload">Chọn tài liệu hướng dẫn</label>
@@ -83,7 +87,7 @@ export function AiKnowledgeScreen() {
             id="knowledge-upload"
             showUploadList={false}
           >
-            <Button>Chọn tệp</Button>
+            <Button disabled={!capabilities.data}>Chọn tệp</Button>
           </Upload>
           <><Button disabled={(!file || !productId) || (create.isPending)} onClick={upload} type="primary">Tải lên</Button><LoadingOverlay active={create.isPending} label="Đang xử lý yêu cầu: Tải lên" /></>
           {file ? <span>Đã chọn: {file.name}</span> : null}

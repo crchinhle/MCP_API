@@ -1,4 +1,12 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsInt, IsUUID, Min } from 'class-validator';
+
+export class RetrieveActivationKeyDto {
+  @ApiProperty({ format: 'uuid' }) @IsUUID() deliveryId!: string;
+}
+export class AcknowledgeActivationKeyDto extends RetrieveActivationKeyDto {
+  @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) keyVersion!: number;
+}
 
 export class LicensePlanDto {
   @ApiProperty() commitment!: string;
@@ -13,6 +21,12 @@ export class LicenseProviderDto {
 }
 
 export class LicenseProjectionDto {
+  @ApiPropertyOptional({enum:['LEGACY_DEVICE','PROVIDER_HANDOFF']}) fulfillmentMode?:string;
+  @ApiPropertyOptional({nullable:true,type:String}) providerDeliveryStatus?:string|null;
+  @ApiPropertyOptional({nullable:true,type:String}) providerAcceptedAt?:string|null;
+  @ApiPropertyOptional() providerRevision?:number;
+  @ApiPropertyOptional({nullable:true,type:Number}) providerAcceptedRevision?:number|null;
+  @ApiPropertyOptional() keyAvailable?:boolean;
   @ApiPropertyOptional()
   activationKeyAvailable?: boolean;
   @ApiPropertyOptional({ nullable: true, type: String, pattern: '^[0-9a-f]{4}$' })
@@ -46,11 +60,15 @@ export class LicenseProjectionDto {
 }
 
 export class ActivationKeyDto {
+  @ApiProperty({ format: 'uuid' }) deliveryId!: string;
+  @ApiProperty({ format: 'date-time' }) retryUntil!: string;
   @ApiProperty() activationKey!: string;
   @ApiProperty() keyVersion!: number;
 }
 
 export class LicenseDeviceDto {
+  @ApiPropertyOptional({ nullable: true, type: String }) displayName?: string | null;
+  @ApiPropertyOptional() platform?: string;
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty() deviceRef!: string;
   @ApiProperty({ enum: ['ACTIVE', 'REVOKED'] }) status!: string;
@@ -60,6 +78,8 @@ export class LicenseDeviceDto {
 }
 
 export class PublicLicenseVerificationDto {
+  @ApiPropertyOptional({ enum: ['LEGACY_DEVICE', 'PROVIDER_HANDOFF'] }) fulfillmentMode?: string;
+  @ApiPropertyOptional() providerDeliveryStatus?: string;
   @ApiPropertyOptional({ nullable: true, type: Number }) blockNumber?:
     number | null;
   @ApiPropertyOptional() confirmationCount?: number;

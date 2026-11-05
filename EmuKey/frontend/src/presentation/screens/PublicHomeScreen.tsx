@@ -655,7 +655,7 @@ export function PublicHomeScreen() {
               </li>
               <li>
                 <CheckCircleOutlined aria-hidden="true" />
-                <div><strong>Theo dõi xuyên suốt</strong><span>Quản lý đơn hàng, license và thiết bị từ một khu vực tài khoản thống nhất.</span></div>
+                <div><strong>Theo dõi xuyên suốt</strong><span>Quản lý đơn hàng, bản quyền và trạng thái bàn giao từ một khu vực tài khoản thống nhất.</span></div>
               </li>
               <li>
                 <CheckCircleOutlined aria-hidden="true" />

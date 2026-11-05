@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { orderStatusLabel, orderStatusTone, type OrderSummary, useOrder, useOrderMutations, useOrders, useOrderTerms } from '../../application/orders/orderQueries';
 import { CopyableId, PageLoading, formatMoney, FactList, StatusChip, useDebouncedValue } from '../components/WorkspacePrimitives';
 import { entitlementLabel } from '../components/OrderSummary';
+import { providerHandoffStatus, useLicenses } from '../../application/licenses/licenseQueries';
 
 type OrderTab = 'all' | 'sign' | 'payment' | 'complete';
 
@@ -50,6 +51,7 @@ export function BuyerOrdersScreen() {
   const navigate = useNavigate();
   const createConversation = useCreateConversation();
   const ordersQuery = useOrders();
+  const licensesQuery = useLicenses();
   const detailQuery = useOrder(selectedId ?? '');
   const terms = useOrderTerms(detailQuery.data?.orderStatus === 'WAITING_SERVICE_TERMS_ACCEPTANCE' ? selectedId ?? '' : '');
   const mutations = useOrderMutations();
@@ -101,7 +103,7 @@ export function BuyerOrdersScreen() {
                   <td><CopyableId value={order.orderNumber} onOpen={() => setSelectedId(order.id)} /></td>
                   <td><span className="buyer-orders-cell-text">{order.productNameSnapshot} · {order.planNameSnapshot}</span></td>
                   <td className="buyer-orders-money">{formatMoney(order.priceVndSnapshot)}</td>
-                  <td><StatusChip tone={state.tone}>{state.label}</StatusChip></td>
+                  <td><StatusChip tone={state.tone}>{state.label}</StatusChip>{(()=>{const license=licensesQuery.data?.find((item)=>item.originOrderId===order.id || item.id===order.targetLicenseId);const progress=license?providerHandoffStatus(license):null;return progress?<p>{progress.label}</p>:null;})()}</td>
                   <td><div className="buyer-orders-actions">
                     {order.orderStatus === 'WAITING_PAYMENT' ? <Button href={`/buyer/orders/${encodeURIComponent(order.id)}/payment`} type="primary">Thanh toán</Button> : <Button onClick={() => setSelectedId(order.id)} type="primary">Xem chi tiết</Button>}
                     {['WAITING_SERVICE_TERMS_ACCEPTANCE', 'WAITING_PAYMENT'].includes(order.orderStatus) ? (

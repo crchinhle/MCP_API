@@ -54,7 +54,19 @@ function mapCommand(row: Record<string, unknown>): LicenseCommandResult {
 export class LicensingRepository {
   constructor(
     private readonly pool: Pool,
+    private readonly handoff?: import('../application/provider-handoff.service.js').ProviderHandoffService,
   ) {}
+
+  async updateDeviceMetadata(customerId:string,licenseId:string,deviceId:string,input:{displayName?:string;platform?:string}) {
+    const result=await this.pool.query<Record<string,unknown>>(`UPDATE license_devices d
+      SET display_name=CASE WHEN $4::text IS NULL THEN display_name ELSE NULLIF(btrim($4),'') END,
+          platform=coalesce($5,platform)
+      FROM licenses l WHERE l.id=d.license_id AND l.customer_user_id=$1 AND l.id=$2 AND d.id=$3
+      RETURNING d.*`,[customerId,licenseId,deviceId,input.displayName ?? null,input.platform ?? null]);
+    const row=result.rows[0];
+    return row?{id:row.id,deviceRef:row.device_ref,status:row.status,bindingGeneration:Number(row.binding_generation),
+      activatedAt:row.activated_at,revokedAt:row.revoked_at,displayName:row.display_name,platform:row.platform}:null;
+  }
 
   async commandStatus(actorUserId: string, commandId: string) {
     const result = await this.pool.query<Record<string, unknown>>(
@@ -278,6 +290,7 @@ export class LicensingRepository {
     commitment: Hex,
     nextVersion: number,
     config: LicenseCommandConfig,
+    secret?: string,
   ): Promise<LicenseCommandResult> {
     return this.transaction(async (client) => {
       const license = await this.lockLicense(client, licenseId);
@@ -310,6 +323,10 @@ export class LicensingRepository {
            updated_at=now() WHERE id=$1`,
         [licenseId, commitment.slice(2), nextVersion, commandId],
       );
+      if (this.handoff && await this.handoff.deliveries.mode(licenseId,client)==='PROVIDER_HANDOFF') {
+        if (!secret) throw new Error('PROVIDER_KEY_STORAGE_REQUIRED');
+        await this.handoff.persistKey(client,{licenseId,commandId,keyVersion:nextVersion,commitment,secret});
+      }
       return command;
     });
   }

@@ -16,10 +16,12 @@ export class ActivationEnvelopeRecoveryService {
   constructor(
     private readonly repository: ChainCommandRepository,
     private readonly envelopes: ActivationEnvelopePort,
+    private readonly handoff?: import('../../licensing/application/provider-handoff.service.js').ProviderHandoffService,
   ) {}
 
   async ensure(command: ChainCommandRecord): Promise<ChainCommandRecord> {
     if (!['ISSUE_LICENSE', 'ROTATE_KEY'].includes(command.commandType)) return command;
+    if (await this.handoff?.hasDurableCommandKey(command)) return command;
     const durable = command.commandType === 'ISSUE_LICENSE'
       ? await this.repository.getLicenseCommitment(command.licenseId)
       : await this.repository.getRotationCommitment(command.licenseId);
@@ -51,6 +53,7 @@ export class ActivationEnvelopeRecoveryService {
       licenseId,
     );
     if (!command) throw new Error('ACTIVATION_ROTATION_NOT_ALLOWED');
+    if (await this.handoff?.hasDurableCommandKey(command)) return command;
     return this.recover(command);
   }
 

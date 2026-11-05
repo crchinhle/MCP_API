@@ -47,6 +47,9 @@ describe('publicVerificationErrorLabel', () => {
 });
 
 describe('activationKeyErrorLabel', () => {
+  it.each(['KEY_DELIVERY_EXPIRED', 'KEY_ALREADY_DELIVERED', 'KEY_UNAVAILABLE'])('directs %s to key recovery', (code) => {
+    expect(activationKeyErrorLabel({ status: 409, code })).toContain('quy trình khôi phục mã');
+  });
   it('maps 404 to unavailable message', () => {
     expect(activationKeyErrorLabel({ status: 404 })).toBe('Mã bản quyền đã được nhận hoặc hiện không còn sẵn sàng. Nếu bạn đã mất mã, hãy dùng quy trình khôi phục mã.');
   });

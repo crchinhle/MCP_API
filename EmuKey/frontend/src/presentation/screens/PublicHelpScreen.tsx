@@ -8,8 +8,8 @@ import { roleHomePath } from '../../domain/workspace';
 const helpSections = [
   { title: '1. Chọn sản phẩm và gói', content: 'Mở danh mục, xem giá, thời hạn và số thiết bị. Dùng tính năng so sánh để đối chiếu từ hai đến bốn gói trước khi quyết định.' },
   { title: '2. Xác nhận đơn hàng và thanh toán', content: 'Đăng nhập, đọc điều khoản của đơn hàng và xác nhận trước khi đến cổng SePay. Sau thanh toán, quay về EmuKey để theo dõi kết quả. Nếu giao dịch chưa rõ kết quả, kiểm tra trạng thái đơn trước khi thanh toán lại.' },
-  { title: '3. Nhận mã và kích hoạt phần mềm', content: 'Khi bản quyền sẵn sàng, nhận mã bản quyền và lưu ở nơi an toàn: mã chỉ được hiển thị một lần. Nhập mã trong phần mềm trên thiết bị cần sử dụng. Không chia sẻ mã trong hội thoại hỗ trợ.' },
-  { title: '4. Quản lý và gia hạn', content: 'Vào Bản quyền & thiết bị, chọn bản quyền rồi bấm Gia hạn. Kiểm tra giá, thời hạn và điều khoản trước khi thanh toán. Không cần nhập mã; mã bản quyền và thiết bị hiện tại được giữ nguyên. Nếu đã có đơn gia hạn đang chờ, hãy tiếp tục đơn đó.' },
+  { title: '3. Nhận mã và sử dụng sản phẩm', content: 'Sau khi blockchain xác nhận và nhà cung cấp đã lưu bản quyền, nhận mã rồi lưu ở nơi an toàn. Nhập mã trong sản phẩm của nhà cung cấp; họ quản lý quyền sử dụng. Không chia sẻ mã trong hội thoại hỗ trợ.' },
+  { title: '4. Quản lý và gia hạn', content: 'Vào Bản quyền, chọn bản quyền rồi bấm Gia hạn. Kiểm tra giá, thời hạn và điều khoản trước khi thanh toán. Mã hiện tại được giữ nguyên; hạn sử dụng mới cần được xác nhận và đồng bộ sang nhà cung cấp. Nếu đã có đơn gia hạn đang chờ, hãy tiếp tục đơn đó.' },
   { title: '5. Xác minh công khai', content: 'Dùng mã tra cứu công khai tại trang Xác minh để kiểm tra trạng thái trên blockchain. Đây không phải mã bản quyền dùng trong phần mềm và không dùng để đăng nhập.' },
 ] as const;
 
@@ -45,7 +45,7 @@ export function PublicHelpScreen() {
             </section>
           ))}
           <h2>Cần trợ giúp thêm?</h2>
-          <p>Nếu mất mã, gặp lỗi thanh toán hoặc kích hoạt, hãy gửi yêu cầu hỗ trợ kèm mã đơn hàng hoặc mã tra cứu công khai. Không gửi mã bản quyền bí mật.</p>
+          <p>Nếu mất mã, gặp lỗi thanh toán hoặc bàn giao bản quyền, hãy gửi yêu cầu hỗ trợ kèm mã đơn hàng hoặc mã tra cứu công khai. Không gửi mã bản quyền bí mật.</p>
           <Button type="primary" onClick={() => void navigate(auth?.user ? auth.user.role === 'CUSTOMER' ? '/buyer/support' : roleHomePath(auth.user.role) : '/auth?redirect=/buyer/support')}>
             {auth?.user ? 'Mở khu vực hỗ trợ' : 'Đăng nhập để được hỗ trợ'}
           </Button>

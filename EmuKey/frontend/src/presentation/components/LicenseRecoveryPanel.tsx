@@ -1,13 +1,16 @@
 import { LoadingOverlay } from './WorkspacePrimitives';
 import { Alert, Button, Input, Popconfirm } from 'antd';
-import { useState } from 'react';
+import { useEffect,useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { usePhase6Command, useRecoverActivationKey, useRequestLicensingActionVerification, useRetrieveActivationKey } from '../../application/licenses/licenseQueries';
 
-export function LicenseRecoveryPanel({ licenseId, initialToken, onKey }: {
+export function LicenseRecoveryPanel({ licenseId, initialToken, onKey,providerManaged=false,providerReady=true }: {
   readonly licenseId: string;
   readonly initialToken: string;
-  readonly onKey: (licenseId: string, key: string) => void;
+  readonly onKey: (licenseId: string, key: string, keyVersion: number) => void;
+  readonly providerManaged?:boolean;
+  readonly providerReady?:boolean;
 }) {
   const [params, setParams] = useSearchParams();
   const [token, setToken] = useState(initialToken);
@@ -22,6 +25,8 @@ export function LicenseRecoveryPanel({ licenseId, initialToken, onKey }: {
   const recover = useRecoverActivationKey();
   const retrieve = useRetrieveActivationKey();
   const status = usePhase6Command(command?.commandId);
+  const queryClient=useQueryClient();
+  useEffect(()=>{if(providerManaged && status.data?.status==='CONFIRMED') void queryClient.invalidateQueries({queryKey:['licenses']});},[providerManaged,status.data?.status,queryClient]);
   const submit = async () => {
     setError('');
     try {
@@ -43,7 +48,7 @@ export function LicenseRecoveryPanel({ licenseId, initialToken, onKey }: {
   };
   return <section className="buyer-license-action-panel" aria-label="Khôi phục mã bản quyền">
     <h3>Khôi phục mã bị mất</h3>
-    <p>Khôi phục sẽ thay thế mã cũ. Chỉ nhận mã mới sau khi blockchain xác nhận. Chọn đúng bản quyền trước khi gửi yêu cầu.</p>
+    <p>Khôi phục sẽ thay thế mã cũ. Chỉ nhận mã mới sau khi hoàn tất xác nhận phát hành{providerManaged?' và nhà cung cấp đã nhận mã mới':''}. Chọn đúng bản quyền trước khi gửi yêu cầu.</p>
     {!command ? <>
       <><Button disabled={email.isPending} onClick={() => email.mutate({ licenseId, action: 'KEY_RECOVERY' })}>Gửi email khôi phục</Button><LoadingOverlay active={email.isPending} label="Đang xử lý yêu cầu: Gửi email khôi phục" /></>
       {email.isSuccess ? <Alert type="success" title="Đã gửi email. Dán mã xác nhận trong email vào ô bên dưới." /> : null}
@@ -57,7 +62,8 @@ export function LicenseRecoveryPanel({ licenseId, initialToken, onKey }: {
       <Alert type={status.data?.status === 'CONFIRMED' ? 'success' : 'info'} title={`Trạng thái khôi phục: ${status.data?.status === 'CONFIRMED' ? 'Đã xác nhận' : status.data?.status === 'DEAD_LETTER' || status.data?.status === 'ABANDONED' || status.data?.status === 'SUPERSEDED' ? 'Cần hỗ trợ' : status.data?.status === 'SUBMITTED' || status.data?.status === 'SUBMITTED_UNKNOWN' ? 'Đang chờ xác nhận blockchain' : status.data?.status === 'RETRYABLE_FAILED' ? 'Đang thử lại' : 'Đang xử lý'}`} description="Chỉ nhận mã mới sau khi giao dịch được xác nhận trên blockchain." />
       {status.isError ? <Alert type="error" title="Không thể tải trạng thái yêu cầu" action={<Button onClick={() => void status.refetch()}>Thử lại</Button>} /> : null}
       {['DEAD_LETTER', 'ABANDONED', 'SUPERSEDED'].includes(status.data?.status ?? '') ? <Alert type="warning" title="Không thể hoàn tất tự động" description={<a href="/buyer/support">Liên hệ hỗ trợ; không gửi yêu cầu khôi phục khác.</a>} /> : null}
-      {status.data?.status === 'CONFIRMED' ? <><Button type="primary" disabled={(received) || (retrieve.isPending)} onClick={() => retrieve.mutate({ id: command.licenseId }, { onSuccess: (result) => { onKey(command.licenseId, result.activationKey); setReceived(true); } })}>Nhận mã khôi phục</Button><LoadingOverlay active={retrieve.isPending} label="Đang xử lý yêu cầu: Nhận mã khôi phục" /></> : null}
+      {status.data?.status === 'CONFIRMED' && providerManaged && !providerReady?<Alert type="info" title="Đang chờ nhà cung cấp tiếp nhận mã mới" description="Không gửi yêu cầu khôi phục khác. Trạng thái bàn giao sẽ được cập nhật tự động."/>:null}
+      {status.data?.status === 'CONFIRMED' ? <><Button type="primary" disabled={received || retrieve.isPending || (providerManaged && !providerReady)} onClick={() => retrieve.mutate({ id: command.licenseId }, { onSuccess: (result) => { onKey(command.licenseId, result.activationKey, result.keyVersion); setReceived(true); } })}>Nhận mã khôi phục</Button><LoadingOverlay active={retrieve.isPending} label="Đang xử lý yêu cầu: Nhận mã khôi phục" /></> : null}
       {retrieve.isError ? <Alert type="error" title="Không thể nhận mã mới. Mã có thể đã được nhận; vui lòng kiểm tra trước khi thử lại." /> : null}
       {received ? <Alert type="success" title="Mã mới đã hiển thị trong phần Mã bản quyền. Hãy sao chép và lưu an toàn." /> : null}
     </>}

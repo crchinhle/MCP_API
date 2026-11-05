@@ -18,6 +18,8 @@ export type AdminPlan = AdminPlanDto;
 
 function mapProduct(product: PublicCatalogProductDto): Product {
   return {
+    id: product.id,
+    providerDisplayName: product.providerDisplayName,
     imageUrl: product.imageUrl ?? null,
     slug: product.slug,
     name: product.name,
@@ -42,14 +44,14 @@ export function useProducts() {
   });
 }
 
-export function useProduct(slug: string) {
+export function useProduct(slug: string, productId?: string) {
   return useQuery({
-    queryKey: ['products', 'public', slug],
+    queryKey: ['products', 'public', productId ?? slug],
     queryFn: async () =>
       mapProduct(
-        await requestJson<PublicCatalogProductDto>(`/products/${encodeURIComponent(slug)}`),
+        await requestJson<PublicCatalogProductDto>(productId ? `/products/by-id/${encodeURIComponent(productId)}` : `/products/${encodeURIComponent(slug)}`),
       ),
-    enabled: Boolean(slug),
+    enabled: Boolean(productId ?? slug),
   });
 }
 

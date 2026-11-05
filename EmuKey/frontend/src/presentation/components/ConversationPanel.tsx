@@ -3,9 +3,11 @@ import { Alert, Button, Input } from 'antd';
 import { useRef, useState } from 'react';
 
 import type { ConversationMessage } from '../../domain/workspace';
+import type { CitationDetailDto } from '../../infrastructure/api/generated';
+import { KnowledgeCitations } from './KnowledgeCitations';
 
 interface ConversationPanelProps {
-  readonly initialMessages: readonly ConversationMessage[];
+  readonly initialMessages: readonly (ConversationMessage & {citationDetails?:CitationDetailDto[]})[];
   readonly inputLabel: string;
   readonly submitLabel: string;
   readonly author: ConversationMessage['author'];
@@ -13,6 +15,7 @@ interface ConversationPanelProps {
   readonly onSubmit?: (content: string, clientMessageId: string) => Promise<unknown>;
   readonly onAskAi?: (question: string, clientMessageId: string) => Promise<unknown>;
   readonly readOnly?: boolean;
+  readonly readOnlyReason?: string | undefined;
 }
 
 export function ConversationPanel({
@@ -23,6 +26,7 @@ export function ConversationPanel({
   onSubmit,
   onAskAi,
   readOnly = false,
+  readOnlyReason = 'Hội thoại đã hoàn tất. Không thể gửi thêm tin nhắn ở trạng thái này.',
 }: ConversationPanelProps) {
   const [draft, setDraft] = useState('');
   const [pending, setPending] = useState(false);
@@ -57,12 +61,13 @@ export function ConversationPanel({
           >
             <small>{message.author === 'Buyer' ? 'Người mua' : message.author === 'Support' ? 'Nhân viên hỗ trợ' : 'Trợ lý AI'}</small>
             <p>{message.body}</p>
+            {message.author==='AI'?<KnowledgeCitations citations={message.citationDetails??[]} />:null}
           </article>
         ))}
       </div>
       {error ? <Alert type="error" title={error} /> : null}
       {readOnly ? (
-        <p className="muted-copy">Hội thoại đã hoàn tất. Không thể gửi thêm tin nhắn ở trạng thái này.</p>
+        <p className="muted-copy">{readOnlyReason}</p>
       ) : <label className="message-composer">
         <span>{inputLabel}</span>
         <Input.TextArea

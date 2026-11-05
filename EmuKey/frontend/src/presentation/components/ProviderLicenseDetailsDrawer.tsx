@@ -1,4 +1,5 @@
 import { Alert, Button, Descriptions, Drawer } from 'antd';
+import { ProviderHandoffNotice } from './ProviderHandoffNotice';
 import type { LicenseProjectionDto } from '../../infrastructure/api/generated';
 import {
   providerFinalityLabel,
@@ -187,10 +188,11 @@ export function ProviderLicenseDetailsDrawer({
             />
           </section>
           <section className="provider-license-section">
-            <h3>Thiết bị đang kích hoạt</h3>
+            <h3>{license.fulfillmentMode==='PROVIDER_HANDOFF'?'Phạm vi do nhà cung cấp quản lý':'Thiết bị đang kích hoạt'}</h3>
+            <ProviderHandoffNotice license={license}/>
             <p>
               <strong>
-                {license.activeDeviceCount} / {license.maxActiveDevices} thiết
+                {license.fulfillmentMode==='PROVIDER_HANDOFF'?'Tối đa':`${license.activeDeviceCount} /`} {license.maxActiveDevices} thiết
                 bị
               </strong>
             </p>

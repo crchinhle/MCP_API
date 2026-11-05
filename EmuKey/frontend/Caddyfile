@@ -8,6 +8,17 @@
         Permissions-Policy "camera=(), microphone=(), geolocation=()"
     }
 
+    @knowledgeUpload {
+        path /api/v1/knowledge/documents
+        method POST
+    }
+    handle @knowledgeUpload {
+        request_body {
+            max_size 12MiB
+        }
+        reverse_proxy api:3000
+    }
+
     handle /api/* {
         request_body {
             max_size 1MB

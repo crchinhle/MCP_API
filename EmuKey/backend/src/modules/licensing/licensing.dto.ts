@@ -103,6 +103,12 @@ export class RotateActivationKeyDto {
   currentKey!: `0x${string}`;
 }
 
+export class UpdateDeviceMetadataDto {
+  @ApiPropertyOptional({ maxLength: 80 }) @IsOptional() @IsString() @MaxLength(80) displayName?: string;
+  @ApiPropertyOptional({ enum: ['ANDROID','IOS','WINDOWS','MACOS','LINUX','WEB','UNKNOWN'] })
+  @IsOptional() @IsIn(['ANDROID','IOS','WINDOWS','MACOS','LINUX','WEB','UNKNOWN']) platform?: string;
+}
+
 export class ResolveLicensingActionDto {
   @ApiProperty({ minLength: 20 })
   @IsString()

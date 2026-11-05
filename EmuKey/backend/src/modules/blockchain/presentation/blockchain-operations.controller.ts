@@ -10,6 +10,7 @@ import {
 import type { AuthPrincipal } from '../../identity-access/identity.types.js';
 import { BlockchainReconciliationService } from '../application/blockchain-reconciliation.service.js';
 import { BlockchainReconciliationDto, DeadLetterRecoveryDto } from './blockchain-reconciliation.dto.js';
+import { Phase6CommandDto } from '../../licensing/licensing.dto.js';
 
 @ApiTags('operations')
 @Controller('operations/blockchain')
@@ -30,12 +31,13 @@ export class BlockchainOperationsController {
 
   @Post('dead-letters/:commandId/recover')
   @HttpCode(HttpStatus.OK)
-  @ApiOkResponse()
-  recoverDeadLetter(
+  @ApiOkResponse({ type: Phase6CommandDto })
+  async recoverDeadLetter(
     @CurrentUser() actor: AuthPrincipal,
     @Param('commandId', ParseUUIDPipe) commandId: string,
     @Body() dto: DeadLetterRecoveryDto,
   ) {
-    return this.reconciliation.recoverDeadLetter(actor, commandId, dto);
+    const command = await this.reconciliation.recoverDeadLetter(actor, commandId, dto);
+    return { commandId: command.commandId, licenseId: command.licenseId, status: command.status, deviceId: null };
   }
 }

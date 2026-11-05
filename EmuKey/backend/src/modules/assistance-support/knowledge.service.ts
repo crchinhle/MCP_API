@@ -1,8 +1,10 @@
-import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException, PayloadTooLargeException, ServiceUnavailableException } from '@nestjs/common';
 import type { AuthPrincipal } from '../identity-access/identity.types.js';
 
 export class KnowledgeService {
   constructor(private readonly repository: {
+    capabilities():{maxFileBytes:number;allowedMimeTypes:string[]};
+    chunk(actor:AuthPrincipal,documentId:string,chunkId:string):Promise<unknown>;
      create(actor: AuthPrincipal, input: { chunks?: string[]; file?: { originalname: string; mimetype: string; size: number; buffer: Buffer }; logicalDocumentKey: string; productId: string; sourceType: string; title: string; version?: number }): Promise<unknown>;
     list(actor: AuthPrincipal): Promise<unknown[]>;
      publish(actor: AuthPrincipal, id: string, expectedCurrentVersion?: number): Promise<unknown>;
@@ -10,9 +12,28 @@ export class KnowledgeService {
     search(actor: AuthPrincipal, question: string): Promise<Array<{ content: string; id: string }>>;
   }) {}
 
-  create(actor: AuthPrincipal, input: Parameters<KnowledgeService['repository']['create']>[1]) {
+  capabilities(actor:AuthPrincipal) {this.requireProvider(actor);return this.repository.capabilities();}
+  async chunk(actor:AuthPrincipal,documentId:string,chunkId:string) {
+    this.requireReader(actor);
+    try {return await this.repository.chunk(actor,documentId,chunkId);} catch(error) {
+      if(error instanceof Error && error.message==='KNOWLEDGE_DOCUMENT_NOT_FOUND') throw new NotFoundException({code:error.message});
+      throw error;
+    }
+  }
+
+  async create(actor: AuthPrincipal, input: Parameters<KnowledgeService['repository']['create']>[1]) {
     this.requireProvider(actor);
-    return this.repository.create(actor, input);
+    try { return await this.repository.create(actor, input); }
+    catch (error) {
+      if (!(error instanceof Error)) throw error;
+      if (error.message === 'KNOWLEDGE_FILE_TOO_LARGE') throw new PayloadTooLargeException({ code: error.message, message: 'Tệp vượt quá giới hạn dung lượng của máy chủ.' });
+      if (error.message === 'KNOWLEDGE_FILE_NOT_ALLOWED') throw new BadRequestException({ code: error.message, message: 'Định dạng hoặc nội dung tệp không hợp lệ. Chọn PDF hoặc TXT được hỗ trợ.' });
+      if (error.message === 'KNOWLEDGE_CHUNK_LIMIT') throw new BadRequestException({ code: error.message, message: 'Nội dung vượt giới hạn xử lý. Chia tài liệu thành các phần nhỏ hơn.' });
+      if (error.message === 'KNOWLEDGE_PRODUCT_NOT_FOUND') throw new NotFoundException({ code: error.message });
+      if (error.message === 'KNOWLEDGE_VERSION_EXISTS') throw new ConflictException({ code: error.message });
+      if (error.message === 'KNOWLEDGE_STORAGE_UNAVAILABLE') throw new ServiceUnavailableException({ code: error.message });
+      throw error;
+    }
   }
   list(actor: AuthPrincipal) { this.requireReader(actor); return this.repository.list(actor); }
   async publish(actor: AuthPrincipal, id: string, expectedCurrentVersion?: number) {

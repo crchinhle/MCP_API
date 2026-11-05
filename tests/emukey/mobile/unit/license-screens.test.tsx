@@ -6,6 +6,8 @@ import {
   listDevices,
   remoteRevokeDevice,
   verifyPublicLicense,
+  retrieveActivationKey,
+  requestLicensingActionVerification,
 } from '../../../../EmuKey/mobile/src/infrastructure/api/client';
 
 jest.mock('../../../../EmuKey/mobile/src/infrastructure/api/client', () => ({
@@ -14,6 +16,8 @@ jest.mock('../../../../EmuKey/mobile/src/infrastructure/api/client', () => ({
   remoteRevokeDevice: jest.fn(),
   requestLicensingActionVerification: jest.fn().mockResolvedValue({ accepted: true }),
   verifyPublicLicense: jest.fn(),
+  retrieveActivationKey: jest.fn(),
+  loadActivationKey: jest.fn().mockResolvedValue(null),
 }));
 
 const listLicensesMock = listLicenses as jest.MockedFunction<typeof listLicenses>;
@@ -45,8 +49,52 @@ const activeLicense = {
 
 describe('mobile License screens', () => {
   beforeEach(() => jest.clearAllMocks());
+  it('waits for blockchain before describing provider delivery',async()=>{
+    listLicensesMock.mockResolvedValue([{...activeLicense,fulfillmentMode:'PROVIDER_HANDOFF',status:'PENDING_ONCHAIN',activationKeyTrustStatus:'PENDING_FINALITY',finality:'PENDING_FINALITY',providerDeliveryStatus:null,activationKeyAvailable:false}]);
+    await render(<LicensesScreen/>);
+    expect(await screen.findByText('Đang xác nhận blockchain')).toBeOnTheScreen();
+    expect(screen.queryByText('Đang bàn giao bản quyền cho nhà cung cấp')).toBeNull();
+    expect(screen.queryByText('Nhận mã bản quyền')).toBeNull();
+  });
+  it('does not describe a delivered snapshot as usable while chain evidence is being checked',async()=>{
+    listLicensesMock.mockResolvedValue([{...activeLicense,fulfillmentMode:'PROVIDER_HANDOFF',activationKeyTrustStatus:'UNTRUSTED_REORG',finality:'REORGED',providerDeliveryStatus:'DELIVERED',activationKeyAvailable:true}]);
+    await render(<LicensesScreen/>);
+    expect(await screen.findByText('Đang xác minh lại blockchain')).toBeOnTheScreen();
+    expect(screen.queryByText('Nhà cung cấp đã nhận bản quyền')).toBeNull();
+    expect(screen.queryByText('Nhận mã bản quyền')).toBeNull();
+  });
+  it.each(['PENDING', 'RETRY_WAIT', 'FAILED'] as const)('keeps provider-managed %s licenses out of device and key actions', async (providerDeliveryStatus) => {
+    listLicensesMock.mockResolvedValue([{ ...activeLicense, fulfillmentMode: 'PROVIDER_HANDOFF', providerDeliveryStatus, activationKeyAvailable: false }]);
+    await render(<LicensesScreen />);
+    expect(await screen.findByText('EMU-LICENSE-1')).toBeOnTheScreen();
+    expect(screen.queryByText('Xem thiết bị')).toBeNull();
+    expect(screen.queryByText('Nhận mã bản quyền')).toBeNull();
+    expect(screen.queryByText('Xem mã đã lưu')).toBeNull();
+    expect(listDevicesMock).not.toHaveBeenCalled();
+    expect(retrieveActivationKey).not.toHaveBeenCalled();
+    expect(screen.getByText(providerDeliveryStatus === 'FAILED' ? 'Bàn giao bản quyền cần xử lý. Không thanh toán lại.' : 'Đang bàn giao cho nhà cung cấp')).toBeOnTheScreen();
+  });
 
-  it('manages licenses and devices without exposing an activation-key retrieval or self-activation CTA', async () => {
+  it('receives an acknowledged provider key without opening EmuKey device management', async () => {
+    listLicensesMock.mockResolvedValue([{ ...activeLicense, fulfillmentMode: 'PROVIDER_HANDOFF', providerDeliveryStatus: 'DELIVERED', activationKeyAvailable: true }]);
+    jest.mocked(retrieveActivationKey).mockResolvedValue({ activationKey: 'provider-ready-key', keyVersion: 1, deliveryId: 'delivery', retryUntil: '2026-11-01T00:05:00Z' });
+    await render(<LicensesScreen />);
+    expect(await screen.findByText('Nhà cung cấp đã nhận bản quyền')).toBeOnTheScreen();
+    await act(async () => fireEvent.press(screen.getByText('Nhận mã bản quyền')));
+    expect(await screen.findByDisplayValue('provider-ready-key')).toBeOnTheScreen();
+    expect(listDevicesMock).not.toHaveBeenCalled();
+  });
+
+  it('lets the owner receive an available key immediately after mobile purchase', async () => {
+    listLicensesMock.mockResolvedValue([{ ...activeLicense, activationKeyAvailable: true }]);
+    jest.mocked(retrieveActivationKey).mockResolvedValue({ activationKey: 'received-secret', keyVersion: 1, deliveryId: 'delivery', retryUntil: '2026-11-01T00:05:00Z' });
+    await render(<LicensesScreen />);
+    await act(async () => fireEvent.press(await screen.findByText('Nhận mã bản quyền')));
+    expect(retrieveActivationKey).toHaveBeenCalledWith('license-1', 1);
+    expect(await screen.findByDisplayValue('received-secret')).toBeOnTheScreen();
+  });
+
+  it('continues a device action through its bound email link without copying tokens into mobile', async () => {
     listLicensesMock.mockResolvedValue([activeLicense]);
     listDevicesMock.mockResolvedValue([
       {
@@ -66,23 +114,11 @@ describe('mobile License screens', () => {
     await act(async () => fireEvent.press(await screen.findByText('Xem thiết bị')));
     expect(listDevicesMock).toHaveBeenCalledWith('license-1');
     expect(await screen.findByText(/playwright-device · Đang hoạt động/)).toBeOnTheScreen();
-    await act(async () => fireEvent.changeText(screen.getByLabelText('Mật khẩu hiện tại'), 'CurrentPassword1!'));
-    await act(async () => fireEvent.changeText(screen.getByLabelText('Action token'), 'remote-action-token'));
-    remoteRevokeDeviceMock.mockResolvedValue({
-      ...listDevicesMock.mock.results[0]?.value,
-      activatedAt: '2026-09-10T00:01:00.000Z',
-      bindingGeneration: 1,
-      deviceRef: 'playwright-device',
-      id: 'device-1',
-      licenseId: 'license-1',
-      revokedAt: '2026-09-10T00:02:00.000Z',
-      status: 'REVOKED',
-    } as Awaited<ReturnType<typeof remoteRevokeDevice>>);
-    await act(async () => fireEvent.press(screen.getByText('Thu hồi thiết bị')));
-    await waitFor(() => expect(remoteRevokeDeviceMock).toHaveBeenCalledWith('license-1', 'device-1', {
-      actionToken: 'remote-action-token',
-      currentPassword: 'CurrentPassword1!',
-    }));
+    jest.mocked(requestLicensingActionVerification).mockResolvedValue({ accepted: true });
+    await act(async () => fireEvent.press(screen.getByText('Gửi email xác nhận thu hồi')));
+    await waitFor(() => expect(requestLicensingActionVerification).toHaveBeenCalledWith('license-1', 'REMOTE_REVOKE_DEVICE', 'device-1'));
+    expect(screen.queryByLabelText('Action token')).toBeNull();
+    expect(remoteRevokeDeviceMock).not.toHaveBeenCalled();
   });
 
   it('verifies a public license without authentication data', async () => {

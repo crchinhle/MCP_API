@@ -1,5 +1,169 @@
 import { expect, test } from '@playwright/test';
 
+test('keeps the AI conversation and source snapshot across reload and human escalation', async ({ page }) => {
+  const id = '00000000-0000-4000-8000-000000000707';
+  let created = 0;
+  let asked = 0;
+  let sourceAvailable = true;
+  let status = 'AI_ACTIVE';
+  const history: Record<string, unknown>[] = [];
+  const citation = { chunkId: 'original-chunk', documentId: 'original-document', documentTitle: 'Hướng dẫn thiết bị', documentVersion: 1, excerpt: 'Đoạn trích của phiên bản gốc.' };
+  const conversation = () => ({ id, status, customerUserId: 'ai-buyer', assignedSupportUserId: null, contextType: 'GENERAL', contextId: null, title: 'Hỏi trợ lý AI' });
+  await page.route('**/api/v1/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const method = route.request().method();
+    if (path.endsWith('/auth/refresh')) return route.fulfill({ json: { accessToken: 'buyer-fixture', user: { id: 'ai-buyer', role: 'CUSTOMER', status: 'ACTIVE', displayName: 'AI buyer', email: 'buyer@example.test' } } });
+    if (path.endsWith('/notifications')) return route.fulfill({ json: { items: [], unreadCount: 0, nextCursor: null } });
+    if (path.endsWith('/conversations') && method === 'POST') { created += 1; return route.fulfill({ status: 201, json: conversation() }); }
+    if (path.endsWith('/conversations')) return route.fulfill({ json: created ? [conversation()] : [] });
+    if (path.endsWith('/ai-ask')) {
+      asked += 1;
+      if (status !== 'AI_ACTIVE') return route.fulfill({ status: 409, json: { error: { code: 'CONVERSATION_AI_NOT_ACTIVE' } } });
+      const input = route.request().postDataJSON();
+      history.push({ id: 'question', conversationId: id, clientMessageId: input.clientMessageId, serverSequence: 1, senderType: 'CUSTOMER', content: input.question },
+        { id: 'answer', conversationId: id, clientMessageId: 'answer-id', serverSequence: 2, senderType: 'AI', content: 'Câu trả lời dựa trên tài liệu gốc.', citationDetails: [citation] });
+      return route.fulfill({ json: { answer: 'Câu trả lời dựa trên tài liệu gốc.', citations: [citation.chunkId], citationDetails: [citation], confidence: 0.9 } });
+    }
+    if (path.endsWith('/messages')) return route.fulfill({ json: history });
+    if (path.endsWith('/request-support')) { status = 'WAITING_SUPPORT'; return route.fulfill({ json: conversation() }); }
+    if (path.endsWith('/knowledge/documents/original-document/chunks/original-chunk')) return route.fulfill(sourceAvailable
+      ? { json: { id: citation.chunkId, content: 'Toàn văn nguồn của phiên bản gốc.' } }
+      : { status: 404, json: { error: { code: 'KNOWLEDGE_DOCUMENT_NOT_FOUND' } } });
+    return route.fulfill({ json: [] });
+  });
+  await page.goto('/buyer/support');
+  await page.getByRole('button', { name: 'Mở chat chăm sóc khách hàng' }).click();
+  await page.getByLabel('Câu hỏi cho trợ lý AI').fill('Quản lý thiết bị thế nào?');
+  await page.getByRole('button', { name: 'Hỏi', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Câu trả lời dựa trên tài liệu gốc.' })).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: 'Mở chat chăm sóc khách hàng' }).click();
+  await page.getByRole('link', { name: 'Mở hội thoại hỗ trợ' }).click();
+  await expect(page).toHaveURL(new RegExp(`conversationId=${id}`));
+  await page.getByRole('heading', { name: 'Hội thoại hỗ trợ', exact: true }).click();
+  const answer = page.locator('.message--ai');
+  await expect(answer).toContainText('Câu trả lời dựa trên tài liệu gốc.');
+  await answer.getByRole('button', { name: 'Hướng dẫn thiết bị · phiên bản 1' }).click();
+  const source = page.getByRole('dialog');
+  await expect(source).toContainText('Toàn văn nguồn của phiên bản gốc.');
+  await source.getByRole('button', { name: 'Đóng', exact: true }).click();
+  sourceAvailable = false;
+  await answer.getByRole('button', { name: 'Hướng dẫn thiết bị · phiên bản 1' }).click();
+  await expect(answer.getByText('Không thể mở nguồn. Tài liệu có thể đã được thay thế hoặc quyền đọc đã thay đổi.')).toBeVisible();
+  await expect(answer).toContainText(citation.excerpt);
+  await page.getByRole('button', { name: 'Chuyển cho nhân viên' }).click();
+  await expect(page.getByText('Chờ nhân viên hỗ trợ', { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Hỏi AI có nguồn' })).toHaveCount(0);
+  await page.reload();
+  await expect(answer).toContainText(citation.excerpt);
+  await page.getByRole('button', { name: 'Mở chat chăm sóc khách hàng' }).click();
+  await page.getByLabel('Câu hỏi cho trợ lý AI').fill('Câu hỏi sau khi chuyển hỗ trợ');
+  await page.getByRole('button', { name: 'Hỏi', exact: true }).click();
+  await expect(page.getByText('Hội thoại này đã kết thúc hoặc chuyển sang nhân viên. Mở hội thoại hỗ trợ để tiếp tục.')).toBeVisible();
+  expect(created).toBe(1);
+  expect(asked).toBe(2);
+});
+
+test('staff preserves a failed reply and resumes with the current claim generation', async ({ page }) => {
+  const id = '00000000-0000-4000-8000-000000000703';
+  let status = 'SUPPORT_ACTIVE';
+  let claimVersion = 1;
+  const sent: Array<{ content: string; clientMessageId: string; claimVersion: number }> = [];
+  const messages: Array<Record<string, unknown>> = [];
+  const conversation = () => ({ id, status, claimVersion, assignedSupportUserId: status === 'SUPPORT_ACTIVE' ? 'support-test' : null,
+    claimExpiresAt: '2030-01-01T00:00:00.000Z', customerUserId: 'customer', contextType: 'GENERAL', contextId: null, title: 'Support lease browser regression' });
+  await page.route('**/api/v1/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const method = route.request().method();
+    if (path.endsWith('/auth/refresh')) return route.fulfill({ json: { accessToken: 'support-fixture', user: { id: 'support-test', email: 'support@example.test', displayName: 'Support', role: 'SUPPORT_STAFF', status: 'ACTIVE' } } });
+    if (path.endsWith('/notifications')) return route.fulfill({ json: { items: [], unreadCount: 0, nextCursor: null } });
+    if (path.endsWith('/conversations/queue')) return route.fulfill({ json: [conversation()] });
+    if (path.endsWith('/heartbeat')) return route.fulfill({ json: conversation() });
+    if (path.endsWith('/claim')) { status = 'SUPPORT_ACTIVE'; claimVersion += 1; return route.fulfill({ json: conversation() }); }
+    if (path.endsWith('/messages') && method === 'POST') {
+      sent.push(route.request().postDataJSON());
+      if (sent.length === 1) { status = 'WAITING_SUPPORT'; return route.fulfill({ status: 409, json: { error: { code: 'CONVERSATION_CLAIM_EXPIRED', message: 'Claim expired' } } }); }
+      const message = { id: 'browser-reply', conversationId: id, ...sent.at(-1), senderType: 'SUPPORT', serverSequence: 1, createdAt: '2026-11-02T00:00:00.000Z' };
+      messages.push(message);
+      return route.fulfill({ json: message });
+    }
+    if (path.endsWith('/messages') || path.endsWith('/messages/queue-preview')) return route.fulfill({ json: messages });
+    return route.fulfill({ json: [] });
+  });
+  await page.goto(`/support?conversationId=${id}`);
+  await page.getByLabel('Phản hồi hỗ trợ').fill('Nội dung cần giữ khi phiên hết hạn');
+  await page.getByRole('button', { name: 'Gửi phản hồi', exact: true }).click();
+  await expect(page.getByText('Nhận xử lý hội thoại để gửi phản hồi.', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Nhận xử lý', exact: true }).click();
+  await expect(page.getByLabel('Phản hồi hỗ trợ')).toHaveValue('Nội dung cần giữ khi phiên hết hạn');
+  await page.getByRole('button', { name: 'Gửi phản hồi', exact: true }).click();
+  await expect(page.getByLabel('Phản hồi hỗ trợ')).toHaveValue('');
+  expect(sent.map((input) => input.claimVersion)).toEqual([1, 2]);
+  expect(sent[0].clientMessageId).toBe(sent[1].clientMessageId);
+});
+
+test('two support tabs preserve a draft and fence actions until the current claim is verified', async ({ page, context }) => {
+  const sibling = await context.newPage();
+  const id = '00000000-0000-4000-8000-000000000705';
+  const draft = 'Bản nháp ở tab thứ hai';
+  let status = 'SUPPORT_ACTIVE';
+  let claimVersion = 1;
+  let heldHeartbeats = 0;
+  let releaseHeartbeat!: () => void;
+  const verification = new Promise<void>((resolve) => { releaseHeartbeat = resolve; });
+  const sent: Array<{ content: string; clientMessageId: string; claimVersion: number }> = [];
+  const messages: Array<Record<string, unknown>> = [];
+  const conversation = () => ({ id, status, claimVersion, assignedSupportUserId: status === 'SUPPORT_ACTIVE' ? 'support-test' : null,
+    claimExpiresAt: '2030-01-01T00:00:00.000Z', customerUserId: 'customer', contextType: 'GENERAL', contextId: null, title: 'Two support tabs' });
+  await context.route('**/api/v1/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const method = route.request().method();
+    if (path.endsWith('/auth/refresh')) return route.fulfill({ json: { accessToken: 'support-fixture', user: { id: 'support-test', email: 'support@example.test', displayName: 'Support', role: 'SUPPORT_STAFF', status: 'ACTIVE' } } });
+    if (path.endsWith('/notifications')) return route.fulfill({ json: { items: [], unreadCount: 0, nextCursor: null } });
+    if (path.endsWith('/conversations/queue')) return route.fulfill({ json: [conversation()] });
+    if (path.endsWith('/heartbeat')) {
+      if (route.request().postDataJSON().claimVersion !== claimVersion) return route.fulfill({ status: 409, json: { error: { code: 'CONVERSATION_CLAIM_EXPIRED' } } });
+      if (route.request().frame().page() === sibling && claimVersion === 2) { heldHeartbeats += 1; await verification; }
+      return route.fulfill({ json: conversation() });
+    }
+    if (path.endsWith('/release')) { status = 'WAITING_SUPPORT'; return route.fulfill({ json: conversation() }); }
+    if (path.endsWith('/claim')) { status = 'SUPPORT_ACTIVE'; claimVersion += 1; return route.fulfill({ json: conversation() }); }
+    if (path.endsWith('/messages') && method === 'POST') {
+      const input = route.request().postDataJSON();
+      sent.push(input);
+      if (input.claimVersion !== claimVersion) return route.fulfill({ status: 409, json: { error: { code: 'CONVERSATION_CLAIM_EXPIRED' } } });
+      const message = { id: 'two-tab-reply', conversationId: id, ...input, senderType: 'SUPPORT', serverSequence: 1, createdAt: '2026-11-02T00:00:00.000Z' };
+      messages.push(message);
+      return route.fulfill({ json: message });
+    }
+    if (path.endsWith('/messages') || path.endsWith('/messages/queue-preview')) return route.fulfill({ json: messages });
+    return route.fulfill({ json: [] });
+  });
+  try {
+    await page.goto(`/support?conversationId=${id}`);
+    await expect(page.getByLabel('Phản hồi hỗ trợ')).toBeVisible();
+    await sibling.goto(`/support?conversationId=${id}`);
+    await sibling.getByLabel('Phản hồi hỗ trợ').fill(draft);
+    await page.getByRole('button', { name: 'Trả về hàng đợi', exact: true }).click();
+    await page.getByRole('button', { name: 'Nhận xử lý', exact: true }).click();
+    await expect(page.getByLabel('Phản hồi hỗ trợ')).toBeVisible();
+    await sibling.getByRole('button', { name: 'Làm mới', exact: true }).click();
+    await expect.poll(() => heldHeartbeats).toBeGreaterThan(0);
+    await expect(sibling.getByLabel('Phản hồi hỗ trợ')).toHaveCount(0);
+    await expect(sibling.getByRole('button', { name: 'Trả về hàng đợi', exact: true })).toBeDisabled();
+    await expect(sibling.getByRole('button', { name: 'Hoàn tất', exact: true })).toBeDisabled();
+    expect(sent).toHaveLength(0);
+    releaseHeartbeat();
+    await expect(sibling.getByLabel('Phản hồi hỗ trợ')).toHaveValue(draft);
+    await sibling.getByRole('button', { name: 'Gửi phản hồi', exact: true }).click();
+    await expect(sibling.getByLabel('Phản hồi hỗ trợ')).toHaveValue('');
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ content: draft, claimVersion: 2 });
+    await expect(page.getByText(draft, { exact: true })).toBeVisible();
+    expect(messages).toHaveLength(1);
+  } finally { releaseHeartbeat(); await sibling.close(); }
+});
+
 test('license command Retry stays reachable after lifecycle confirmation closes', async ({ page }) => {
   let failCommand = true;
   await page.route('**/api/v1/**', async (route) => {

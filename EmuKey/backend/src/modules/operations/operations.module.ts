@@ -17,24 +17,19 @@ import { BrevoEmailDelivery } from './infrastructure/brevo-email-delivery.js';
 import { Pool } from 'pg';
 import { NotificationController } from './presentation/notification.controller.js';
 import { NotificationRepository } from './infrastructure/notification.repository.js';
+import { NotificationWriter } from './application/notification-writer.js';
 import { NotificationService } from './application/notification.service.js';
 import { IdentityModule } from '../identity-access/identity.module.js';
-import { NotificationProcessor } from './worker/notification.processor.js';
-import { NotificationScheduler } from './worker/notification.scheduler.js';
-import { BullModule } from '@nestjs/bullmq';
 import { OperationsHealthController } from './presentation/operations-health.controller.js';
 
-const notificationQueueImports = process.env.NODE_ENV === 'test'
-  ? []
-  : [BullModule.registerQueue({ name: 'notification-delivery' })];
 
 @Module({
-  imports: [forwardRef(() => IdentityModule), ...notificationQueueImports],
+  imports: [forwardRef(() => IdentityModule)],
   controllers: [NotificationController, OperationsHealthController],
   providers: [
     { provide: NotificationRepository, inject: [Pool], useFactory: (pool: Pool) => new NotificationRepository(pool) },
+    { provide: NotificationWriter, useExisting: NotificationRepository },
     { provide: NotificationService, inject: [NotificationRepository], useFactory: (repository: NotificationRepository) => new NotificationService(repository) },
-    ...(process.env.NODE_ENV === 'test' ? [] : [NotificationProcessor, NotificationScheduler]),
     {
       provide: EMAIL_DELIVERY,
       inject: [ConfigService],
@@ -79,6 +74,6 @@ const notificationQueueImports = process.env.NODE_ENV === 'test'
       },
     },
   ],
-  exports: [EMAIL_DELIVERY, PUSH_DELIVERY, NotificationService, NotificationRepository],
+  exports: [EMAIL_DELIVERY, PUSH_DELIVERY, NotificationService, NotificationRepository, NotificationWriter],
 })
 export class OperationsModule {}

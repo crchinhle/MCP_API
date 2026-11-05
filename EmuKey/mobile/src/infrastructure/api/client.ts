@@ -3,6 +3,9 @@ import * as SecureStore from 'expo-secure-store';
 import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex } from '@noble/hashes/utils';
 import type {
+  AiAnswerDto,
+  KnowledgeChunkDto,
+  CitationDetailDto,
   ActivationChallengeDto,
   ActivationKeyDto,
   DeviceChallengeDto,
@@ -31,10 +34,8 @@ let pushRegistrationWork: Promise<void> = Promise.resolve();
 const SESSION_KEY = 'emukey_mobile_session_v1';
 const ACTIVATION_KEY_PREFIX = 'emukey_activation_key_v1_';
 const IDEMPOTENCY_PREFIX = 'emukey_order_intent_v1_';
-const API_URL =
-  (globalThis as typeof globalThis & {
-    process?: { env?: { EXPO_PUBLIC_API_URL?: string } };
-  }).process?.env?.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
+// Expo only embeds statically referenced process.env.EXPO_PUBLIC_* values.
+const API_URL = (process.env.EXPO_PUBLIC_API_URL as string | undefined) ?? 'http://localhost:3000/api/v1';
 const REQUEST_TIMEOUT_MS = 8_000;
 
 export type MobileOrderSummary = OrderDto;
@@ -47,6 +48,8 @@ export type MobileRenewalPreview = RenewalPreviewDto;
 export type MobileLicense = LicenseProjectionDto;
 export type MobileLicenseVerification = PublicLicenseVerificationDto;
 export type MobileDevice = {
+  displayName?: string | null;
+  platform?: string;
   id: string;
   deviceRef: string;
   status: 'ACTIVE' | 'REVOKED';
@@ -66,6 +69,7 @@ export interface MobileUser {
 }
 export interface MobileSession {
   accessToken: string;
+  refreshToken?: string;
   user: MobileUser;
 }
 
@@ -80,6 +84,7 @@ export interface MobileConversation {
 }
 
 export interface MobileConversationMessage {
+  citationDetails?:CitationDetailDto[];
   id: string;
   conversationId: string;
   clientMessageId: string;
@@ -101,11 +106,52 @@ export interface MobileNotification {
 }
 
 export interface MobileNotificationPage {
+  unreadCount: number;
   items: MobileNotification[];
   nextCursor: string | null;
 }
 
+export async function getNotification(id:string):Promise<MobileNotification> {
+  return json(await request(`/notifications/${encodeURIComponent(id)}`));
+}
+
+export async function getKnowledgeChunk(documentId: string, chunkId: string): Promise<KnowledgeChunkDto> {
+  return json(await request(`/knowledge/documents/${encodeURIComponent(documentId)}/chunks/${encodeURIComponent(chunkId)}`));
+}
+
 let activeSession: MobileSession | null = null;
+const sessionListeners = new Set<(session: MobileSession | null) => void>();
+let refreshWork: Promise<void> | null = null;
+let sessionGeneration = 0;
+let accountGeneration = 0;
+let storageWork: Promise<void> = Promise.resolve();
+
+function serializeStorage(work: () => Promise<void>): Promise<void> {
+  storageWork = storageWork.catch(() => undefined).then(work);
+  return storageWork;
+}
+
+function privateIndex(userId: string): string { return `emukey_private_index_${userId}`; }
+async function savePrivateValue(userId: string, key: string, value: string): Promise<void> {
+  await serializeStorage(async () => {
+    if ((activeSession?.user.id ?? 'anonymous') !== userId) throw new MobileApiError(401);
+    const index = JSON.parse(await SecureStore.getItemAsync(privateIndex(userId)) ?? '[]') as string[];
+    // Register before storing: interruption can leave an empty entry, never an unindexed secret.
+    if (!index.includes(key)) await SecureStore.setItemAsync(privateIndex(userId), JSON.stringify([...index, key]));
+    await SecureStore.setItemAsync(key, value, { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY });
+  });
+}
+async function clearPrivateValues(userId: string): Promise<void> {
+  await serializeStorage(async () => {
+    const index = JSON.parse(await SecureStore.getItemAsync(privateIndex(userId)) ?? '[]') as string[];
+    for (const key of index) await SecureStore.deleteItemAsync(key);
+    await SecureStore.deleteItemAsync(privateIndex(userId));
+  });
+}
+export function subscribeSession(listener: (session: MobileSession | null) => void): () => void {
+  sessionListeners.add(listener);
+  return () => { sessionListeners.delete(listener); };
+}
 
 export class MobileApiError extends Error {
   constructor(readonly status: number, message = 'Yêu cầu API thất bại.') {
@@ -129,11 +175,24 @@ export async function restoreSession(): Promise<MobileSession | null> {
 
 async function saveSession(session: MobileSession | null): Promise<void> {
   activeSession = session;
-  if (session) await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(session));
-  else await SecureStore.deleteItemAsync(SESSION_KEY);
+  sessionGeneration += 1;
+  for (const listener of sessionListeners) listener(session);
+  await serializeStorage(async () => {
+    if (session) await SecureStore.setItemAsync(SESSION_KEY, JSON.stringify(session));
+    else await SecureStore.deleteItemAsync(SESSION_KEY);
+  });
 }
 
-async function request(path: string, init: RequestInit = {}, authenticated = true): Promise<Response> {
+async function invalidateSession(session: MobileSession): Promise<void> {
+  if (activeSession !== session) return;
+  accountGeneration += 1;
+  try { await saveSession(null); }
+  finally { await clearPrivateValues(session.user.id); }
+}
+
+async function request(path: string, init: RequestInit = {}, authenticated = true, retried = false): Promise<Response> {
+  const sessionAtStart = activeSession;
+  const accountAtStart = accountGeneration;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   const headers = new Headers(init.headers);
@@ -147,7 +206,38 @@ async function request(path: string, init: RequestInit = {}, authenticated = tru
       headers,
       signal: init.signal ?? controller.signal,
     });
-    if (authenticated && response.status === 401) await saveSession(null);
+    if (authenticated && accountAtStart !== accountGeneration) throw new MobileApiError(401);
+    if (authenticated && response.status === 401 && !retried && sessionAtStart) {
+      if (accountAtStart !== accountGeneration || activeSession?.user.id !== sessionAtStart.user.id) throw new MobileApiError(401);
+      const replay = () => {
+        if (accountAtStart !== accountGeneration || activeSession?.user.id !== sessionAtStart.user.id) throw new MobileApiError(401);
+        if (!['GET', 'HEAD'].includes((init.method ?? 'GET').toUpperCase()) && !headers.has('Idempotency-Key')) {
+          throw new MobileApiError(409, 'Phiên đã được làm mới. Vui lòng thực hiện lại thao tác.');
+        }
+        return request(path, init, authenticated, true);
+      };
+      if (activeSession !== sessionAtStart) return replay();
+      if (!sessionAtStart.refreshToken) { await invalidateSession(sessionAtStart); return response; }
+      refreshWork ??= (async () => {
+        const generation = sessionGeneration;
+        const refreshed = await request('/auth/mobile/refresh', {
+          method: 'POST', body: JSON.stringify({ refreshToken: sessionAtStart.refreshToken }),
+        }, false);
+        if (refreshed.status === 401 || refreshed.status === 403) {
+          if (generation === sessionGeneration) await invalidateSession(sessionAtStart);
+          throw new MobileApiError(401);
+        }
+        const next = await json<MobileSession>(refreshed);
+        if (generation !== sessionGeneration) throw new MobileApiError(401);
+        if (!next.refreshToken || next.user.id !== sessionAtStart.user.id || next.user.role !== 'CUSTOMER') {
+          await invalidateSession(sessionAtStart); throw new MobileApiError(401);
+        }
+        await saveSession(next);
+      })().finally(() => { refreshWork = null; });
+      await refreshWork;
+      return replay();
+    }
+    if (authenticated && response.status === 401 && retried && activeSession && activeSession.user.id === sessionAtStart?.user.id) await invalidateSession(activeSession);
     return response;
   } finally {
     clearTimeout(timeout);
@@ -176,9 +266,11 @@ export async function forgotPassword(email: string): Promise<void> {
 }
 
 export async function login(email: string, password: string): Promise<MobileSession> {
+  const generation = ++accountGeneration;
+  sessionGeneration += 1;
   const session = await json<MobileSession>(
     await request(
-      '/auth/login',
+      '/auth/mobile/login',
       { method: 'POST', body: JSON.stringify({ email: email.trim(), password }) },
       false,
     ),
@@ -186,20 +278,29 @@ export async function login(email: string, password: string): Promise<MobileSess
   if (session.user.role !== 'CUSTOMER') {
     throw new MobileApiError(403, 'Ứng dụng này dành cho tài khoản người mua.');
   }
+  if (generation !== accountGeneration) throw new MobileApiError(401);
+  if (activeSession && activeSession.user.id !== session.user.id) await clearPrivateValues(activeSession.user.id);
+  if (generation !== accountGeneration) throw new MobileApiError(401);
   await saveSession(session);
   return session;
 }
 
 export async function logout(): Promise<void> {
+  const userId = activeSession?.user.id;
+  accountGeneration += 1;
+  sessionGeneration += 1;
   pushRegistrationGeneration += 1;
   await pushRegistrationWork.catch(() => undefined);
   try {
     const token = await SecureStore.getItemAsync(PUSH_TOKEN_KEY);
     try { if (token) await removePushToken(token); }
-    finally { await request('/auth/logout', { method: 'POST' }); }
+    finally { if (activeSession?.refreshToken) await request('/auth/mobile/logout', { method: 'POST', body: JSON.stringify({ refreshToken: activeSession.refreshToken }) }, false); }
   } finally {
-    await SecureStore.deleteItemAsync(PUSH_TOKEN_KEY);
-    await saveSession(null);
+    try { if (userId) await clearPrivateValues(userId); }
+    finally {
+      try { await SecureStore.deleteItemAsync(PUSH_TOKEN_KEY); }
+      finally { await saveSession(null); }
+    }
   }
 }
 
@@ -300,27 +401,86 @@ export async function createCheckout(id: string): Promise<MobileCheckoutSession>
 export async function listLicenses(): Promise<MobileLicense[]> {
   return json(await request('/licenses'));
 }
+export async function getLicense(id:string):Promise<MobileLicense> {return json(await request(`/licenses/${encodeURIComponent(id)}`));}
 
-export async function retrieveActivationKey(id: string): Promise<ActivationKeyDto> {
-  return json(
+export async function retrieveActivationKey(id: string, keyVersion?: number): Promise<ActivationKeyDto> {
+  const userId = activeSession?.user.id ?? 'anonymous';
+  const intentKey = `emukey_key_delivery_${userId}_${id}_${keyVersion ?? 'current'}`;
+  const deliveryId = await SecureStore.getItemAsync(intentKey) ?? Crypto.randomUUID();
+  await savePrivateValue(userId, intentKey, deliveryId);
+  const result = await json<ActivationKeyDto>(
     await request(`/licenses/${encodeURIComponent(id)}/activation-key/retrieve`, {
-      method: 'POST',
+      method: 'POST', headers: { 'Idempotency-Key': deliveryId }, body: JSON.stringify({ deliveryId }),
     }),
   );
+  if ((activeSession?.user.id ?? 'anonymous') !== userId || (keyVersion !== undefined && result.keyVersion !== keyVersion)) throw new MobileApiError(409);
+  const receipt: SavedActivationKey = { ...result, acknowledged: false };
+  await savePrivateValue(userId, activationStorageKey(userId, id), JSON.stringify(receipt));
+  await acknowledgeSavedKey(userId, id, receipt);
+  return result;
+}
+
+interface SavedActivationKey { activationKey: string; keyVersion?: number; deliveryId?: string; acknowledged: boolean }
+function activationStorageKey(userId: string, licenseId: string): string { return `${ACTIVATION_KEY_PREFIX}${userId}_${licenseId}`; }
+
+async function acknowledgeSavedKey(userId: string, licenseId: string, receipt: SavedActivationKey): Promise<void> {
+  if (!receipt.deliveryId || !receipt.keyVersion || receipt.acknowledged) return;
+  if ((activeSession?.user.id ?? 'anonymous') !== userId) throw new MobileApiError(401);
+  await json(await request(`/licenses/${encodeURIComponent(licenseId)}/activation-key/ack`, {
+    method: 'POST', headers: { 'Idempotency-Key': receipt.deliveryId },
+    body: JSON.stringify({ deliveryId: receipt.deliveryId, keyVersion: receipt.keyVersion }),
+  }));
+  await savePrivateValue(userId, activationStorageKey(userId, licenseId), JSON.stringify({ ...receipt, acknowledged: true }));
 }
 
 export async function storeActivationKey(licenseId: string, key: string): Promise<void> {
-  await SecureStore.setItemAsync(`${ACTIVATION_KEY_PREFIX}${licenseId}`, key, {
-    keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
-  });
+  const userId = activeSession?.user.id ?? 'anonymous';
+  await savePrivateValue(userId, activationStorageKey(userId, licenseId), JSON.stringify({ activationKey: key, acknowledged: true } satisfies SavedActivationKey));
 }
 
-export async function loadActivationKey(licenseId: string): Promise<string | null> {
-  return SecureStore.getItemAsync(`${ACTIVATION_KEY_PREFIX}${licenseId}`);
+export async function loadActivationKey(licenseId: string, keyVersion?: number): Promise<string | null> {
+  const userId = activeSession?.user.id ?? 'anonymous';
+  const storageKey = activationStorageKey(userId, licenseId);
+  const raw = await SecureStore.getItemAsync(storageKey);
+  if (!raw) return null;
+  let receipt: SavedActivationKey;
+  try { receipt = JSON.parse(raw) as SavedActivationKey; }
+  catch { await SecureStore.deleteItemAsync(storageKey); return null; }
+  if (keyVersion !== undefined && receipt.keyVersion !== keyVersion) {
+    await SecureStore.deleteItemAsync(storageKey); return null;
+  }
+  await acknowledgeSavedKey(userId, licenseId, receipt);
+  if ((activeSession?.user.id ?? 'anonymous') !== userId) throw new MobileApiError(401);
+  return receipt.activationKey;
 }
 
 export async function requestLicensingActionVerification(licenseId: string, action: 'ROTATE_KEY' | 'REVOKE_DEVICE' | 'REMOTE_REVOKE_DEVICE' | 'KEY_RECOVERY', deviceId?: string): Promise<{ accepted: boolean }> {
+  const userId = activeSession?.user.id ?? 'anonymous';
+  const license = await getLicense(licenseId);
+  await savePrivateValue(userId, `emukey_pending_license_action_${userId}`, JSON.stringify({ licenseId, action, deviceId, keyVersion: license.keyVersion, createdAt: Date.now() }));
   return json(await request('/licenses/action-verification', { method: 'POST', body: JSON.stringify({ action, ...(deviceId ? { deviceId } : {}), licenseId }) }));
+}
+
+export async function pendingLicensingAction(): Promise<{ licenseId: string } | null> {
+  if (!activeSession) return null;
+  const userId = activeSession.user.id;
+  const key = `emukey_pending_license_action_${userId}`;
+  const raw = await SecureStore.getItemAsync(key);
+  if (!raw) return null;
+  const intent = JSON.parse(raw) as { licenseId: string; deviceId?: string; action: string; keyVersion: number; createdAt: number };
+  if (intent.createdAt + 86_400_000 < Date.now()) { await SecureStore.deleteItemAsync(key); return null; }
+  const license = await getLicense(intent.licenseId);
+  if (activeSession?.user.id !== userId) return null;
+  let completed = license.keyVersion > intent.keyVersion;
+  if (intent.deviceId) completed = (await listDevices(intent.licenseId)).some((device) => device.id === intent.deviceId && device.status === 'REVOKED');
+  if (completed) await SecureStore.deleteItemAsync(key);
+  return { licenseId: intent.licenseId };
+}
+
+export async function updateDeviceMetadata(licenseId: string, deviceId: string, displayName: string): Promise<LicenseDeviceDto> {
+  return json(await request(`/licenses/${encodeURIComponent(licenseId)}/devices/${encodeURIComponent(deviceId)}`, {
+    method: 'PATCH', body: JSON.stringify({ displayName }),
+  }));
 }
 
 export async function getCommandStatus(commandId: string): Promise<Phase6CommandStatusDto> {
@@ -386,7 +546,7 @@ export async function appendConversationMessage(conversationId: string, clientMe
   return json(await request(`/conversations/${encodeURIComponent(conversationId)}/messages`, { method: 'POST', body: JSON.stringify({ clientMessageId, content }) }));
 }
 
-export async function askConversationAi(conversationId: string, question: string, clientMessageId?: string): Promise<{ answer: string; citedSourceIds: string[]; grounded: boolean }> {
+export async function askConversationAi(conversationId: string, question: string, clientMessageId?: string): Promise<AiAnswerDto> {
   return json(await request(`/conversations/${encodeURIComponent(conversationId)}/ai-ask`, { method: 'POST', body: JSON.stringify({ question, ...(clientMessageId ? { clientMessageId } : {}) }) }));
 }
 
@@ -440,4 +600,20 @@ export function observeDevicePushTokens(): () => void {
     subscription = notifications.addPushTokenListener((next) => { if (active()) register(String(next.data)); });
   })().catch(() => { /* Push setup must not block account access; retried on next login. */ });
   return () => { if (active()) pushRegistrationGeneration += 1; subscription?.remove(); };
+}
+
+export function observeNotificationResponses(onNotification:(id:string)=>void):()=>void {
+  let active=true;
+  let subscription:{remove():void}|undefined;
+  void import('expo-notifications').then(async (notifications)=>{
+    const handle=(response:import('expo-notifications').NotificationResponse|null)=>{
+      const id=response?.notification.request.content.data?.notificationId;
+      if (active && typeof id==='string' && /^[0-9a-f-]{36}$/i.test(id)) onNotification(id);
+    };
+    if (!active) return;
+    subscription=notifications.addNotificationResponseReceivedListener(handle);
+    handle(await notifications.getLastNotificationResponseAsync());
+    if (active) await notifications.clearLastNotificationResponseAsync();
+  }).catch(()=>undefined);
+  return ()=>{active=false;subscription?.remove();};
 }

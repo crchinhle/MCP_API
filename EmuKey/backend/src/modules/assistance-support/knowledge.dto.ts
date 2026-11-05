@@ -1,6 +1,20 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsArray, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Matches, Max, Min } from 'class-validator';
 
+export class KnowledgeCapabilitiesDto {
+  @ApiProperty({ maximum: 10_485_760 }) maxFileBytes!: number;
+  @ApiProperty({ type: String, isArray: true }) allowedMimeTypes!: string[];
+}
+
+export class KnowledgeChunkDto {
+  @ApiProperty({ format: 'uuid' }) documentId!: string;
+  @ApiProperty() documentTitle!: string;
+  @ApiProperty() documentVersion!: number;
+  @ApiProperty({ format: 'uuid' }) chunkId!: string;
+  @ApiProperty() chunkIndex!: number;
+  @ApiProperty() content!: string;
+}
+
 export class CreateKnowledgeDocumentDto {
   @ApiProperty({ format: 'uuid' }) @IsUUID() productId!: string;
   @ApiProperty({ maxLength: 180, pattern: '^[A-Za-z0-9][A-Za-z0-9/_-]{0,179}$' }) @IsString() @Length(1, 180) @Matches(/^[A-Za-z0-9][A-Za-z0-9/_-]{0,179}$/u) logicalDocumentKey!: string;

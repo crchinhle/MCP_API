@@ -1,4 +1,5 @@
 import type { Client, QueryResultRow } from 'pg';
+import { canonicalCatalogSql } from './database-cli.js';
 
 const EXPECTED_TABLES = [
   'chain_commands',
@@ -8,6 +9,10 @@ const EXPECTED_TABLES = [
   'knowledge_chunks',
   'knowledge_documents',
   'license_devices',
+  'license_key_deliveries',
+  'license_key_materials',
+  'provider_integrations',
+  'provider_license_deliveries',
   'licenses',
   'messages',
   'mobile_push_tokens',
@@ -19,6 +24,7 @@ const EXPECTED_TABLES = [
   'plans',
   'products',
   'provider_invitations',
+  'schema_versions',
   'users',
 ] as const;
 
@@ -83,6 +89,14 @@ const EXPECTED_CRITICAL_INDEXES = {
 } as const;
 
 const EXPECTED_CRITICAL_COLUMNS = {
+  'schema_versions.schema_fingerprint': { dataType: 'character varying', expression: null, isGenerated: 'NEVER', isNullable: 'NO' },
+  'license_key_deliveries.delivery_id': { dataType: 'uuid', expression: null, isGenerated: 'NEVER', isNullable: 'NO' },
+  'license_key_deliveries.retry_until': { dataType: 'timestamp with time zone', expression: null, isGenerated: 'NEVER', isNullable: 'NO' },
+  'payment_transactions.review_evidence': { dataType: 'jsonb', expression: null, isGenerated: 'NEVER', isNullable: 'NO' },
+  'messages.citation_details': { dataType: 'jsonb', expression: null, isGenerated: 'NEVER', isNullable: 'NO' },
+  'conversations.claim_expires_at': { dataType: 'timestamp with time zone', expression: null, isGenerated: 'NEVER', isNullable: 'YES' },
+  'conversations.claim_version': { dataType: 'bigint', expression: null, isGenerated: 'NEVER', isNullable: 'NO' },
+  'license_devices.display_name': { dataType: 'character varying', expression: null, isGenerated: 'NEVER', isNullable: 'YES' },
   'provider_invitations.token_hash': {
     dataType: 'bytea', expression: null, isGenerated: 'NEVER', isNullable: 'NO',
   },
@@ -273,7 +287,7 @@ async function count(database: Client, sql: string): Promise<number> {
 }
 
 function normalizeDefinition(definition: string): string {
-  return definition.replace(/\s+/g, ' ').trim().toLowerCase();
+  return canonicalCatalogSql(definition).replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
 function compareDefinitions(

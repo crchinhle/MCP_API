@@ -4,12 +4,14 @@ import {
   HttpException,
   HttpStatus,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import type { Redis } from 'ioredis';
 
 import type { AuthPrincipal } from '../../identity-access/identity.types.js';
 import type { LicenseProjectionRepository } from '../infrastructure/license-projection.repository.js';
 import type { ActivationEnvelopePort } from './ports/activation-envelope.port.js';
+import type { ActivationDeliveryRepository } from '../infrastructure/activation-delivery.repository.js';
 
 type LicenseProjection = NonNullable<
   Awaited<ReturnType<LicenseProjectionRepository['findCustomer']>>
@@ -21,6 +23,8 @@ export class LicenseQueryService {
     private readonly envelopes: ActivationEnvelopePort,
     private readonly redis: Redis,
     private readonly publicVerifyRateLimit = 30,
+    private readonly deliveries?: ActivationDeliveryRepository,
+    private readonly handoff?: import('../../licensing/application/provider-handoff.service.js').ProviderHandoffService,
   ) {}
 
   async list(actor: AuthPrincipal) {
@@ -49,6 +53,9 @@ export class LicenseQueryService {
 
   async listDevices(actor: AuthPrincipal, id: string) {
     if (actor.role !== 'CUSTOMER') throw new ForbiddenException();
+    if (await this.handoff?.customerInfo(actor.sub, id)) {
+      await this.handoff!.rejectProductUse(id);
+    }
     return this.repository.listCustomerDevices(actor.sub, id);
   }
 
@@ -71,11 +78,18 @@ export class LicenseQueryService {
     return result ?? { state: 'NOT_FOUND' };
   }
 
-  async retrieveActivation(actor: AuthPrincipal, id: string) {
+  async retrieveActivation(actor: AuthPrincipal, id: string, deliveryId: string) {
     if (actor.role !== 'CUSTOMER') throw new ForbiddenException();
+    const handoffInfo = await this.handoff?.customerInfo(actor.sub,id);
+    if (handoffInfo) {
+      const envelope = await this.handoff!.readCustomerKey(actor.sub,id);
+      if (!this.deliveries) throw new ServiceUnavailableException();
+      const receipt = await this.deliveries.claim({licenseId:id,customerId:actor.sub,commandId:envelope.commandId,keyVersion:envelope.keyVersion,deliveryId,ttlSeconds:300});
+      return {activationKey:envelope.secret,keyVersion:envelope.keyVersion,deliveryId,retryUntil:receipt.retryUntil.toISOString()};
+    }
     const command = await this.repository.activationCommand(actor.sub, id);
     if (!command) this.notFound();
-    const envelope = await this.envelopes.consume(command.command_id);
+    const envelope = await this.envelopes.read(command.command_id);
     if (
       !envelope ||
       envelope.licenseId !== command.license_id ||
@@ -87,7 +101,21 @@ export class LicenseQueryService {
         message: 'Activation key is unavailable or was already retrieved.',
       });
     }
-    return { activationKey: envelope.secret, keyVersion: envelope.keyVersion };
+    if (!this.deliveries) throw new ServiceUnavailableException({ code: 'KEY_DELIVERY_NOT_CONFIGURED' });
+    const ttlSeconds = await this.envelopes.remainingTtl(command.command_id);
+    if (ttlSeconds < 1) throw new NotFoundException({ code: 'KEY_UNAVAILABLE' });
+    const receipt = await this.deliveries.claim({ licenseId: id, customerId: actor.sub,
+      commandId: command.command_id, keyVersion: envelope.keyVersion, deliveryId, ttlSeconds });
+    return { activationKey: envelope.secret, keyVersion: envelope.keyVersion, deliveryId, retryUntil: receipt.retryUntil.toISOString() };
+  }
+
+  async acknowledgeActivation(actor: AuthPrincipal, id: string, deliveryId: string, keyVersion: number) {
+    if (actor.role !== 'CUSTOMER') throw new ForbiddenException();
+    if (!this.deliveries) throw new ServiceUnavailableException();
+    const commandId = await this.deliveries.acknowledge(actor.sub,id,keyVersion,deliveryId);
+    // Receipt is durable before deletion: Redis failure cannot reopen delivery.
+    if (!await this.handoff?.customerInfo(actor.sub,id)) await this.envelopes.consume(commandId).catch(() => null);
+    return { acknowledged: true };
   }
 
   private async withActivationAvailability(
@@ -96,10 +124,16 @@ export class LicenseQueryService {
   ): Promise<(LicenseProjection & { activationKeyAvailable: boolean })[]> {
     return Promise.all(
       licenses.map(async (license) => {
+        const provider = await this.handoff?.customerInfo(actor.sub,String(license.id));
+        if (provider) {
+          const available = provider.keyAvailable && (!this.deliveries || await this.deliveries.available(String(license.id),provider.keyVersion,actor.sub));
+          return {...license,...provider,keyAvailable:available,activationKeyAvailable:available};
+        }
         const command = await this.repository.activationCommand(actor.sub, String(license.id));
         return {
           ...license,
-          activationKeyAvailable: command ? await this.envelopes.exists(command.command_id) : false,
+          activationKeyAvailable: command ? await this.envelopes.exists(command.command_id) &&
+            (!this.deliveries || await this.deliveries.available(String(license.id), Number(command.key_version), actor.sub)) : false,
         };
       }),
     );

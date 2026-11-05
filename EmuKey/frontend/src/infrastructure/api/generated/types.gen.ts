@@ -33,6 +33,8 @@ export type ApiErrorEnvelopeDto = {
 };
 
 export type ConversationDto = {
+  claimVersion: number;
+  claimExpiresAt: string | null;
   id: string;
   customerUserId: string;
   assignedSupportUserId?: string | null;
@@ -51,11 +53,22 @@ export type CreateConversationDto = {
 };
 
 export type AppendMessageDto = {
+  claimVersion?: number;
   clientMessageId: string;
   content: string;
 };
 
+export type CitationDetailDto = {
+  chunkId: string;
+  documentId: string;
+  documentTitle: string;
+  documentVersion: number;
+  excerpt: string;
+  chunkIndex: number;
+};
+
 export type MessageDto = {
+  citationDetails: Array<CitationDetailDto>;
   id: string;
   conversationId: string;
   clientMessageId: string;
@@ -74,6 +87,7 @@ export type AiAskDto = {
 };
 
 export type AiAnswerDto = {
+  citationDetails: Array<CitationDetailDto>;
   answer: string;
   citedSourceIds: Array<string>;
   grounded: boolean;
@@ -81,6 +95,28 @@ export type AiAnswerDto = {
 
 export type RequestSupportDto = {
   reason: string;
+};
+
+export type SupportClaimDto = {
+  claimVersion: number;
+};
+
+export type CloseConversationDto = {
+  claimVersion?: number;
+};
+
+export type KnowledgeCapabilitiesDto = {
+  maxFileBytes: number;
+  allowedMimeTypes: Array<string>;
+};
+
+export type KnowledgeChunkDto = {
+  documentId: string;
+  documentTitle: string;
+  documentVersion: number;
+  chunkId: string;
+  chunkIndex: number;
+  content: string;
 };
 
 export type KnowledgeDocumentDto = {
@@ -193,6 +229,27 @@ export type CredentialsDto = {
   password: string;
 };
 
+export type NativeUserDto = {
+  id: string;
+  email: string;
+  displayName: string;
+  role: 'CUSTOMER';
+  status: string;
+  phone: string | null;
+  address: string | null;
+  organizationName: string | null;
+};
+
+export type NativeSessionDto = {
+  accessToken: string;
+  refreshToken: string;
+  user: NativeUserDto;
+};
+
+export type NativeRefreshDto = {
+  refreshToken: string;
+};
+
 export type ChangePasswordDto = {
   currentPassword: string;
   password: string;
@@ -205,6 +262,11 @@ export type ProfileDto = {
   organizationName?: string;
 };
 
+export type NotificationTargetDto = {
+  kind: 'LICENSE' | 'ORDER' | 'CONVERSATION' | 'PAYMENT' | 'SYSTEM';
+  id: string | null;
+};
+
 export type NotificationDto = {
   id: string;
   title: string;
@@ -212,14 +274,41 @@ export type NotificationDto = {
   isRead: boolean;
   createdAt: string;
   readAt?: string | null;
-  target?: {
-    [key: string]: unknown;
-  } | null;
+  target?: NotificationTargetDto | null;
+};
+
+export type NotificationPageDto = {
+  items: Array<NotificationDto>;
+  nextCursor: string | null;
+  unreadCount: number;
 };
 
 export type RegisterPushTokenDto = {
   token: string;
   provider: 'FCM' | 'EXPO';
+};
+
+export type WorkerLivenessDto = {
+  notifications: 'UP' | 'DOWN' | 'UNKNOWN';
+  supportLeases: 'UP' | 'DOWN' | 'UNKNOWN';
+  expiry: 'UP' | 'DOWN' | 'UNKNOWN';
+};
+
+export type AssistanceBacklogDto = {
+  supportActive: number;
+  waitingSupport: number;
+};
+
+export type NotificationBacklogDto = {
+  deadLetter: number;
+  pending: number;
+  retryableFailed: number;
+};
+
+export type OperationsHealthDto = {
+  workers: WorkerLivenessDto;
+  conversations: AssistanceBacklogDto;
+  notifications: NotificationBacklogDto;
 };
 
 export type AdminProductDto = {
@@ -248,6 +337,10 @@ export type PublicCatalogPlanDto = {
 };
 
 export type PublicCatalogProductDto = {
+  id: string;
+  providerId: string;
+  providerDisplayName: string;
+  code: string;
   imageUrl?: string | null;
   name: string;
   plans: Array<PublicCatalogPlanDto>;
@@ -373,6 +466,21 @@ export type DeadLetterRecoveryDto = {
   reason: string;
 };
 
+export type Phase6CommandDto = {
+  commandId: string;
+  status:
+    | 'PENDING'
+    | 'SUBMITTED'
+    | 'SUBMITTED_UNKNOWN'
+    | 'CONFIRMED'
+    | 'RETRYABLE_FAILED'
+    | 'DEAD_LETTER'
+    | 'ABANDONED'
+    | 'SUPERSEDED';
+  licenseId: string;
+  deviceId?: string | null;
+};
+
 export type LicensePlanDto = {
   commitment: string;
   name: string;
@@ -385,6 +493,12 @@ export type LicenseProviderDto = {
 };
 
 export type LicenseProjectionDto = {
+  fulfillmentMode?: 'LEGACY_DEVICE' | 'PROVIDER_HANDOFF';
+  providerDeliveryStatus?: string | null;
+  providerAcceptedAt?: string | null;
+  providerRevision?: number;
+  providerAcceptedRevision?: number | null;
+  keyAvailable?: boolean;
   activationKeyAvailable?: boolean;
   activationKeyLast4?: string | null;
   blockNumber?: number | null;
@@ -411,6 +525,8 @@ export type LicenseProjectionDto = {
 };
 
 export type LicenseDeviceDto = {
+  displayName?: string | null;
+  platform?: string;
   id: string;
   deviceRef: string;
   status: 'ACTIVE' | 'REVOKED';
@@ -419,12 +535,25 @@ export type LicenseDeviceDto = {
   revokedAt?: string | null;
 };
 
+export type RetrieveActivationKeyDto = {
+  deliveryId: string;
+};
+
 export type ActivationKeyDto = {
+  deliveryId: string;
+  retryUntil: string;
   activationKey: string;
   keyVersion: number;
 };
 
+export type AcknowledgeActivationKeyDto = {
+  deliveryId: string;
+  keyVersion: number;
+};
+
 export type PublicLicenseVerificationDto = {
+  fulfillmentMode?: 'LEGACY_DEVICE' | 'PROVIDER_HANDOFF';
+  providerDeliveryStatus?: string;
   blockNumber?: number | null;
   confirmationCount?: number;
   expiresAt?: string;
@@ -441,6 +570,41 @@ export type PublicLicenseVerificationDto = {
     | 'NOT_FOUND';
   status?: string;
   transactionHash?: string | null;
+};
+
+export type ProviderIntegrationViewDto = {
+  endpointUrl: string;
+  configVersion: number;
+  status: string;
+  verifiedAt: string | null;
+  authorizedAt: string | null;
+  hasCredential: boolean;
+};
+
+export type SaveProviderIntegrationDto = {
+  endpointUrl: string;
+  configVersion: number;
+  authorized: boolean;
+};
+
+export type ProviderIntegrationStateDto = {
+  action: 'ENABLE' | 'DISABLE';
+  configVersion: number;
+};
+
+export type ProviderDeliveryViewDto = {
+  id: string;
+  licenseId: string;
+  revision: number;
+  status: string;
+  attemptCount: number;
+  lastErrorCode: string | null;
+  acceptedAt: string | null;
+  createdAt: string;
+};
+
+export type RetryProviderDeliveryDto = {
+  reason: string;
 };
 
 export type CreateOrderDto = {
@@ -522,6 +686,8 @@ export type AcceptServiceTermsDto = {
 };
 
 export type PaymentRetryDecisionDto = {
+  customerNextAction:
+    'WAIT' | 'VIEW_LICENSE' | 'CONTACT_SUPPORT' | 'CREATE_NEW_ORDER';
   allowed: boolean;
   /**
    * The existing live checkout can be resumed without creating another attempt.
@@ -570,6 +736,10 @@ export type PaymentHistoryDto = {
 };
 
 export type PaymentReviewDto = {
+  reviewResolution?: string | null;
+  reviewEvidence: {
+    [key: string]: unknown;
+  };
   amountVnd: number;
   classification:
     'MATCHED' | 'DUPLICATE' | 'UNMATCHED' | 'AMOUNT_MISMATCH' | 'INVALID';
@@ -586,7 +756,11 @@ export type PaymentReviewDto = {
 };
 
 export type ReviewPaymentDto = {
-  status: 'RESOLVED' | 'CLOSED_NO_ACTION';
+  resolution:
+    'NO_ACTION' | 'REFUND_CONFIRMED' | 'REMATCHED' | 'ACCEPT_AND_FULFILL';
+  refundReference?: string;
+  orderId?: string;
+  paymentAttemptId?: string;
   reason: string;
 };
 
@@ -608,6 +782,12 @@ export type PaymentReceiptDto = {
   providerNameSnapshot: string;
   providerTransactionReference?: string | null;
   transactionId: string;
+};
+
+export type UpdateDeviceMetadataDto = {
+  displayName?: string;
+  platform?:
+    'ANDROID' | 'IOS' | 'WINDOWS' | 'MACOS' | 'LINUX' | 'WEB' | 'UNKNOWN';
 };
 
 export type ActivationChallengeDto = {
@@ -735,21 +915,6 @@ export type RotateActivationKeyDto = {
   currentKey: string;
 };
 
-export type Phase6CommandDto = {
-  commandId: string;
-  status:
-    | 'PENDING'
-    | 'SUBMITTED'
-    | 'SUBMITTED_UNKNOWN'
-    | 'CONFIRMED'
-    | 'RETRYABLE_FAILED'
-    | 'DEAD_LETTER'
-    | 'ABANDONED'
-    | 'SUPERSEDED';
-  licenseId: string;
-  deviceId?: string | null;
-};
-
 export type ActivationKeyRecoveryDto = {
   actionToken: string;
   currentPassword: string;
@@ -796,6 +961,13 @@ export type EntitlementValidationDto = {
   rights: {
     [key: string]: unknown;
   };
+};
+
+export type SaveProviderIntegrationDtoWritable = {
+  endpointUrl: string;
+  token?: string;
+  configVersion: number;
+  authorized: boolean;
 };
 
 export type HealthControllerLiveData = {
@@ -988,7 +1160,7 @@ export type AssistanceSupportControllerClaimResponse =
   AssistanceSupportControllerClaimResponses[keyof AssistanceSupportControllerClaimResponses];
 
 export type AssistanceSupportControllerReleaseData = {
-  body?: never;
+  body: SupportClaimDto;
   path: {
     conversationId: string;
   };
@@ -1003,8 +1175,24 @@ export type AssistanceSupportControllerReleaseResponses = {
 export type AssistanceSupportControllerReleaseResponse =
   AssistanceSupportControllerReleaseResponses[keyof AssistanceSupportControllerReleaseResponses];
 
+export type AssistanceSupportControllerHeartbeatData = {
+  body: SupportClaimDto;
+  path: {
+    conversationId: string;
+  };
+  query?: never;
+  url: '/api/v1/conversations/{conversationId}/heartbeat';
+};
+
+export type AssistanceSupportControllerHeartbeatResponses = {
+  200: ConversationDto;
+};
+
+export type AssistanceSupportControllerHeartbeatResponse =
+  AssistanceSupportControllerHeartbeatResponses[keyof AssistanceSupportControllerHeartbeatResponses];
+
 export type AssistanceSupportControllerCloseData = {
-  body?: never;
+  body: CloseConversationDto;
   path: {
     conversationId: string;
   };
@@ -1018,6 +1206,37 @@ export type AssistanceSupportControllerCloseResponses = {
 
 export type AssistanceSupportControllerCloseResponse =
   AssistanceSupportControllerCloseResponses[keyof AssistanceSupportControllerCloseResponses];
+
+export type KnowledgeControllerCapabilitiesData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/knowledge/capabilities';
+};
+
+export type KnowledgeControllerCapabilitiesResponses = {
+  200: KnowledgeCapabilitiesDto;
+};
+
+export type KnowledgeControllerCapabilitiesResponse =
+  KnowledgeControllerCapabilitiesResponses[keyof KnowledgeControllerCapabilitiesResponses];
+
+export type KnowledgeControllerChunkData = {
+  body?: never;
+  path: {
+    id: string;
+    chunkId: string;
+  };
+  query?: never;
+  url: '/api/v1/knowledge/documents/{id}/chunks/{chunkId}';
+};
+
+export type KnowledgeControllerChunkResponses = {
+  200: KnowledgeChunkDto;
+};
+
+export type KnowledgeControllerChunkResponse =
+  KnowledgeControllerChunkResponses[keyof KnowledgeControllerChunkResponses];
 
 export type KnowledgeControllerListData = {
   body?: never;
@@ -1041,7 +1260,7 @@ export type KnowledgeControllerCreateData = {
 };
 
 export type KnowledgeControllerCreateResponses = {
-  200: KnowledgeDocumentDto;
+  201: KnowledgeDocumentDto;
 };
 
 export type KnowledgeControllerCreateResponse =
@@ -1232,6 +1451,48 @@ export type IdentityControllerRefreshResponses = {
   201: unknown;
 };
 
+export type IdentityControllerNativeLoginData = {
+  body: CredentialsDto;
+  path?: never;
+  query?: never;
+  url: '/api/v1/auth/mobile/login';
+};
+
+export type IdentityControllerNativeLoginResponses = {
+  200: NativeSessionDto;
+};
+
+export type IdentityControllerNativeLoginResponse =
+  IdentityControllerNativeLoginResponses[keyof IdentityControllerNativeLoginResponses];
+
+export type IdentityControllerNativeRefreshData = {
+  body: NativeRefreshDto;
+  path?: never;
+  query?: never;
+  url: '/api/v1/auth/mobile/refresh';
+};
+
+export type IdentityControllerNativeRefreshResponses = {
+  200: NativeSessionDto;
+};
+
+export type IdentityControllerNativeRefreshResponse =
+  IdentityControllerNativeRefreshResponses[keyof IdentityControllerNativeRefreshResponses];
+
+export type IdentityControllerNativeLogoutData = {
+  body: NativeRefreshDto;
+  path?: never;
+  query?: never;
+  url: '/api/v1/auth/mobile/logout';
+};
+
+export type IdentityControllerNativeLogoutResponses = {
+  204: void;
+};
+
+export type IdentityControllerNativeLogoutResponse =
+  IdentityControllerNativeLogoutResponses[keyof IdentityControllerNativeLogoutResponses];
+
 export type IdentityControllerLogoutData = {
   body?: never;
   path?: never;
@@ -1352,10 +1613,7 @@ export type NotificationControllerListData = {
 };
 
 export type NotificationControllerListResponses = {
-  200: {
-    items?: Array<NotificationDto>;
-    nextCursor?: string | null;
-  };
+  200: NotificationPageDto;
 };
 
 export type NotificationControllerListResponse =
@@ -1376,6 +1634,22 @@ export type NotificationControllerMarkReadResponses = {
 
 export type NotificationControllerMarkReadResponse =
   NotificationControllerMarkReadResponses[keyof NotificationControllerMarkReadResponses];
+
+export type NotificationControllerFindData = {
+  body?: never;
+  path: {
+    notificationId: string;
+  };
+  query?: never;
+  url: '/api/v1/notifications/{notificationId}';
+};
+
+export type NotificationControllerFindResponses = {
+  200: NotificationDto;
+};
+
+export type NotificationControllerFindResponse =
+  NotificationControllerFindResponses[keyof NotificationControllerFindResponses];
 
 export type NotificationControllerRegisterPushTokenData = {
   body: RegisterPushTokenDto;
@@ -1407,8 +1681,11 @@ export type OperationsHealthControllerAssistanceData = {
 };
 
 export type OperationsHealthControllerAssistanceResponses = {
-  200: unknown;
+  200: OperationsHealthDto;
 };
+
+export type OperationsHealthControllerAssistanceResponse =
+  OperationsHealthControllerAssistanceResponses[keyof OperationsHealthControllerAssistanceResponses];
 
 export type CatalogControllerListAdminData = {
   body?: never;
@@ -1478,6 +1755,22 @@ export type CatalogControllerCreateResponses = {
 
 export type CatalogControllerCreateResponse =
   CatalogControllerCreateResponses[keyof CatalogControllerCreateResponses];
+
+export type CatalogControllerFindByIdData = {
+  body?: never;
+  path: {
+    id: string;
+  };
+  query?: never;
+  url: '/api/v1/products/by-id/{id}';
+};
+
+export type CatalogControllerFindByIdResponses = {
+  200: PublicCatalogProductDto;
+};
+
+export type CatalogControllerFindByIdResponse =
+  CatalogControllerFindByIdResponses[keyof CatalogControllerFindByIdResponses];
 
 export type CatalogControllerFindData = {
   body?: never;
@@ -1756,8 +2049,11 @@ export type BlockchainOperationsControllerRecoverDeadLetterData = {
 };
 
 export type BlockchainOperationsControllerRecoverDeadLetterResponses = {
-  200: unknown;
+  200: Phase6CommandDto;
 };
+
+export type BlockchainOperationsControllerRecoverDeadLetterResponse =
+  BlockchainOperationsControllerRecoverDeadLetterResponses[keyof BlockchainOperationsControllerRecoverDeadLetterResponses];
 
 export type LicenseControllerListData = {
   body?: never;
@@ -1806,7 +2102,7 @@ export type LicenseControllerListDevicesResponse =
   LicenseControllerListDevicesResponses[keyof LicenseControllerListDevicesResponses];
 
 export type LicenseControllerRetrieveData = {
-  body?: never;
+  body: RetrieveActivationKeyDto;
   path: {
     id: string;
   };
@@ -1820,6 +2116,19 @@ export type LicenseControllerRetrieveResponses = {
 
 export type LicenseControllerRetrieveResponse =
   LicenseControllerRetrieveResponses[keyof LicenseControllerRetrieveResponses];
+
+export type LicenseControllerAcknowledgeData = {
+  body: AcknowledgeActivationKeyDto;
+  path: {
+    id: string;
+  };
+  query?: never;
+  url: '/api/v1/licenses/{id}/activation-key/ack';
+};
+
+export type LicenseControllerAcknowledgeResponses = {
+  201: unknown;
+};
 
 export type PublicLicenseControllerVerifyData = {
   body?: never;
@@ -1836,6 +2145,125 @@ export type PublicLicenseControllerVerifyResponses = {
 
 export type PublicLicenseControllerVerifyResponse =
   PublicLicenseControllerVerifyResponses[keyof PublicLicenseControllerVerifyResponses];
+
+export type ProviderIntegrationControllerGetData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/provider/integration';
+};
+
+export type ProviderIntegrationControllerGetResponses = {
+  /**
+   * Masked integration; configVersion is zero until configured
+   */
+  200: ProviderIntegrationViewDto;
+};
+
+export type ProviderIntegrationControllerGetResponse =
+  ProviderIntegrationControllerGetResponses[keyof ProviderIntegrationControllerGetResponses];
+
+export type ProviderIntegrationControllerSaveData = {
+  body: SaveProviderIntegrationDtoWritable;
+  path?: never;
+  query?: never;
+  url: '/api/v1/provider/integration';
+};
+
+export type ProviderIntegrationControllerSaveResponses = {
+  200: ProviderIntegrationViewDto;
+};
+
+export type ProviderIntegrationControllerSaveResponse =
+  ProviderIntegrationControllerSaveResponses[keyof ProviderIntegrationControllerSaveResponses];
+
+export type ProviderIntegrationControllerTestData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/provider/integration/test';
+};
+
+export type ProviderIntegrationControllerTestResponses = {
+  201: ProviderIntegrationViewDto;
+};
+
+export type ProviderIntegrationControllerTestResponse =
+  ProviderIntegrationControllerTestResponses[keyof ProviderIntegrationControllerTestResponses];
+
+export type ProviderIntegrationControllerStateData = {
+  body: ProviderIntegrationStateDto;
+  path?: never;
+  query?: never;
+  url: '/api/v1/provider/integration/state';
+};
+
+export type ProviderIntegrationControllerStateResponses = {
+  201: ProviderIntegrationViewDto;
+};
+
+export type ProviderIntegrationControllerStateResponse =
+  ProviderIntegrationControllerStateResponses[keyof ProviderIntegrationControllerStateResponses];
+
+export type ProviderIntegrationControllerListData = {
+  body?: never;
+  path?: never;
+  query: {
+    status: string;
+    page: string;
+  };
+  url: '/api/v1/provider/license-deliveries';
+};
+
+export type ProviderIntegrationControllerListResponses = {
+  200: Array<ProviderDeliveryViewDto>;
+};
+
+export type ProviderIntegrationControllerListResponse =
+  ProviderIntegrationControllerListResponses[keyof ProviderIntegrationControllerListResponses];
+
+export type ProviderIntegrationControllerRetryData = {
+  body: RetryProviderDeliveryDto;
+  path: {
+    id: string;
+  };
+  query?: never;
+  url: '/api/v1/provider/license-deliveries/{id}/retry';
+};
+
+export type ProviderIntegrationControllerRetryResponses = {
+  201: unknown;
+};
+
+export type ProviderDeliveryOperationsControllerListData = {
+  body?: never;
+  path?: never;
+  query: {
+    status: string;
+    page: string;
+  };
+  url: '/api/v1/operations/license-deliveries';
+};
+
+export type ProviderDeliveryOperationsControllerListResponses = {
+  200: Array<ProviderDeliveryViewDto>;
+};
+
+export type ProviderDeliveryOperationsControllerListResponse =
+  ProviderDeliveryOperationsControllerListResponses[keyof ProviderDeliveryOperationsControllerListResponses];
+
+export type ProviderDeliveryOperationsControllerRetryData = {
+  body: RetryProviderDeliveryDto;
+  path: {
+    id: string;
+  };
+  query?: never;
+  url: '/api/v1/operations/license-deliveries/{id}/retry';
+};
+
+export type ProviderDeliveryOperationsControllerRetryResponses = {
+  201: unknown;
+};
 
 export type CommerceControllerListData = {
   body?: never;
@@ -2085,6 +2513,23 @@ export type PaymentControllerGetReceiptResponses = {
 
 export type PaymentControllerGetReceiptResponse =
   PaymentControllerGetReceiptResponses[keyof PaymentControllerGetReceiptResponses];
+
+export type LicensingControllerUpdateDeviceData = {
+  body: UpdateDeviceMetadataDto;
+  path: {
+    licenseId: string;
+    deviceId: string;
+  };
+  query?: never;
+  url: '/api/v1/licenses/{licenseId}/devices/{deviceId}';
+};
+
+export type LicensingControllerUpdateDeviceResponses = {
+  200: LicenseDeviceDto;
+};
+
+export type LicensingControllerUpdateDeviceResponse =
+  LicensingControllerUpdateDeviceResponses[keyof LicensingControllerUpdateDeviceResponses];
 
 export type LicensingControllerChallengeData = {
   body: ActivationChallengeDto;

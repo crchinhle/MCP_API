@@ -149,7 +149,7 @@ for (const fixture of fixtures) {
   }));
   await page.route('**/api/v1/licenses', async (route) => intercept(route, fixture.name, fixture.data.licenses ?? []));
   await page.route('**/api/v1/orders', async (route) => intercept(route, fixture.name, fixture.data.orders ?? []));
-  await page.route('**/api/v1/notifications', async (route) => intercept(route, fixture.name, []));
+  await page.route('**/api/v1/notifications', async (route) => intercept(route, fixture.name, { items: [], nextCursor: null, unreadCount: 0 }));
   await page.route('**/api/v1/licenses/*/devices', async (route) => {
     const licenseId = new globalThis.URL(route.request().url()).pathname.split('/').at(-2);
     await intercept(route, fixture.name, fixture.data.devicesByLicense?.[licenseId] ?? []);

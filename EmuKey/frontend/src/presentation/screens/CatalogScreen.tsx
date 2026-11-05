@@ -97,7 +97,7 @@ export function CatalogScreen({ authenticated = false }: { readonly authenticate
 {!isLoading && !isError && visibleProducts.slice((currentPage - 1) * 12, currentPage * 12).map((product) => (
              <Card
                className="product-card"
-               key={product.slug}
+               key={product.id}
              >
                <ProductArtwork imageUrl={product.imageUrl} productName={product.name} tone={product.tone} />
                <h2>{product.name}</h2>
@@ -106,7 +106,7 @@ export function CatalogScreen({ authenticated = false }: { readonly authenticate
                <div className="product-actions">
                  <Link
                    className="primary-link"
-                   to={`${authenticated ? '/buyer/products/' : '/products/'}${product.slug}`}
+                   to={`${authenticated ? '/buyer/products/id/' : '/products/id/'}${product.id}`}
                  >
                    Xem gói & chi tiết
                  </Link>

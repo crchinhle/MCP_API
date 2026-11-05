@@ -65,6 +65,8 @@ export class RedisActivationEnvelope implements ActivationEnvelopePort {
     return (await this.redis.get(this.keyName(commandId))) !== null;
   }
 
+  async remainingTtl(commandId: string): Promise<number> { return this.redis.ttl(this.keyName(commandId)); }
+
   async consume(commandId: string): Promise<ActivationEnvelopeData | null> {
     const raw = await this.redis.eval(
       "local v=redis.call('GET',KEYS[1]); if v then redis.call('DEL',KEYS[1]); end; return v",

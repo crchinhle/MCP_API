@@ -23,6 +23,25 @@ function repository() {
 }
 
 describe('CatalogAdminService', () => {
+  it('rejects an ambiguous legacy product code instead of mixing provider plans', async () => {
+    const rows = [
+      { id: 'product-a', provider_user_id: 'provider-a', code: 'SHARED', name: 'Product A', plan_id: 'plan-a' },
+      { id: 'product-b', provider_user_id: 'provider-b', code: 'SHARED', name: 'Product B', plan_id: 'plan-b' },
+    ];
+    const service = new CatalogService({ findPublished: async () => rows } as never);
+    await expect(service.find('SHARED')).rejects.toMatchObject({ response: { code: 'AMBIGUOUS_PRODUCT_CODE' } });
+  });
+
+  it('publishes stable product and provider identity independently of a provider-scoped code', async () => {
+    const service = new CatalogService({ listPublished: async () => [
+      { id: 'product-a', provider_user_id: 'provider-a', provider_display_name: 'Provider A', code: 'SHARED', name: 'Product A' },
+      { id: 'product-b', provider_user_id: 'provider-b', provider_display_name: 'Provider B', code: 'SHARED', name: 'Product B' },
+    ] } as never);
+    expect(await service.list()).toMatchObject([
+      { id: 'product-a', providerId: 'provider-a', providerDisplayName: 'Provider A' },
+      { id: 'product-b', providerId: 'provider-b', providerDisplayName: 'Provider B' },
+    ]);
+  });
   it('explains the disabled namespace issuance capability', async () => {
     const repo = repository();
     vi.mocked(repo.createPlan).mockRejectedValue(new Error('PROVIDER_NAMESPACE_CAPABILITY_NOT_CONFIGURED'));

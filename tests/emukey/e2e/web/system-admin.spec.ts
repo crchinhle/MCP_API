@@ -73,7 +73,7 @@ async function systemFixture(page: Page) {
       if (state.failReconciliation) return route.fulfill({ status: 500, json: {} });
       return route.fulfill({ json: { indexedEvents: 2, processed: true, reconciledCommandIds: ['command-1'], projection: { licenseRepairs: 1, commandRepairs: 1, remainingMismatches: 2 }, health: { unknown_commands: 1, pending_events: 0, reorged_events: 0, active_without_finality: 0 } } });
     }
-    if (path === '/notifications') return route.fulfill({ json: { items: [], nextCursor: null } });
+    if (path === '/notifications') return route.fulfill({ json: { items: [], nextCursor: null, unreadCount: 0 } });
     return route.fulfill({ status: 404, json: {} });
   });
   return state;

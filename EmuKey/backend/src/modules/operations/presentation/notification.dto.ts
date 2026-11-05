@@ -1,5 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
+export class NotificationTargetDto {
+  @ApiProperty({ enum: ['LICENSE', 'ORDER', 'CONVERSATION', 'PAYMENT', 'SYSTEM'] })
+  kind!: 'LICENSE' | 'ORDER' | 'CONVERSATION' | 'PAYMENT' | 'SYSTEM';
+  @ApiProperty({ nullable: true, type: String }) id!: string | null;
+}
+
 export class NotificationDto {
   @ApiProperty({ format: 'uuid' })
   id!: string;
@@ -19,7 +25,7 @@ export class NotificationDto {
   @ApiPropertyOptional({ format: 'date-time', nullable: true, type: String })
   readAt!: string | null;
 
-  @ApiPropertyOptional({ nullable: true, type: Object })
+  @ApiPropertyOptional({ nullable: true, type: NotificationTargetDto })
   target!: NotificationTarget | null;
 }
 
@@ -28,16 +34,31 @@ export interface NotificationTarget {
   id: string | null;
 }
 
+export class NotificationPageDto {
+  @ApiProperty({ type: NotificationDto, isArray: true }) items!: NotificationDto[];
+  @ApiProperty({ nullable: true, type: String }) nextCursor!: string | null;
+  @ApiProperty({ minimum: 0 }) unreadCount!: number;
+}
+
 const KNOWN_TARGET_TYPES: Record<string, (data: Record<string, unknown>) => NotificationTarget | null> = {
+  LICENSE_STATUS_RECHECK:(data)=>({kind:'LICENSE',id:typeof data.licenseId==='string'?data.licenseId:null}),
+  LICENSE_EXPIRING:(data)=>({kind:'LICENSE',id:typeof data.licenseId==='string'?data.licenseId:null}),
+  LICENSE_RESUMED:(data)=>({kind:'LICENSE',id:typeof data.licenseId==='string'?data.licenseId:null}),
+  KEY_ROTATED:(data)=>({kind:'LICENSE',id:typeof data.licenseId==='string'?data.licenseId:null}),
+  SUPPORT_REPLY:(data)=>({kind:'CONVERSATION',id:typeof data.conversationId==='string'?data.conversationId:null}),
   LICENSE_CONFIRMED: (data) => ({ kind: 'LICENSE', id: typeof data.licenseId === 'string' ? data.licenseId : null }),
   LICENSE_SUSPENDED: (data) => ({ kind: 'LICENSE', id: typeof data.licenseId === 'string' ? data.licenseId : null }),
   LICENSE_REVOKED: (data) => ({ kind: 'LICENSE', id: typeof data.licenseId === 'string' ? data.licenseId : null }),
   LICENSE_RENEWED: (data) => ({ kind: 'LICENSE', id: typeof data.licenseId === 'string' ? data.licenseId : null }),
+  PAYMENT_ACCEPTED: (data) => ({ kind: 'ORDER', id: typeof data.orderId === 'string' ? data.orderId : null }),
   ORDER_PAYMENT_ACCEPTED: (data) => ({ kind: 'ORDER', id: typeof data.orderId === 'string' ? data.orderId : null }),
   ORDER_AUTO_CANCELLED: (data) => ({ kind: 'ORDER', id: typeof data.orderId === 'string' ? data.orderId : null }),
   SUPPORT_REQUESTED: (data) => ({ kind: 'CONVERSATION', id: typeof data.conversationId === 'string' ? data.conversationId : null }),
   SUPPORT_ASSIGNED: (data) => ({ kind: 'CONVERSATION', id: typeof data.conversationId === 'string' ? data.conversationId : null }),
   PAYMENT_REVIEW_REQUIRED: (data) => ({ kind: 'PAYMENT', id: typeof data.transactionId === 'string' ? data.transactionId : null }),
+  PAYMENT_REVIEW_RESOLVED: (data) => ({ kind: 'PAYMENT', id: typeof data.transactionId === 'string' ? data.transactionId : null }),
+  ORDER_PAYMENT_REVIEW_REQUIRED: (data) => ({ kind: 'ORDER', id: typeof data.orderId === 'string' ? data.orderId : null }),
+  ORDER_PAYMENT_REVIEW_RESOLVED: (data) => ({ kind: 'ORDER', id: typeof data.orderId === 'string' ? data.orderId : null }),
 };
 
 export function mapNotification(row: {

@@ -177,7 +177,7 @@ describe('Provider workspace', () => {
     const panel = screen.getByRole('main');
     const detail = await screen.findByRole('dialog');
     expect(within(detail).getByText('Chi tiết giao dịch')).toBeTruthy();
-    expect(screen.queryByRole('tab')).toBeNull();
+    expect(within(detail).queryByRole('tab')).toBeNull();
     expect(within(detail).getByText(/SEPAY-TX-1/)).toBeTruthy();
     expect(within(detail).getByText(/sepay-event-1/)).toBeTruthy();
     fireEvent.click(within(detail).getByRole('button', { name: /Close|Đóng/ }));

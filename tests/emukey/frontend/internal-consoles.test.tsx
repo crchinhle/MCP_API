@@ -6,11 +6,106 @@ import { AuthProvider } from '../../../EmuKey/frontend/src/application/auth/auth
 import { AuthScreen } from '../../../EmuKey/frontend/src/presentation/screens/AuthScreen';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { SupportConsoleScreen } from '../../../EmuKey/frontend/src/presentation/screens/SupportConsoleScreen';
 
 afterEach(cleanup);
 
 describe('W17-W18 Internal consoles', () => {
-  it.each(['users', 'payments', 'blockchain'])('keeps %s independent of health endpoints and duplicate navigation', async (view) => {
+  it('refetches a lost support claim after 409 and retains the draft when it is claimed again', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    const id = '00000000-0000-4000-8000-000000000701';
+    let status = 'SUPPORT_ACTIVE';
+    let claimVersion = 1;
+    const conversation = () => ({ id, status, claimVersion, assignedSupportUserId: status === 'SUPPORT_ACTIVE' ? 'staff' : null,
+      claimExpiresAt: '2030-01-01T00:00:00.000Z', customerUserId: 'customer', contextType: 'GENERAL', contextId: null, title: 'Lease regression' });
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith('/conversations/queue')) return Response.json([conversation()]);
+      if (url.endsWith(`/conversations/${id}/messages`) && init?.method === 'POST') { status = 'WAITING_SUPPORT'; return Response.json({ error: { code: 'CONVERSATION_CLAIM_EXPIRED' } }, { status: 409 }); }
+      if (url.endsWith(`/conversations/${id}/messages`) || url.endsWith('/messages/queue-preview')) return Response.json([]);
+      if (url.endsWith('/heartbeat')) return Response.json(conversation());
+      if (url.endsWith('/claim')) { status = 'SUPPORT_ACTIVE'; claimVersion += 1; return Response.json(conversation()); }
+      return original(input, init);
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    try {
+      render(<QueryClientProvider client={queryClient}><MemoryRouter initialEntries={[`/support?conversationId=${id}`]}><AuthProvider skipBootstrap initialUser={{ id: 'staff', role: 'SUPPORT_STAFF', email: 'staff@example.test', displayName: 'Staff', status: 'ACTIVE' }}><SupportConsoleScreen /></AuthProvider></MemoryRouter></QueryClientProvider>);
+      fireEvent.change(await screen.findByLabelText('Phản hồi hỗ trợ'), { target: { value: 'Nội dung chưa gửi' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Gửi phản hồi' }));
+      await waitFor(() => expect(screen.queryByLabelText('Phản hồi hỗ trợ')).toBeNull());
+      expect(await screen.findByText('Nhận xử lý hội thoại để gửi phản hồi.')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Nhận xử lý', exact: true }));
+      expect((await screen.findByLabelText('Phản hồi hỗ trợ') as HTMLTextAreaElement).value).toBe('Nội dung chưa gửi');
+    } finally { cleanup(); queryClient.clear(); vi.mocked(fetch).mockImplementation(original); }
+  });
+
+  it('checks ownership again before enabling replies when a hidden support tab returns', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    let status = 'SUPPORT_ACTIVE';
+    let reads = 0;
+    let holdHeartbeat = false;
+    let finishHeartbeat: ((response: Response) => void) | undefined;
+    const id = '00000000-0000-4000-8000-000000000702';
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith('/conversations/queue')) { reads += 1; return Response.json([{ id, status, claimVersion: 1, assignedSupportUserId: status === 'SUPPORT_ACTIVE' ? 'staff' : null,
+        claimExpiresAt: '2030-01-01T00:00:00.000Z', customerUserId: 'customer', contextType: 'GENERAL', contextId: null, title: 'Foreground lease' }]); }
+      if (url.endsWith('/heartbeat')) return holdHeartbeat ? new Promise<Response>((resolve) => { finishHeartbeat = resolve; }) : Response.json({});
+      if (url.endsWith('/messages') || url.endsWith('/messages/queue-preview')) return Response.json([]);
+      return original(input, init);
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    try {
+      render(<QueryClientProvider client={queryClient}><MemoryRouter><AuthProvider skipBootstrap initialUser={{ id: 'staff', role: 'SUPPORT_STAFF', email: 'staff@example.test', displayName: 'Staff', status: 'ACTIVE' }}><SupportConsoleScreen /></AuthProvider></MemoryRouter></QueryClientProvider>);
+      await screen.findByLabelText('Phản hồi hỗ trợ');
+      visibility.mockReturnValue('hidden');
+      fireEvent(document, new Event('visibilitychange'));
+      await waitFor(() => expect(screen.queryByLabelText('Phản hồi hỗ trợ')).toBeNull());
+      holdHeartbeat = true;
+      visibility.mockReturnValue('visible');
+      fireEvent(document, new Event('visibilitychange'));
+      await waitFor(() => expect(finishHeartbeat).toBeDefined());
+      visibility.mockReturnValue('hidden');
+      fireEvent(document, new Event('visibilitychange'));
+      finishHeartbeat!(Response.json({}));
+      await waitFor(() => expect(screen.queryByLabelText('Phản hồi hỗ trợ')).toBeNull());
+      holdHeartbeat = false;
+      status = 'WAITING_SUPPORT';
+      visibility.mockReturnValue('visible');
+      fireEvent(document, new Event('visibilitychange'));
+      await screen.findByRole('button', { name: 'Nhận xử lý', exact: true });
+      expect(reads).toBeGreaterThan(1);
+      expect(screen.queryByLabelText('Phản hồi hỗ trợ')).toBeNull();
+    } finally { cleanup(); queryClient.clear(); visibility.mockRestore(); vi.mocked(fetch).mockImplementation(original); }
+  });
+
+  it('recovers a transient heartbeat failure with the refresh action without reclaiming the conversation', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    let unavailable = true;
+    let claimRequests = 0;
+    const row = { id: '00000000-0000-4000-8000-000000000704', status: 'SUPPORT_ACTIVE', claimVersion: 1,
+      assignedSupportUserId: 'staff', claimExpiresAt: '2030-01-01T00:00:00.000Z', customerUserId: 'customer', contextType: 'GENERAL', contextId: null, title: 'Heartbeat transient' };
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith('/conversations/queue')) return Response.json([row]);
+      if (url.endsWith('/messages')) return Response.json([]);
+      if (url.endsWith('/heartbeat')) return Response.json({}, { status: unavailable ? 503 : 200 });
+      if (url.endsWith('/claim')) claimRequests += 1;
+      return original(input, init);
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    try {
+      render(<QueryClientProvider client={queryClient}><MemoryRouter><AuthProvider skipBootstrap initialUser={{ id: 'staff', role: 'SUPPORT_STAFF', email: 'staff@example.test', displayName: 'Staff', status: 'ACTIVE' }}><SupportConsoleScreen /></AuthProvider></MemoryRouter></QueryClientProvider>);
+      await screen.findByText('Chưa xác minh được phiên xử lý. Kiểm tra kết nối rồi bấm Làm mới.');
+      expect(screen.queryByLabelText('Phản hồi hỗ trợ')).toBeNull();
+      unavailable = false;
+      fireEvent.click(screen.getByRole('button', { name: 'Làm mới', exact: true }));
+      await screen.findByLabelText('Phản hồi hỗ trợ');
+      expect(claimRequests).toBe(0);
+    } finally { cleanup(); queryClient.clear(); vi.mocked(fetch).mockImplementation(original); }
+  });
+  it.each(['users', 'payments', 'blockchain'])('keeps %s usable when health endpoints are unavailable, without duplicate navigation', async (view) => {
     const original = vi.mocked(fetch).getMockImplementation()!;
     const healthRequests: string[] = [];
     vi.mocked(fetch).mockImplementation((input, init) => {
@@ -23,7 +118,8 @@ describe('W17-W18 Internal consoles', () => {
       expect(await screen.findByRole('heading', { level: 1 })).toBeTruthy();
       expect(screen.queryByRole('navigation', { name: 'Điều hướng quản trị hệ thống' })).toBeNull();
       expect(screen.queryByRole('region', { name: 'Sức khỏe hệ thống' })).toBeNull();
-      expect(healthRequests).toEqual([]);
+      if (view === 'blockchain') expect(healthRequests).toEqual([expect.stringContaining('/operations/health/')]);
+      else expect(healthRequests).toEqual([]);
     } finally { vi.mocked(fetch).mockImplementation(original); }
   });
 

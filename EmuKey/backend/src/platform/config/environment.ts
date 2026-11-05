@@ -95,6 +95,8 @@ export interface PlatformEnvironment {
   PUBLIC_VERIFY_ID_MIN_LENGTH: number;
   ACTIVATION_ENVELOPE_ADAPTER: string;
   ACTIVATION_ENVELOPE_KEY: string;
+  PROVIDER_HANDOFF_ENABLED: boolean;
+  PROVIDER_TEST_ORIGIN?: string;
   JWT_SECRET: string;
 }
 
@@ -200,6 +202,7 @@ export function validateEnvironment(
   }
 
   const result: PlatformEnvironment = {
+    PROVIDER_HANDOFF_ENABLED: parseBoolean(typeof environment.PROVIDER_HANDOFF_ENABLED==='string' ? environment.PROVIDER_HANDOFF_ENABLED : 'true', 'PROVIDER_HANDOFF_ENABLED'),
     NODE_ENV: nodeEnvironment,
     PORT: parsePort(requiredString(environment, 'PORT')),
     DATABASE_URL: requiredString(environment, 'DATABASE_URL'),
@@ -376,6 +379,13 @@ export function validateEnvironment(
     result.EVM_NAMESPACE_DEPLOYMENT_BLOCK = parseNonNegativeInteger(namespaceBlock, 'EVM_NAMESPACE_DEPLOYMENT_BLOCK');
   }
   assertSepoliaRuntime(result.EVM_NETWORK, result.EVM_CHAIN_ID);
+  if (environment.PROVIDER_TEST_ORIGIN) {
+    if (nodeEnvironment === 'production') throw new Error('PROVIDER_TEST_ORIGIN is forbidden in production');
+    if (typeof environment.PROVIDER_TEST_ORIGIN!=='string') throw new Error('PROVIDER_TEST_ORIGIN must be a string');
+    const origin = new URL(environment.PROVIDER_TEST_ORIGIN);
+    if (!['http:','https:'].includes(origin.protocol) || !['127.0.0.1','localhost','[::1]'].includes(origin.hostname) || origin.pathname !== '/' || origin.search || origin.hash || origin.username || origin.password) throw new Error('PROVIDER_TEST_ORIGIN must be an exact loopback origin');
+    result.PROVIDER_TEST_ORIGIN = origin.origin;
+  }
   if (!/^[0-9a-fA-F]{64}$/.test(result.ACTIVATION_ENVELOPE_KEY)) {
     throw new Error('ACTIVATION_ENVELOPE_KEY must contain exactly 32 bytes');
   }

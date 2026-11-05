@@ -23,6 +23,15 @@ services:
     env_file:
       - ./backend/.env
 
+  database-upgrade:
+    profiles: [maintenance]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["node", "dist/entrypoints/database/upgrade.js", "--from=cf17043", "--to=continuity_20261101"]
+    env_file:
+      - ./backend/.env
+
   api:
     build:
       context: ./backend

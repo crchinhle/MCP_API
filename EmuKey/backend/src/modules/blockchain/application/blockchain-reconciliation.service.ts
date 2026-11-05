@@ -39,7 +39,7 @@ export class BlockchainReconciliationService {
       reason: string;
     },
   ) {
-    if (actor.role !== 'SYSTEM_ADMIN' && actor.role !== 'SUPPORT_STAFF') {
+    if (actor.role !== 'SYSTEM_ADMIN') {
       throw new ForbiddenException();
     }
     try {

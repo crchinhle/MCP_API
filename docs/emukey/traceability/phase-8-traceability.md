@@ -1,6 +1,13 @@
+> Cập nhật phạm vi 04/11/2026: golden flow hiện hành là phát hành và bàn giao key cho hệ thống nhà cung cấp. Chức năng sử dụng bản quyền trong sản phẩm nằm ngoài EmuKey. Các kết quả có ngày trước đó ở phần dưới là bằng chứng legacy, không phải nghiệm thu bàn giao mới.
+>
+> Schema hiện có 24 bảng. LIC-04/05/06 lần lượt là cấu hình tích hợp, bàn giao và đồng bộ trạng thái. Ngày 05/11/2026 đã nghiệm thu SePay sandbox/Sepolia thật và buyer retrieve/ACK; receiver vẫn là fixture độc lập, không phải nhà cung cấp thật. Integration/lifecycle/restart dùng payment giả và chain event fixture được ghi riêng. Xem kế hoạch handoff và canonical golden flow.
+
+> Task 9 đạt trong development/sandbox: Neon đã backup/restore và nâng giữ dữ liệu từ `9ed5729`; 412 cột/61 FK. Restart drill HTTP/BullMQ đạt; live IPN MATCHED → chain CONFIRMED → provider DELIVERED → buyer ACK đạt. Phép đo độc lập sau sửa lỗi: 19,039 giây đến vào block, 32,782 giây đến CONFIRMED; không phải SLA production.
+
 # Phase 8 Traceability Matrix
 
-> Current scope (2026-10-20): user activity audit (`OPS-02`) is removed. The current matrix has 34 capabilities and 18 tables. Prior verification rows below describe their recorded release, not evidence that the removal has been applied to a deployed database.
+
+> Historical scope (2026-10-20): user activity audit (`OPS-02`) was removed; that release recorded 34 capabilities and 18 tables. Verification rows below describe their recorded release. The current schema has 24 tables as stated above; these rows do not prove provider-handoff acceptance.
 
 This matrix is the release-hardening index for the existing Phase 1-7 baseline.
 It does not add business capability or replace the canonical owners documented in

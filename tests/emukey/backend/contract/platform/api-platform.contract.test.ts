@@ -3,6 +3,9 @@ import type { Server } from 'node:http';
 import type { INestApplication } from '@nestjs/common';
 import type { OpenAPIObject } from '@nestjs/swagger';
 import request from 'supertest';
+import { RequestMethod } from '@nestjs/common';
+import { HTTP_CODE_METADATA, METHOD_METADATA } from '@nestjs/common/constants.js';
+import { ModulesContainer } from '@nestjs/core';
 
 import {
   AI_GATEWAY,
@@ -46,6 +49,18 @@ const testEnvironment = {
 };
 
 describe('API platform contract', () => {
+  it('keeps reviewed module boundaries behind published application interfaces', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const { resolve } = await import('node:path');
+    for (const path of [
+      'licensing/licensing.service.ts', 'licensing/licensing.module.ts',
+      'commerce-payment/commerce.module.ts', 'commerce-payment/infrastructure/commerce.repository.ts',
+      'assistance-support/assistance-support.module.ts', 'assistance-support/infrastructure/assistance-support.repository.ts',
+    ]) {
+      const source = await readFile(resolve('src/modules', path), 'utf8');
+      expect(source, path).not.toMatch(/from ['"](?:\.\.\/)+(?:blockchain|operations)\/infrastructure\//);
+    }
+  });
   let app: INestApplication;
 
   beforeAll(async () => {
@@ -65,6 +80,27 @@ describe('API platform contract', () => {
       .get('/api/v1/health/live')
       .expect(200)
       .expect({ status: 'ok', service: 'emukey-api' });
+  });
+
+  it('aligns runtime POST statuses with the documented success responses of every controller', async () => {
+    const document = (await request(app.getHttpServer() as Server).get('/api/v1/openapi.json').expect(200)).body as OpenAPIObject;
+    const operations = Object.values(document.paths).flatMap((path) => path?.post ? [path.post] : []);
+    const mismatches: string[] = [];
+    for (const module of app.get(ModulesContainer).values()) {
+      for (const controller of module.controllers.values()) {
+        const prototype = controller.metatype?.prototype;
+        if (!prototype) continue;
+        for (const name of Object.getOwnPropertyNames(prototype)) {
+          const handler = prototype[name];
+          if (typeof handler !== 'function' || Reflect.getMetadata(METHOD_METADATA, handler) !== RequestMethod.POST) continue;
+          const operation = operations.find((item) => item.operationId === `${controller.metatype!.name}_${name}`);
+          const success = Object.keys(operation?.responses ?? {}).filter((code) => /^2\d\d$/.test(code));
+          const runtime = String(Reflect.getMetadata(HTTP_CODE_METADATA, handler) ?? 201);
+          if (success.length && !success.includes(runtime)) mismatches.push(`${controller.name}.${name}: runtime ${runtime}, documented ${success.join('/')}`);
+        }
+      }
+    }
+    expect(mismatches).toEqual([]);
   });
 
   it('uses the canonical structured error envelope', async () => {
@@ -94,6 +130,18 @@ describe('API platform contract', () => {
     });
     expect(document.paths).toHaveProperty('/api/v1/health/live');
     expect(document.components?.schemas).toHaveProperty('ApiErrorEnvelopeDto');
+  });
+
+  it('returns the documented HTTP 200 for public entitlement verification', async () => {
+    const { LicensingService } = await import('../../../../../EmuKey/backend/src/modules/licensing/licensing.service.js');
+    const result = { valid: true as const, bindingGeneration: 1, entitlementVersion: 1, keyVersion: 1,
+      licenseId: '00000000-0000-4000-8000-000000000401', deviceId: '00000000-0000-4000-8000-000000000901',
+      rights: { desktop: true }, expiresAt: '2030-01-01T00:00:00.000Z' };
+    const verify = vi.spyOn(app.get(LicensingService), 'verifyEntitlement').mockResolvedValueOnce(result);
+    try {
+      const response = await request(app.getHttpServer() as Server).post('/api/v1/entitlements/verify').send({ token: 'test-entitlement-token-32-characters' }).expect(200);
+      expect(response.body).toEqual(result);
+    } finally { verify.mockRestore(); }
   });
 
   it('publishes typed catalog response contracts for generated clients', async () => {
@@ -163,10 +211,12 @@ describe('API platform contract', () => {
       'confirmationCount',
       'expiresAt',
       'finality',
+      'fulfillmentMode',
       'licenseId',
       'plan',
       'productName',
       'provider',
+      'providerDeliveryStatus',
       'state',
       'status',
       'transactionHash',

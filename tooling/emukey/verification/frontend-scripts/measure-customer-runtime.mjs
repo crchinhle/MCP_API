@@ -13,7 +13,7 @@ for (const vp of [{ name: '1920', width: 1920, height: 1080 }, { name: '390', wi
   await page.route('**/api/v1/auth/refresh', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ accessToken: 'runtime-token', user: { id: 'runtime', email: 'minh@example.test', displayName: 'Minh An', role: 'CUSTOMER', status: 'ACTIVE' } }) }));
   await page.route('**/api/v1/orders', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   await page.route('**/api/v1/licenses', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
-  await page.route('**/api/v1/notifications', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+  await page.route('**/api/v1/notifications', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], nextCursor: null, unreadCount: 0 }) }));
   await page.route('**/api/v1/products', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
   for (const route of ['/buyer', '/buyer/orders', '/buyer/licenses', '/buyer/support']) {
     await page.goto(`http://localhost:5174${route}`, { waitUntil: 'domcontentloaded' });

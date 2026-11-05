@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { Pool, type PoolClient } from 'pg';
+import type { NotificationWriter } from '../../operations/application/notification-writer.js';
 
 export type ChainEventType =
   | 'LICENSE_ISSUED'
@@ -38,7 +39,25 @@ export interface CanonicalProjectionRepairReport {
 export class ChainEventRepository {
   constructor(
     private readonly pool: Pool,
+    private readonly notifications?:NotificationWriter,
+    private readonly handoff?: import('../../licensing/application/provider-handoff.service.js').ProviderHandoffService,
   ) {}
+
+  private async notifyTransition(client:PoolClient,event:Record<string,unknown>,reorged:boolean) {
+    if(!this.notifications||event.event_type==='ACTIVE_DEVICE_COUNT_SYNCED') return;
+    const type=reorged?'LICENSE_STATUS_RECHECK':event.event_type==='LICENSE_ISSUED'?'LICENSE_CONFIRMED':String(event.event_type);
+    const commandId = event.chain_command_id;
+    const blockHash = event.block_hash;
+    const reorgCount = Number(event.reorg_count ?? 0);
+    if (typeof commandId !== 'string' || typeof blockHash !== 'string' || !Number.isSafeInteger(reorgCount)) throw new Error('INVALID_CHAIN_NOTIFICATION_BASIS');
+    const owner=await client.query<{customer_user_id:string;fulfillment_mode:string}>('SELECT customer_user_id,fulfillment_mode FROM licenses WHERE id=$1',[event.license_id]);
+    if(!owner.rows[0]) return;
+    if (owner.rows[0].fulfillment_mode==='PROVIDER_HANDOFF' && !reorged) return;
+    const title=reorged?'Bản quyền đang được xác minh lại':type==='LICENSE_CONFIRMED'?'Bản quyền đã sẵn sàng':type==='LICENSE_RENEWED'?'Gia hạn bản quyền đã hoàn tất':'Trạng thái bản quyền đã cập nhật';
+    await this.notifications.enqueueInTransaction(client,{channel:'IN_APP',type,title,content:reorged?'Blockchain thay đổi. Mở bản quyền để kiểm tra trạng thái hiện tại.':'Mở bản quyền để xem trạng thái và thao tác tiếp theo.',
+      userId:owner.rows[0].customer_user_id,eventKey:`chain:${commandId}:${blockHash}:${reorgCount}:${type}`,
+      data:{licenseId:event.license_id,chainEventId:event.id,canonicalBlockHash:event.block_hash,reorgCount:Number(event.reorg_count??0)}});
+  }
 
   async ingest(
     event: ObservedChainEvent,
@@ -167,6 +186,9 @@ export class ChainEventRepository {
         [event.chain_command_id, event.id],
       );
       await this.applyEvent(client, event);
+      await this.handoff?.publish(client,String(event.license_id),String(event.event_type));
+      await this.notifications?.invalidateLicenseRemindersInTransaction(client, String(event.license_id));
+      await this.notifyTransition(client,event,false);
       return true;
     });
   }
@@ -187,6 +209,8 @@ export class ChainEventRepository {
       );
       const row = event.rows[0];
       if (!row) return;
+      await this.notifications?.invalidateChainEventInTransaction(client,eventId);
+      await this.notifyTransition(client,row,true);
       await client.query(
         `UPDATE chain_commands SET status='SUBMITTED_UNKNOWN', confirmed_at=NULL,
            confirmation_chain_event_id=NULL, updated_at=now() WHERE id=$1`,
@@ -222,6 +246,8 @@ export class ChainEventRepository {
       } else {
          await this.rebuildProjectionWithoutKeyReset(client, String(row.license_id));
       }
+      await this.notifications?.invalidateLicenseRemindersInTransaction(client, String(row.license_id));
+      await this.handoff?.publish(client,String(row.license_id),'TRUST_CHANGED');
     });
   }
 
@@ -287,6 +313,7 @@ export class ChainEventRepository {
       const candidates = await this.projectionMismatches(client, limit);
       for (const { id } of candidates) {
         await this.rebuildProjection(client, id);
+        await this.handoff?.publish(client,id,'TRUST_CHANGED');
       }
       const remaining = await this.projectionMismatches(client, 1);
 
@@ -426,7 +453,10 @@ export class ChainEventRepository {
           pending_activation_command_id=NULL,
            activation_key_trust_status='PENDING_FINALITY', entitlement_version=GREATEST(entitlement_version, 1),
 
-         expires_at=COALESCE((issue.payload->>'expiresAt')::timestamptz, l.expires_at),
+         expires_at=CASE
+           WHEN date_trunc('second', (issue.payload->>'expiresAt')::timestamptz)=date_trunc('second', l.expires_at)
+             THEN l.expires_at
+           ELSE COALESCE((issue.payload->>'expiresAt')::timestamptz, l.expires_at) END,
          activation_commitment=COALESCE(
            decode(replace(issue.payload->>'activationCommitment','0x',''), 'hex'),
            l.activation_commitment
@@ -460,6 +490,11 @@ export class ChainEventRepository {
          WHERE license_id=$1 AND finality_status='CONFIRMED'
            AND event_type IN ('LICENSE_ISSUED','LICENSE_SUSPENDED','LICENSE_RESUMED','LICENSE_REVOKED')
          ORDER BY block_number DESC, log_index DESC, id DESC LIMIT 1
+       ), issue_event AS (
+         SELECT payload->>'expiresAt' AS expires_at
+         FROM chain_events
+         WHERE license_id=$1 AND finality_status='CONFIRMED' AND event_type='LICENSE_ISSUED'
+         ORDER BY block_number DESC, log_index DESC, id DESC LIMIT 1
        ), renewal_event AS (
          SELECT payload->>'expiresAt' AS expires_at
          FROM chain_events
@@ -475,11 +510,14 @@ export class ChainEventRepository {
          status=CASE status_event.event_type
            WHEN 'LICENSE_SUSPENDED' THEN 'SUSPENDED'
            WHEN 'LICENSE_REVOKED' THEN 'REVOKED'
-           WHEN 'LICENSE_ISSUED' THEN 'ACTIVE'
-           WHEN 'LICENSE_RESUMED' THEN 'ACTIVE'
+           WHEN 'LICENSE_ISSUED' THEN CASE WHEN COALESCE(renewal_event.expires_at::timestamptz, issue_event.expires_at::timestamptz, license.expires_at)<=statement_timestamp() THEN 'EXPIRED' ELSE 'ACTIVE' END
+           WHEN 'LICENSE_RESUMED' THEN CASE WHEN COALESCE(renewal_event.expires_at::timestamptz, issue_event.expires_at::timestamptz, license.expires_at)<=statement_timestamp() THEN 'EXPIRED' ELSE 'ACTIVE' END
            ELSE 'PENDING_ONCHAIN'
          END,
-         expires_at=COALESCE(renewal_event.expires_at::timestamptz, license.expires_at),
+         expires_at=CASE
+           WHEN date_trunc('second', COALESCE(renewal_event.expires_at::timestamptz, issue_event.expires_at::timestamptz, license.expires_at))=date_trunc('second', license.expires_at)
+             THEN license.expires_at
+           ELSE COALESCE(renewal_event.expires_at::timestamptz, issue_event.expires_at::timestamptz, license.expires_at) END,
          suspended_at=CASE WHEN status_event.event_type='LICENSE_SUSPENDED'
            THEN COALESCE(status_event.finalized_at, status_event.observed_at) ELSE NULL END,
          revoked_at=CASE WHEN status_event.event_type='LICENSE_REVOKED'
@@ -489,6 +527,7 @@ export class ChainEventRepository {
          updated_at=now()
         FROM status_event, last_event
         LEFT JOIN renewal_event ON TRUE
+        LEFT JOIN issue_event ON TRUE
         WHERE license.id=$1
           AND last_event.id IS NOT NULL`,
       [licenseId],
@@ -502,6 +541,8 @@ export class ChainEventRepository {
   ): Promise<Array<{ id: string }>> {
     // Missing fields in older snapshots are unknown, not evidence of drift.
     // Confirmed typed key evidence takes precedence over the ISSUE snapshot.
+    // EVM expiry is measured in whole seconds. PostgreSQL microseconds and JS
+    // millisecond serialization within that second must not trigger a rebuild.
     const result = await client.query<{ id: string }>(
       `SELECT license.id
        FROM licenses license
@@ -566,11 +607,11 @@ export class ChainEventRepository {
            WHEN 'LICENSE_REVOKED' THEN 'REVOKED'
              ELSE 'PENDING_ONCHAIN'
           END
-         OR license.expires_at IS DISTINCT FROM COALESCE(
+         OR date_trunc('second', license.expires_at) IS DISTINCT FROM date_trunc('second', COALESCE(
            (renewal_event.payload->>'expiresAt')::timestamptz,
            (issue.payload->>'expiresAt')::timestamptz,
            license.expires_at
-         )
+         ))
          OR license.activation_key_version IS DISTINCT FROM COALESCE(
            key_event.activation_key_version,
            (issue.payload->>'keyVersion')::int,

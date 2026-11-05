@@ -57,10 +57,18 @@ export class AssistanceSupportService {
     }
   }
 
-  async release(actor: AuthPrincipal, conversationId: string) {
+  async heartbeat(actor: AuthPrincipal, conversationId: string, claimVersion: number) {
+    if (actor.role!=='SUPPORT_STAFF') throw new ForbiddenException();
+    try { return await this.repository.heartbeat(actor.sub,conversationId,claimVersion); }
+    catch (error) { this.translate(error); }
+  }
+
+  requeueExpiredClaims() { return this.repository.requeueExpiredClaims(); }
+
+  async release(actor: AuthPrincipal, conversationId: string, claimVersion?: number) {
     if (actor.role !== 'SUPPORT_STAFF') throw new ForbiddenException();
     try {
-      return await this.repository.releaseConversation(actor.sub, conversationId);
+      return await this.repository.releaseConversation(actor.sub, conversationId, claimVersion);
     } catch (error) {
       this.translate(error);
     }
@@ -92,9 +100,9 @@ export class AssistanceSupportService {
     return messages;
   }
 
-  async close(actor: AuthPrincipal, conversationId: string) {
+  async close(actor: AuthPrincipal, conversationId: string, claimVersion?: number) {
     try {
-      return await this.repository.closeConversation(actor, conversationId);
+      return await this.repository.closeConversation(actor, conversationId, claimVersion);
     } catch (error) {
       this.translate(error);
     }
@@ -119,7 +127,7 @@ export class AssistanceSupportService {
   private translate(error: unknown): never {
     const code = error instanceof Error ? error.message : 'CONVERSATION_OPERATION_FAILED';
     if (code === 'CONVERSATION_NOT_FOUND') throw new NotFoundException({ code });
-    if (['CONVERSATION_MESSAGE_CONFLICT', 'CONVERSATION_ALREADY_CLAIMED', 'CONVERSATION_STATE_INVALID', 'CONVERSATION_CLOSED', 'CONVERSATION_CLOSE_NOT_ALLOWED'].includes(code)) {
+    if (['CONVERSATION_CLAIM_EXPIRED','CONVERSATION_MESSAGE_CONFLICT', 'CONVERSATION_ALREADY_CLAIMED', 'CONVERSATION_STATE_INVALID', 'CONVERSATION_CLOSED', 'CONVERSATION_CLOSE_NOT_ALLOWED'].includes(code)) {
       throw new ConflictException({ code, message: 'The conversation state does not allow this operation.' });
     }
     if (code === 'CONVERSATION_ACCESS_DENIED') throw new ForbiddenException();

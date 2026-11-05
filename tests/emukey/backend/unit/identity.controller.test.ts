@@ -40,6 +40,21 @@ describe('IdentityController HTTP boundary', () => {
 
   const invitation = { email: 'provider@example.test' };
   const acceptance = { token: 'a'.repeat(43), password: 'Provider-test@123', displayName: 'Provider Owner', organizationName: 'Provider Ltd' };
+  it('issues native refresh credentials without setting a browser cookie', async () => {
+    service.login.mockResolvedValueOnce({ accessToken: 'native-access', refreshToken: 'native-refresh', user: { id: 'u1', role: 'CUSTOMER' } } as never);
+    const response = await request(server()).post('/auth/mobile/login').send({ email: 'customer@example.test', password: 'Password@123' }).expect(200);
+    expect(response.body.refreshToken).toBe('native-refresh');
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.headers['set-cookie']).toBeUndefined();
+  });
+  it('rotates native refresh tokens from the body using the shared session service', async () => {
+    service.refresh.mockResolvedValueOnce({ accessToken: 'a2', refreshToken: 'r2', user: { id: 'u1', role: 'CUSTOMER' } });
+    const response = await request(server()).post('/auth/mobile/refresh').send({ refreshToken: 'r'.repeat(43) }).expect(200);
+    expect(response.body.refreshToken).toBe('r2');
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(service.refresh).toHaveBeenLastCalledWith('r'.repeat(43));
+    expect(response.headers['set-cookie']).toBeUndefined();
+  });
   it('accepts only an email and normalizes it without administrator-supplied profile data', async () => {
     await request(server()).post('/auth/provider-invitations').send({ email: ' Provider@Example.test ' }).expect(201);
     expect(service.inviteProvider).toHaveBeenLastCalledWith(expect.anything(), invitation);

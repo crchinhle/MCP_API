@@ -44,6 +44,44 @@ const preparedCommand = {
 };
 
 describe('ChainCommandService durable submission handling', () => {
+  it.each(['ISSUE_LICENSE', 'ROTATE_KEY'])('submits %s from validated durable provider material without Redis', async (commandType) => {
+    const key = { commitment: `0x${'44'.repeat(32)}`, keyVersion: 1 };
+    const issued = { ...command, commandType, payload: { activationCommitment: key.commitment, keyVersion: key.keyVersion } };
+    const repository = {
+      claimNext: vi.fn().mockResolvedValue(issued),
+      getLicenseCommitment: vi.fn().mockResolvedValue(key),
+      getRotationCommitment: vi.fn().mockResolvedValue(key),
+      reserveNonce: vi.fn().mockResolvedValue(7),
+      markPrepared: vi.fn().mockResolvedValue({ ...issued, ...preparedCommand, commandType }),
+      markSubmitted: vi.fn(), markFailure: vi.fn(),
+    } as unknown as Mocked<ChainCommandRepository>;
+    const envelopes = { read: vi.fn().mockRejectedValue(new Error('Redis offline')) };
+    const relayer = {
+      getSubmissionContext: vi.fn().mockResolvedValue({ pendingNonce: 7, relayerAddress: transaction.relayerAddress }),
+      prepare: vi.fn().mockResolvedValue(transaction), broadcast: vi.fn(), receipt: vi.fn(),
+    };
+    const handoff = { hasDurableCommandKey: vi.fn().mockResolvedValue(true) };
+    const service = new ChainCommandService(repository, relayer, envelopes as never, undefined, handoff);
+    await service.processNext('durable-key-worker');
+    expect(relayer.broadcast).toHaveBeenCalledWith(transaction);
+    expect(envelopes.read).not.toHaveBeenCalled();
+    expect(repository.markFailure).not.toHaveBeenCalled();
+  });
+
+  it('rejects a provider command whose payload differs from the license commitment', async () => {
+    const issued = { ...command, commandType: 'ISSUE_LICENSE', payload: { activationCommitment: `0x${'44'.repeat(32)}`, keyVersion: 1 } };
+    const repository = {
+      claimNext: vi.fn().mockResolvedValue(issued),
+      getLicenseCommitment: vi.fn().mockResolvedValue({ commitment: `0x${'55'.repeat(32)}`, keyVersion: 1 }),
+      markFailure: vi.fn(),
+    } as unknown as Mocked<ChainCommandRepository>;
+    const relayer = { broadcast: vi.fn() };
+    const service = new ChainCommandService(repository, relayer as never, {} as never, undefined, { hasDurableCommandKey: vi.fn().mockResolvedValue(true) });
+    await service.processNext('mismatched-key-worker');
+    expect(relayer.broadcast).not.toHaveBeenCalled();
+    expect(repository.markFailure).toHaveBeenCalledWith(issued.commandId, 1, 'ACTIVATION_ENVELOPE_PRECONDITION_FAILED');
+  });
+
   it('reopens a retryable command before submitting it', async () => {
     const retryable = { ...command, status: 'RETRYABLE_FAILED' as const };
     const repository = {

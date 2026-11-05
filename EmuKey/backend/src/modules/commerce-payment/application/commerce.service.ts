@@ -18,7 +18,7 @@ import {
   canonicalizeEntitlements,
 } from '../../../platform/crypto/license-crypto.js';
 import type { AuthPrincipal } from '../../identity-access/identity.types.js';
-import type { AcceptServiceTermsDto, CreateOrderDto } from '../presentation/commerce.dto.js';
+import type { AcceptServiceTermsDto, CreateOrderDto, ReviewPaymentDto } from '../presentation/commerce.dto.js';
 import type { PaymentGatewayPort, VerifiedPaymentEvent } from './ports/payment-gateway.port.js';
 import { ServiceTermsContent } from '../../../platform/terms/service-terms-content.js';
 import { renewalExpiry } from '../domain/renewal-policy.js';
@@ -239,7 +239,7 @@ export class CommerceService {
   }
 
   private async fulfillPayment(event: VerifiedPaymentEvent, payload: unknown,
-    reconciliation?: { transactionId: string; actor: AuthPrincipal; reason: string }) {
+    reconciliation?: { transactionId: string; actor: AuthPrincipal; reason: string; manual?: ReviewPaymentDto }) {
     const activation = this.newActivation(1);
     const result = await this.repository.ingestPayment(
       event,
@@ -247,6 +247,7 @@ export class CommerceService {
       activation.material,
       this.chain,
       reconciliation,
+      activation.secret,
     );
     if (
       result.classification === 'MATCHED' &&
@@ -299,18 +300,31 @@ export class CommerceService {
     return this.repository.listPaymentReview(true);
   }
 
-  async reviewPayment(
-    actor: AuthPrincipal,
-    id: string,
-    status: 'CLOSED_NO_ACTION' | 'RESOLVED',
-    reason: string,
-  ) {
+  async reviewPayment(actor: AuthPrincipal, id: string, input: ReviewPaymentDto) {
     this.requireReviewRole(actor);
+    if (!input || !['NO_ACTION','REFUND_CONFIRMED','REMATCHED','ACCEPT_AND_FULFILL'].includes(input.resolution) ||
+      !input.reason?.trim() || input.reason.trim().length<3 || input.reason.length>1000 ||
+      (input.resolution==='REFUND_CONFIRMED' && (!input.refundReference?.trim() || input.refundReference.length>200))) {
+      throw new BadRequestException({ code:'PAYMENT_REVIEW_INVALID_RESOLUTION' });
+    }
     try {
-      return await this.repository.reviewPayment(actor, id, status, reason);
+      if (['REMATCHED','ACCEPT_AND_FULFILL'].includes(input.resolution)) {
+        if (!input.orderId || !input.paymentAttemptId) throw new BadRequestException({ code:'PAYMENT_REVIEW_TARGET_REQUIRED' });
+        const evidence=await this.repository.paymentReviewEvidence(id,input.paymentAttemptId);
+        if (evidence.row.selected_order_id!==input.orderId || (evidence.row.classification==='AMOUNT_MISMATCH' && input.resolution!=='REMATCHED')) {
+          throw new ConflictException({ code:'PAYMENT_REVIEW_INVALID_RESOLUTION' });
+        }
+        if (evidence.row.review_status==='OPEN') {
+          await this.fulfillPayment(evidence.event,evidence.payload,{ transactionId:id,actor,reason:input.reason.trim(),manual:input });
+        } else if (evidence.row.review_resolution!==input.resolution || evidence.row.order_id!==input.orderId || evidence.row.payment_attempt_id!==input.paymentAttemptId || evidence.row.review_reason!==input.reason.trim()) {
+          throw new ConflictException({ code:'PAYMENT_REVIEW_ALREADY_CLOSED' });
+        }
+        return (await this.repository.listPaymentReview(true)).find((review)=>review.id===id)!;
+      }
+      return await this.repository.reviewPayment(actor,id,{...input,reason:input.reason.trim()});
     } catch (error) {
-      this.translate(error);
-      throw error;
+      if (error instanceof Error && /^(PAYMENT_REVIEW_|SANDBOX_PAYMENT_)/.test(error.message)) throw new ConflictException({code:error.message});
+      this.translate(error); throw error;
     }
   }
 
@@ -357,7 +371,7 @@ export class CommerceService {
   }
 
   private requireReviewRole(actor: AuthPrincipal): void {
-    if (!['SYSTEM_ADMIN', 'SUPPORT_STAFF'].includes(actor.role)) {
+    if (actor.role !== 'SYSTEM_ADMIN') {
       this.forbidden();
     }
   }
@@ -375,6 +389,7 @@ export class CommerceService {
 
   private translate(error: unknown): void {
     const code = error instanceof Error ? error.message : '';
+    if (code==='PROVIDER_INTEGRATION_NOT_READY') throw new ConflictException({code,message:'Nhà cung cấp chưa sẵn sàng tiếp nhận bản quyền. Vui lòng thử lại sau.'});
     if (code === 'PROVIDER_NAMESPACE_CAPABILITY_NOT_CONFIGURED') throw new ServiceUnavailableException({ code, message: 'Nhà cung cấp chưa được bật tính năng phát hành giấy phép. Vui lòng thử lại sau hoặc liên hệ quản trị hệ thống.' });
     if (
       code === 'PLAN_NOT_FOUND' ||

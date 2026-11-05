@@ -1,9 +1,13 @@
 import { Module } from '@nestjs/common';
+import { ProviderHandoffModule } from '../licensing/provider-handoff.module.js';
+import { ProviderHandoffService } from '../licensing/application/provider-handoff.service.js';
 import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
 import { Pool } from 'pg';
 
 import { IdentityModule } from '../identity-access/identity.module.js';
+import { OperationsModule } from '../operations/operations.module.js';
+import { NotificationWriter } from '../operations/application/notification-writer.js';
 import { ChainCommandService } from './application/chain-command.service.js';
 import { ActivationEnvelopeRecoveryService } from './application/activation-envelope-recovery.service.js';
 import { BlockchainReconciliationService } from './application/blockchain-reconciliation.service.js';
@@ -15,6 +19,7 @@ import {
   type ChainRpcIndexerPort,
   type RegistryIndexerRegistration,
 } from './application/rpc-chain-indexer.service.js';
+import { LicenseProjectionReader } from './application/license-projection-reader.js';
 import { LicenseQueryService } from './application/license-query.service.js';
 import {
   ACTIVATION_ENVELOPE,
@@ -27,6 +32,7 @@ import {
 import { ChainCommandRepository } from './infrastructure/chain-command.repository.js';
 import { ChainEventRepository } from './infrastructure/chain-event.repository.js';
 import { ChainIndexerCheckpointRepository } from './infrastructure/chain-indexer-checkpoint.repository.js';
+import { ActivationDeliveryRepository } from './infrastructure/activation-delivery.repository.js';
 import { LicenseProjectionRepository } from './infrastructure/license-projection.repository.js';
 import { RedisActivationEnvelope } from './infrastructure/redis-activation-envelope.js';
 import { BlockchainOperationsController } from './presentation/blockchain-operations.controller.js';
@@ -36,13 +42,15 @@ import {
 } from './presentation/license.controller.js';
 
 @Module({
-  imports: [IdentityModule],
+  imports: [IdentityModule, OperationsModule, ProviderHandoffModule],
   controllers: [
     BlockchainOperationsController,
     LicenseController,
     PublicLicenseController,
   ],
   providers: [
+    { provide: ActivationDeliveryRepository, inject: [Pool, LicenseProjectionRepository], useFactory: (pool: Pool, projections: LicenseProjectionRepository) => new ActivationDeliveryRepository(pool, projections) },
+    { provide: LicenseProjectionReader, useExisting: LicenseProjectionRepository },
     {
       provide: ACTIVATION_ENVELOPE,
       inject: [Redis, ConfigService],
@@ -100,8 +108,8 @@ import {
     },
     {
       provide: ChainEventRepository,
-      inject: [Pool],
-      useFactory: (pool: Pool) => new ChainEventRepository(pool),
+      inject: [Pool,NotificationWriter,ProviderHandoffService],
+      useFactory: (pool: Pool,notifications:NotificationWriter,handoff:ProviderHandoffService) => new ChainEventRepository(pool,notifications,handoff),
     },
     {
       provide: ChainIndexerCheckpointRepository,
@@ -120,21 +128,24 @@ import {
         CHAIN_RELAYER,
         ACTIVATION_ENVELOPE,
         ActivationEnvelopeRecoveryService,
+        ProviderHandoffService,
       ],
       useFactory: (
         repository: ChainCommandRepository,
         relayer: ChainRelayerPort,
         envelopes: ActivationEnvelopePort,
         recovery: ActivationEnvelopeRecoveryService,
-      ) => new ChainCommandService(repository, relayer, envelopes, recovery),
+        handoff: ProviderHandoffService,
+      ) => new ChainCommandService(repository, relayer, envelopes, recovery, handoff),
     },
     {
       provide: ActivationEnvelopeRecoveryService,
-      inject: [ChainCommandRepository, ACTIVATION_ENVELOPE],
+      inject: [ChainCommandRepository, ACTIVATION_ENVELOPE, ProviderHandoffService],
       useFactory: (
         repository: ChainCommandRepository,
         envelopes: ActivationEnvelopePort,
-      ) => new ActivationEnvelopeRecoveryService(repository, envelopes),
+        handoff: ProviderHandoffService,
+      ) => new ActivationEnvelopeRecoveryService(repository, envelopes, handoff),
     },
     {
       provide: ChainIndexerService,
@@ -194,13 +205,15 @@ import {
     },
     {
       provide: LicenseQueryService,
-      inject: [LicenseProjectionRepository, ACTIVATION_ENVELOPE, Redis, ConfigService],
+      inject: [LicenseProjectionRepository, ACTIVATION_ENVELOPE, Redis, ConfigService, ActivationDeliveryRepository, ProviderHandoffService],
       useFactory: (
         repository: LicenseProjectionRepository,
         envelopes: ActivationEnvelopePort,
         redis: Redis,
         config: ConfigService,
-      ) => new LicenseQueryService(repository, envelopes, redis, config.getOrThrow<number>('PUBLIC_VERIFY_RATE_LIMIT_PER_MINUTE')),
+        deliveries: ActivationDeliveryRepository,
+        handoff: ProviderHandoffService,
+      ) => new LicenseQueryService(repository, envelopes, redis, config.getOrThrow<number>('PUBLIC_VERIFY_RATE_LIMIT_PER_MINUTE'), deliveries, handoff),
     },
     {
       provide: BlockchainReconciliationService,
@@ -233,6 +246,7 @@ import {
     BlockchainReconciliationService,
     LicenseQueryService,
     LicenseProjectionRepository,
+    LicenseProjectionReader,
   ],
 })
 export class BlockchainModule {}

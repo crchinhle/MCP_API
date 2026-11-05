@@ -1,49 +1,544 @@
 {
-  "status": "BLOCKED",
-  "failedPhase": "payment-provider",
-  "failureCode": "SEPAY_PROVIDER_UI_BLOCKED",
-  "executionMode": "OPERATOR_ASSISTED_EXTERNAL_PROVIDER",
-  "realIpn": false,
-  "runId": "canonical-20261005150657879",
-  "PAYMENT_IPN_BACKEND_PATH_WORKING": true,
-  "PAYMENT_TO_LICENSE_ISSUE_PATH_WORKING": true,
-  "historicalRealIpnPathWorking": true,
-  "historicalPaymentToLicenseIssuePathWorking": true,
-  "historicalSepoliaIssueEvidence": "docs/emukey/traceability/sepolia-lifecycle-evidence.json",
-  "historicalRealIpnEvidence": "docs/emukey/traceability/releases/fresh-ipn-offset-20260920-2050/payment-evidence.json",
-  "historicalRealIpnEvidenceId": "37340",
-  "purchase": {
-    "orderId": "53e4ec90-37fe-4dc6-a876-0813c86f488e",
-    "paymentAttemptId": "50688635-7d49-41e0-a5d7-bcbb63d75060"
+  "status": "PASS",
+  "scope": "PROVIDER_HANDOFF",
+  "failedPhase": null,
+  "failureCode": null,
+  "executionMode": "LIVE_SEPAY_SANDBOX_AND_SEPOLIA_WITH_CONTROLLED_RECEIVER",
+  "realIpn": true,
+  "realChain": true,
+  "realProvider": false,
+  "checkedAt": "2026-11-05T03:09:59.980Z",
+  "officialFlow": [
+    "provider authorization and verified integration",
+    "customer order and service terms",
+    "accepted payment",
+    "canonical license issuance",
+    "provider stores whitelist and receipt",
+    "provider ACK persisted",
+    "buyer key retrieval and acknowledgement"
+  ],
+  "integrationEvidence": {
+    "test": "tests/emukey/backend/integration/licensing/provider-delivery.integration.test.ts",
+    "payment": "FAKE_ADAPTER",
+    "blockchain": "PERSISTED_FIXTURE_EVENTS",
+    "receiver": "INDEPENDENT_TEST_DATABASE",
+    "covered": [
+      "duplicate IPN",
+      "lost provider response",
+      "customer retrieval ACK",
+      "rotation invalidates old key",
+      "suspend/resume/revoke",
+      "renewal retry without extending twice",
+      "lease fencing",
+      "concurrent workers",
+      "config change and explicit retry",
+      "HTTP roles and credential omission",
+      "reorg and canonical recovery",
+      "checkout disabled while existing payment is accepted",
+      "stale probe version rejected",
+      "stale receiver revision rejected",
+      "expired lease attempt budget",
+      "new revision fences an in-flight old ACK"
+    ]
   },
-  "payment": {
-    "provider": "SePay Sandbox",
-    "checkoutReached": true,
-    "paymentAttemptId": "50688635-7d49-41e0-a5d7-bcbb63d75060",
-    "paymentReference": "50688635-7d49-41e0-a5d7-bcbb63d75060",
-    "paymentMatched": false,
-    "providerCheckoutBlocked": true,
-    "providerBlockReason": "Cloudflare access-block page",
-    "orderId": "53e4ec90-37fe-4dc6-a876-0813c86f488e",
-    "orderStatus": "WAITING_PAYMENT",
-    "paymentAttemptStatus": "PENDING",
-    "paymentTransactionId": null,
-    "paymentClassification": null,
-    "providerEventId": null,
-    "providerTransactionReference": null,
-    "paymentAccepted": false,
-    "ipnReachedBackend": false,
-    "paymentTransactionPersisted": false,
-    "providerUiBlockIsExternal": true,
-    "externalBlockReason": "SePay Sandbox Cloudflare provider UI",
-    "operatorPaymentEvidence": false
+  "limitations": [
+    "Receiver is a controlled fixture with a separate PostgreSQL database; no real vendor integration or production deployment is claimed.",
+    "Buyer retrieve/ACK and provider key verification were exercised over real HTTP; browser verification covers payment return, persisted receipt state and navigation, not clicking plaintext retrieval.",
+    "One fresh timing sample after fixes; not a latency distribution, average or SLA. Block timestamp precision is one second.",
+    "The earlier live acceptance included debugging pauses and is excluded from the normal timing sample."
+  ],
+  "historicalEvidence": {
+    "scope": "LEGACY_ONLY",
+    "record": {
+      "status": "BLOCKED",
+      "failedPhase": "final-ui",
+      "failureCode": "BROWSER_ACCESS_HOST_UNAVAILABLE",
+      "executionMode": "OPERATOR_ASSISTED_EXTERNAL_PROVIDER",
+      "realIpn": true,
+      "runId": "emukey-real-20261102-f79925a2",
+      "checkedAt": "2026-11-02T08:44:27.085Z",
+      "revision": {
+        "head": "cf1704344ca459f69263a3beea6830bd73d9fe56",
+        "workingTreeDirty": true,
+        "productSourceSha256": "c0eb014908a1e367767673c1056bdc6f6ccf02ef20a396055b9baa1dc3ec1102"
+      },
+      "PAYMENT_IPN_BACKEND_PATH_WORKING": true,
+      "PAYMENT_TO_LICENSE_ISSUE_PATH_WORKING": true,
+      "purchase": {
+        "orderId": "52935335-3fa8-4443-9f83-ddcae1fbcf18",
+        "orderNumber": "EMU-529353353FA844439F83",
+        "planName": "Professional",
+        "amountVnd": 900000,
+        "paymentAttemptId": "717e8bb7-7918-4424-a286-6262a405c9de",
+        "orderStatus": "PAYMENT_ACCEPTED"
+      },
+      "payment": {
+        "provider": "SePay Sandbox",
+        "checkoutCompletedBy": "operator",
+        "ipnReachedBackend": true,
+        "paymentTransactionPersisted": true,
+        "paymentTransactionId": "5e9e125b-ec5b-46a4-b897-1c02c75d5ad7",
+        "paymentClassification": "MATCHED",
+        "paymentAttemptStatus": "SUCCEEDED",
+        "paymentAccepted": true,
+        "timingBasis": "SANDBOX_RECEIPT",
+        "providerOccurredAt": "2026-11-02T08:30:57.000Z",
+        "receivedAt": "2026-11-02T08:30:58.814Z",
+        "invalidSignatureStatus": 401,
+        "replay": {
+          "status": 200,
+          "source": "application replay of already received SePay payload",
+          "sameTransactionId": true,
+          "before": {
+            "payments": 1,
+            "licenses": 1,
+            "issue_commands": 1
+          },
+          "after": {
+            "payments": 1,
+            "licenses": 1,
+            "issue_commands": 1
+          }
+        },
+        "receiptStatus": 200,
+        "paymentHistoryStatus": 200
+      },
+      "license": {
+        "licenseId": "3232cca1-e234-486c-93f8-3e9de5a309d0",
+        "publicLicenseId": "EMU-3232CCA1E234486C93F8",
+        "status": "ACTIVE",
+        "activationKeyTrustStatus": "TRUSTED",
+        "expiresAt": "2027-11-02T08:30:58.814Z",
+        "maxActiveDevices": 3,
+        "publicVerificationState": "CHAIN_CONFIRMED",
+        "activeDevices": 1,
+        "publicProjectionSensitiveFieldsAbsent": true
+      },
+      "issue": {
+        "issueCommandId": "a52d5f14-a4d1-40cd-95fc-392418301efe",
+        "issueCommandStatus": "CONFIRMED",
+        "issueTxHash": "0x98751ac76dad590aa5de8db279afd2c71ab0dcf1bd456362616eaf4dd0109459",
+        "receiptStatus": "success",
+        "chainId": 11155111,
+        "blockNumber": 12046983,
+        "canonicalBlockVerified": true,
+        "confirmationsAtCheck": 10,
+        "confirmationsCheckedAt": "2026-11-02T08:33:07.855Z",
+        "onchainStateRead": true
+      },
+      "activation": {
+        "status": "PASS",
+        "credentialSource": "operator-held key read from designated local temporary file",
+        "keyAlreadyAcknowledged": true,
+        "retrieveAfterAcknowledgement": {
+          "status": 404,
+          "code": "ACTIVATION_KEY_UNAVAILABLE"
+        },
+        "deviceActivated": true,
+        "deviceId": "9b00faa1-d455-4818-8f20-1bf122bc1cb7",
+        "deviceStatus": "ACTIVE",
+        "purchaserSessionUsed": false,
+        "invalidProofCode": "INVALID_DEVICE_PROOF",
+        "consumedChallengeReplayCode": "INVALID_DEVICE_CHALLENGE",
+        "repeatedActivationSameDevice": true,
+        "customerDeviceListVerified": true
+      },
+      "entitlement": {
+        "status": "PASS",
+        "issued": true,
+        "refreshed": true,
+        "verified": true,
+        "desktop": true,
+        "entitlementVersion": 1,
+        "purchaserSessionUsed": false
+      },
+      "deviceSync": {
+        "status": "CONFIRMED",
+        "commandId": "8fbd3521-cab0-4037-ba88-e3efe778d463",
+        "transactionHash": "0x6f2163b41e04f0b548ce83a1b01c4b5a5fb004c8fc2cd2d0d55f0156f9a23227",
+        "receiptStatus": "success",
+        "activeDevicesOnchain": 1,
+        "aggregate": {
+          "active_device_count": 1,
+          "device_state_version": "1",
+          "device_sync_status": "CONFIRMED"
+        },
+        "event": {
+          "event_type": "ACTIVE_DEVICE_COUNT_SYNCED",
+          "block_number": "12047037",
+          "confirmation_count": 2,
+          "finality_status": "CONFIRMED"
+        },
+        "canonicalBlockVerified": true,
+        "confirmationsAtCheck": 12
+      },
+      "limitations": [
+        "CoreFlowStatus PASS covers operator checkout, real SePay IPN, Sepolia issuance, anonymous HTTP activation, entitlement issue/refresh/verify and real device-count sync.",
+        "Browser automation host unavailable; final browser UI and Kotlin consumer app were not verified in this external run.",
+        "Native checkout, real email, push, storage and AI acceptance are not covered by this run.",
+        "The one active device is an API test probe; its ephemeral signing key was kept in memory only."
+      ],
+      "previousRun": {
+        "status": "BLOCKED",
+        "failedPhase": "payment-provider",
+        "failureCode": "SEPAY_PROVIDER_UI_BLOCKED",
+        "executionMode": "OPERATOR_ASSISTED_EXTERNAL_PROVIDER",
+        "realIpn": false,
+        "runId": "canonical-20261005150657879",
+        "PAYMENT_IPN_BACKEND_PATH_WORKING": true,
+        "PAYMENT_TO_LICENSE_ISSUE_PATH_WORKING": true,
+        "historicalRealIpnPathWorking": true,
+        "historicalPaymentToLicenseIssuePathWorking": true,
+        "historicalSepoliaIssueEvidence": "docs/emukey/traceability/sepolia-lifecycle-evidence.json",
+        "historicalRealIpnEvidence": "docs/emukey/traceability/releases/fresh-ipn-offset-20260920-2050/payment-evidence.json",
+        "historicalRealIpnEvidenceId": "37340",
+        "purchase": {
+          "orderId": "53e4ec90-37fe-4dc6-a876-0813c86f488e",
+          "paymentAttemptId": "50688635-7d49-41e0-a5d7-bcbb63d75060"
+        },
+        "payment": {
+          "provider": "SePay Sandbox",
+          "checkoutReached": true,
+          "paymentAttemptId": "50688635-7d49-41e0-a5d7-bcbb63d75060",
+          "paymentReference": "50688635-7d49-41e0-a5d7-bcbb63d75060",
+          "paymentMatched": false,
+          "providerCheckoutBlocked": true,
+          "providerBlockReason": "Cloudflare access-block page",
+          "orderId": "53e4ec90-37fe-4dc6-a876-0813c86f488e",
+          "orderStatus": "WAITING_PAYMENT",
+          "paymentAttemptStatus": "PENDING",
+          "paymentTransactionId": null,
+          "paymentClassification": null,
+          "providerEventId": null,
+          "providerTransactionReference": null,
+          "paymentAccepted": false,
+          "ipnReachedBackend": false,
+          "paymentTransactionPersisted": false,
+          "providerUiBlockIsExternal": true,
+          "externalBlockReason": "SePay Sandbox Cloudflare provider UI",
+          "operatorPaymentEvidence": false
+        },
+        "license": {},
+        "issue": {},
+        "activation": {},
+        "entitlement": {},
+        "deviceSync": {},
+        "timeline": {
+          "orderAccepted": "2026-10-05T15:07:07.796Z"
+        }
+      },
+      "coreFlowStatus": "PASS",
+      "timeline": {
+        "paymentReceived": "2026-11-02T08:30:58.814Z",
+        "licenseConfirmed": "2026-11-02T08:31:22.941Z",
+        "activationCheckedAt": "2026-11-02T08:42:04.395Z",
+        "deviceSyncCompleted": "2026-11-02T08:42:25.749Z"
+      }
+    }
   },
-  "license": {},
-  "issue": {},
-  "activation": {},
-  "entitlement": {},
-  "deviceSync": {},
-  "timeline": {
-    "orderAccepted": "2026-10-05T15:07:07.796Z"
+  "verification": {
+    "checkedAt": "2026-11-05",
+    "backendUnitSecurityContract": {
+      "filesPassed": 44,
+      "testsPassed": 361
+    },
+    "finalFocusedBoundaries": {
+      "filesPassed": 3,
+      "testsPassed": 15,
+      "includesAdditionalDurableEncryptionKeyPreservationTest": true
+    },
+    "backendIntegration": {
+      "filesPassed": 11,
+      "testsPassed": 115,
+      "testsSkipped": 4,
+      "note": "Initial broad run; modified provider integration rerun: 4 passed. Optional subprocess and Android fixtures require separate opt-in."
+    },
+    "frontend": {
+      "filesPassed": 21,
+      "testsPassed": 250
+    },
+    "managerMobile": {
+      "suitesPassed": 5,
+      "testsPassed": 34
+    },
+    "browser": {
+      "testsPassed": 3,
+      "transport": "API_STUB",
+      "viewports": [
+        390,
+        1440
+      ]
+    },
+    "schemaDiagram": {
+      "pages": 6,
+      "tables": 24,
+      "columns": 412,
+      "foreignKeys": 61,
+      "nativeXmlRoundtrip": true
+    },
+    "qualityGates": [
+      "backend lint/typecheck/build/OpenAPI check",
+      "frontend lint/typecheck/build/OpenAPI check",
+      "manager mobile lint/typecheck/OpenAPI check",
+      "baseline validator",
+      "git diff --check"
+    ],
+    "limitations": [
+      "Frontend production bundle has a chunk-size warning.",
+      "Workspace hygiene flags the source filename license-secret-codec.ts; reviewed as source code, no embedded secret."
+    ],
+    "finalFocusedHandoff": {
+      "filesPassed": 3,
+      "testsPassed": 9,
+      "includes": "provider integration plus worker recovery and encryption-key preservation"
+    },
+    "legacyLicenseInvariantsRerun": {
+      "testsPassed": 21,
+      "testsSkipped": 2,
+      "reason": "Optional Android/emulator cases; deterministic PostgreSQL microsecond precision cases included"
+    },
+    "migrationSchema": {
+      "filesPassed": 3,
+      "testsPassed": 24
+    },
+    "finalMigrationGuard": {
+      "testsPassed": 6
+    },
+    "providerHandoffIntegrationRerun": {
+      "testsPassed": 4,
+      "testsSkipped": 2,
+      "includes": [
+        "ChainCommandService submission from encrypted PostgreSQL key without Redis envelope",
+        "Successful pending receipt blocks scoped by registry and removed on confirmation",
+        "Independent receiver receipt",
+        "Separate API/worker/Redis restart recovery"
+      ],
+      "skipReason": "Subprocess fixture tests run only in the child processes launched by the restart drill"
+    },
+    "blockchainContracts": {
+      "testsPassed": 7
+    }
+  },
+  "developmentCutover": {
+    "status": "DEVELOPMENT_CUTOVER_VERIFIED",
+    "checkedAt": "2026-11-04T14:18:09.475Z",
+    "result": "APPLIED",
+    "sourceVersion": "9ed5729",
+    "targetVersion": "provider_handoff_20261104",
+    "tables": 24,
+    "matchesBaseline": true,
+    "fingerprint": "bc56602252eff87ef0ec32223f522f022d7f3e39fe26be46d4abd0a4239519c8",
+    "businessRowsPreserved": true,
+    "backupRestoreVerified": true,
+    "apiWorkerStopped": true,
+    "backupRestoreSource": "OS_TEMP_PRIVATE_BACKUP",
+    "preservedRowCounts": {
+      "chain_commands": 30,
+      "chain_events": 30,
+      "chain_indexer_checkpoints": 11,
+      "conversations": 30,
+      "knowledge_chunks": 30,
+      "knowledge_documents": 30,
+      "license_devices": 30,
+      "licenses": 30,
+      "messages": 30,
+      "mobile_push_tokens": 30,
+      "notifications": 30,
+      "orders": 30,
+      "payment_attempts": 30,
+      "payment_transactions": 30,
+      "plans": 33,
+      "products": 51,
+      "provider_invitations": 0,
+      "users": 34
+    }
+  },
+  "recoveryDrill": {
+    "status": "PASS",
+    "boundary": "separate Nest HTTP API and BullMQ worker processes; independent receiver PostgreSQL; disposable Redis",
+    "killPoint": "receiver committed snapshot and receipt; EmuKey lease still SENDING",
+    "steps": [
+      "kill API and worker",
+      "flush/save/restart Redis",
+      "restart API and worker",
+      "reclaim expired PostgreSQL lease",
+      "retry same key and receipt",
+      "buyer retrieve and ACK over HTTP"
+    ],
+    "payment": "FAKE_ADAPTER",
+    "blockchain": "PERSISTED_FIXTURE_EVENTS",
+    "newKeyCount": 1
+  },
+  "liveSandboxAttempt": {
+    "status": "PASS",
+    "checkedAt": "2026-11-05T02:38:08.741Z",
+    "orderId": "cb8d4f05-600f-4adb-a2ac-0f26d0fed1dc",
+    "orderNumber": "EMU-CB8D4F05600F4ADBA2AC",
+    "licenseId": "6cf561ba-3aea-40e4-b3aa-14ec2c767995",
+    "chain": {
+      "transactionHash": "0xd87eb05aa5b519fdfbeac64add269c3c95337dc7b80656bcd68313c7d52241d8",
+      "status": "success",
+      "blockNumber": "12066576",
+      "blockHash": "0x142379341dc124d0ff4d1e000644c5ba6091b068ddb237e4fad9999e5049433f",
+      "confirmations": 45,
+      "requiredConfirmations": 2
+    },
+    "provider": {
+      "deliveryId": "f04c6e28-f60f-475e-9839-8a7c1e362dc0",
+      "status": "DELIVERED",
+      "revision": 1,
+      "receiptId": "0309dbc9-650e-4a79-880e-96cbf2e8501b",
+      "acceptedAt": "2026-11-05T02:37:26.886Z",
+      "attemptCount": 1,
+      "whitelistCount": 1,
+      "receiptCount": 1,
+      "validKey": true,
+      "fabricatedKeyRejected": true,
+      "wrongProductRejected": true,
+      "receiver": "CONTROLLED_INDEPENDENT_DATABASE_FIXTURE"
+    },
+    "buyer": {
+      "retrieveStatus": 201,
+      "ackStatus": 201,
+      "secretCacheControl": "no-store",
+      "duplicateRetrieveStatus": 409,
+      "duplicateRetrieveCode": "KEY_ALREADY_DELIVERED",
+      "devicesStatus": 410
+    },
+    "amountVnd": 149000,
+    "realIpn": true,
+    "realChain": true,
+    "paymentClassification": "MATCHED",
+    "orderStatus": "PAYMENT_ACCEPTED",
+    "licenseStatus": "ACTIVE",
+    "trust": "TRUSTED",
+    "fulfillmentMode": "PROVIDER_HANDOFF",
+    "commandStatus": "CONFIRMED"
+  },
+  "preparedAttemptHistory": {
+    "checkedAt": "2026-11-04T14:34:56.448Z",
+    "order_id": "2ce5debf-0b9d-4098-afc9-8fdb3cba241f",
+    "order_number": "EMU-2CE5DEBF0B9D4098AFC9",
+    "order_status": "WAITING_PAYMENT",
+    "fulfillment_mode": "PROVIDER_HANDOFF",
+    "license_id": null,
+    "license_status": null,
+    "activation_key_trust_status": null,
+    "provider_revision": null,
+    "provider_delivery_status": null,
+    "command_status": null,
+    "transaction_hash": null,
+    "payment_classification": null,
+    "realIpn": false,
+    "realChain": false,
+    "providerReceiver": "CONTROLLED_FIXTURE",
+    "amountVnd": 149000,
+    "checkoutPrepared": true,
+    "finalStatus": "CANCELLED",
+    "reason": "Payment window elapsed; no matching IPN; replaced with a new order through the application API"
+  },
+  "realProviderHandoff": true,
+  "liveBrowser": {
+    "status": "PASS",
+    "transport": "NATIVE_CHROME_WITH_REAL_API",
+    "checkedAt": "2026-11-05T03:09:59.981Z",
+    "paymentReturnObserved": true,
+    "persistedAcknowledgedKeyStateAfterReload": true,
+    "purchasedOrdersLink": "/buyer/orders",
+    "purchasedOrdersPageObserved": true,
+    "acceptedOrderVisible": true,
+    "handoffLabel": "Đã bàn giao",
+    "plaintextRetrievalClicked": false
+  },
+  "timingSample": {
+    "order_number": "EMU-86241845CD3D41C6B829",
+    "license_created_at": "2026-11-05T03:07:04.961Z",
+    "command_created_at": "2026-11-05T03:07:04.961Z",
+    "submitted_at": "2026-11-05T03:07:12.420Z",
+    "receipt_checked_at": "2026-11-05T03:07:28.459Z",
+    "confirmed_at": "2026-11-05T03:07:37.743Z",
+    "observed_at": "2026-11-05T03:07:28.832Z",
+    "finalized_at": "2026-11-05T03:07:37.665Z",
+    "provider_accepted_at": "2026-11-05T03:07:38.904Z",
+    "ipn_received_at": "2026-11-05T03:07:05.113Z",
+    "mined_at": "2026-11-05T03:07:24.000Z",
+    "transaction_hash": "0x11e8990ef85c03c162839e28550068e573cfe253e8357499e24fcf93f0f48b76",
+    "durations_seconds": {
+      "created_to_submitted": 7.459,
+      "submitted_to_mined": 11.58,
+      "created_to_mined": 19.039,
+      "created_to_confirmed": 32.782,
+      "mined_to_projection_confirmed": 13.743,
+      "confirmed_to_provider_ack": 1.161,
+      "created_to_provider_ack": 33.943
+    },
+    "checkedAt": "2026-11-05T03:09:59.981Z",
+    "environment": "SEPAY_SANDBOX_AND_ETHEREUM_SEPOLIA",
+    "sampleCount": 1,
+    "retries": 0,
+    "requiredConfirmations": 2,
+    "blockTimestampPrecisionSeconds": 1,
+    "clockBasis": "PostgreSQL persisted timestamps and canonical RPC block timestamp",
+    "chainContents": "Activation commitment and issuance evidence; no plaintext activation key"
+  },
+  "uiConsistency": {
+    "status": "PASS",
+    "checkedAt": "2026-11-05T04:07:45.298Z",
+    "scope": "WEB_AND_MANAGER_MOBILE_PROVIDER_HANDOFF_PRESENTATION",
+    "executionMode": "LOCAL_UI_WITH_API_STUBS_AND_COMPONENT_TESTS",
+    "livePaymentOrChainRepeated": false,
+    "stages": [
+      "waiting for blockchain confirmation",
+      "waiting for provider handoff receipt",
+      "provider accepted; buyer may retrieve key",
+      "buyer acknowledged key; show recovery and purchased orders navigation"
+    ],
+    "covered": [
+      "pending blockchain takes precedence over delivery snapshot",
+      "reorg and stale projection prevent premature key retrieval",
+      "failed delivery does not request another payment",
+      "inactive licenses do not offer new key retrieval",
+      "renewal waits for its command and updated expiry while retaining the existing key",
+      "buyer ACK invalidates license queries and survives refresh",
+      "web and manager mobile use consistent license and handoff wording",
+      "legacy device controls remain separate from provider-managed licenses"
+    ],
+    "frontend": {
+      "finalFocusedSuites": [
+        { "file": "provider-integration.test.tsx", "testsPassed": 15 },
+        { "file": "buyer-commerce.test.tsx", "testsPassed": 34 },
+        { "file": "app.test.tsx", "testsPassed": 23 }
+      ],
+      "initialBroadRun": {
+        "testsTotal": 262,
+        "testsPassed": 259,
+        "testsFailed": 3,
+        "affectedSuitesRerunAfterFixes": true,
+        "note": "The broad run is not recorded as passing; affected suites passed in the focused reruns listed above."
+      },
+      "lint": "PASS",
+      "typecheck": "PASS",
+      "productionBuild": "PASS",
+      "retainedWarning": "Existing production bundle chunk-size warning"
+    },
+    "managerMobile": {
+      "suitesPassed": 5,
+      "testsPassed": 42,
+      "lint": "PASS",
+      "typecheck": "PASS"
+    },
+    "browser": {
+      "testsPassed": 22,
+      "finalHandoffRerunPassed": 7,
+      "transport": "API_STUB",
+      "viewports": [320, 390, 768, 1024, 1440],
+      "includesLegacyPaymentFlow": true,
+      "receivedKeyScreenshotsReviewed": [320, 1440],
+      "horizontalOverflowChecked": true
+    },
+    "schemaChanges": false,
+    "newDependencies": false,
+    "newSourceFiles": false,
+    "artifacts": "OS_TEMP_ONLY"
   }
 }

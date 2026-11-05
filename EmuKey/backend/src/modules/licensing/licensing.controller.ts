@@ -4,7 +4,9 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Patch,
   Get,
+  HttpCode,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -33,6 +35,7 @@ import {
   ResolveLicensingActionDto,
   LicensingActionResolutionDto,
 } from './licensing.dto.js';
+import { UpdateDeviceMetadataDto } from './licensing.dto.js';
 import { LicensingService } from './licensing.service.js';
 import { LicenseDeviceDto } from '../blockchain/presentation/license.dto.js';
 
@@ -41,6 +44,14 @@ import { LicenseDeviceDto } from '../blockchain/presentation/license.dto.js';
 @ApiBearerAuth()
 export class LicensingController {
   constructor(private readonly service: LicensingService) {}
+
+  @Patch('licenses/:licenseId/devices/:deviceId')
+  @UseGuards(AuthGuard, RolesGuard) @Roles('CUSTOMER')
+  @ApiOkResponse({ type: LicenseDeviceDto })
+  updateDevice(@CurrentUser() actor: AuthPrincipal, @Param('licenseId',ParseUUIDPipe) licenseId:string,
+    @Param('deviceId',ParseUUIDPipe) deviceId:string,@Body() dto:UpdateDeviceMetadataDto) {
+    return this.service.updateDeviceMetadata(actor,licenseId,deviceId,dto);
+  }
 
   @Post('activations/challenge')
   @UseGuards(OptionalAuthGuard)
@@ -73,6 +84,7 @@ export class LicensingController {
   @UseGuards(AuthGuard, RolesGuard)
   @Roles('CUSTOMER')
   @ApiOperation({ summary: 'Resolve the licensing action an email token authorizes without consuming it' })
+  @HttpCode(200)
   @ApiOkResponse({ type: LicensingActionResolutionDto })
   @ApiForbiddenResponse()
   @ApiUnauthorizedResponse()
@@ -165,6 +177,7 @@ export class LicensingController {
   }
 
   @Post('entitlements/verify')
+  @HttpCode(200)
   @UseGuards(OptionalAuthGuard)
   @ApiOkResponse({ type: EntitlementValidationDto })
   verifyEntitlement(@CurrentUser() actor: AuthPrincipal | undefined, @Body() dto: EntitlementVerifyDto) {

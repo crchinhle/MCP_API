@@ -1,3 +1,5 @@
+import type { NotificationWriter } from '../application/notification-writer.js';
+import { randomUUID } from 'node:crypto';
 import { Pool, type PoolClient } from 'pg';
 
 import type { NotificationCreateInput, NotificationRecord } from '../application/notification.service.js';
@@ -14,14 +16,45 @@ interface NotificationRow {
   data: unknown;
 }
 
-export class NotificationRepository {
+export class NotificationRepository implements NotificationWriter {
   constructor(private readonly pool: Pool) {}
+
+  async invalidateChainEventInTransaction(client: PoolClient, eventId: string): Promise<void> {
+    await client.query(`UPDATE notifications SET inbox_visible=false,updated_at=statement_timestamp()
+      WHERE data->>'chainEventId'=$1 AND type<>'LICENSE_STATUS_RECHECK'`, [eventId]);
+    await client.query(`UPDATE notification_deliveries d SET delivery_status='CANCELLED',lease_owner=NULL,
+      lease_expires_at=NULL,next_attempt_at=NULL,updated_at=statement_timestamp()
+      FROM notifications n WHERE d.notification_id=n.id AND n.data->>'chainEventId'=$1
+      AND n.type<>'LICENSE_STATUS_RECHECK' AND d.delivery_status IN ('PENDING','RETRYABLE_FAILED')`, [eventId]);
+  }
+
+  async invalidateLicenseRemindersInTransaction(client: PoolClient, licenseId: string): Promise<void> {
+    await client.query(`UPDATE notifications n SET inbox_visible=false,updated_at=statement_timestamp()
+      WHERE n.type='LICENSE_EXPIRING' AND n.data->>'licenseId'=$1 AND NOT EXISTS(
+        SELECT 1 FROM licenses l JOIN chain_events ce ON ce.id=l.last_applied_chain_event_id
+        WHERE l.id=$1::uuid AND l.status='ACTIVE' AND ce.finality_status='CONFIRMED'
+        AND l.expires_at>statement_timestamp() AND l.expires_at=(n.data->>'expiresAt')::timestamptz)`, [licenseId]);
+    await client.query(`UPDATE notification_deliveries d SET delivery_status='CANCELLED',lease_owner=NULL,
+      lease_expires_at=NULL,next_attempt_at=NULL,updated_at=statement_timestamp()
+      FROM notifications n WHERE d.notification_id=n.id AND n.type='LICENSE_EXPIRING'
+      AND n.data->>'licenseId'=$1 AND NOT n.inbox_visible AND d.delivery_status IN ('PENDING','RETRYABLE_FAILED')`, [licenseId]);
+  }
+
+  async find(userId:string,id:string) {
+    const result=await this.pool.query<NotificationRow>(`SELECT id,type,title,content,(read_at IS NOT NULL) AS is_read,
+      created_at,read_at,data FROM notifications WHERE user_id=$1 AND id=$2 AND inbox_visible`,[userId,id]);
+    return result.rows[0]?mapNotification(result.rows[0]):null;
+  }
 
   async enqueueInTransaction(client: PoolClient, input: NotificationCreateInput): Promise<NotificationRecord> {
     // Lock the logical event so retries never add devices registered after its creation.
     await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`notification:${input.userId}:${input.eventKey}`]);
     const existing = await client.query<NotificationRecord>(`SELECT id, (read_at IS NOT NULL) AS "isRead" FROM notifications WHERE user_id=$1 AND event_key=$2`, [input.userId, input.eventKey]);
-    if (existing.rows[0]) return existing.rows[0];
+    if (existing.rows[0]) {
+      if (input.type === 'LICENSE_EXPIRING') await client.query(
+        "UPDATE notifications SET inbox_visible=true,updated_at=statement_timestamp() WHERE id=$1 AND NOT inbox_visible", [existing.rows[0].id]);
+      return existing.rows[0];
+    }
     const result = await client.query<NotificationRecord>(
       `INSERT INTO notifications (user_id, event_key, type, title, content, data, inbox_visible)
        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, user_id AS "userId", FALSE AS "isRead"`,
@@ -50,7 +83,7 @@ export class NotificationRepository {
     finally { client.release(); }
   }
 
-  async list(userId: string, options: { cursor?: string; limit: number }): Promise<{ items: ReturnType<typeof mapNotification>[]; nextCursor: string | null }> {
+  async list(userId: string, options: { cursor?: string; limit: number }): Promise<{ items: ReturnType<typeof mapNotification>[]; nextCursor: string | null; unreadCount: number }> {
     const values: unknown[] = [userId];
     let cursorClause = '';
     if (options.cursor) {
@@ -60,13 +93,23 @@ export class NotificationRepository {
       } catch {
         throw new Error('INVALID_NOTIFICATION_CURSOR');
       }
-      if (typeof decoded.createdAt !== 'string' || typeof decoded.id !== 'string') throw new Error('INVALID_NOTIFICATION_CURSOR');
+      if (typeof decoded.createdAt !== 'string' || typeof decoded.id !== 'string' ||
+          !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}(?:\d{3})?Z$/.test(decoded.createdAt) ||
+          !Number.isFinite(Date.parse(decoded.createdAt)) ||
+          new Date(decoded.createdAt).toISOString() !== decoded.createdAt.replace(/(\.\d{3})\d{3}Z$/, '$1Z') ||
+          !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(decoded.id)) throw new Error('INVALID_NOTIFICATION_CURSOR');
       values.push(decoded.createdAt, decoded.id);
-      cursorClause = ' AND (created_at, id) < ($2::timestamptz, $3::uuid)';
+      // Old cursors stored JS milliseconds. Recover their exact timestamp from
+      // the owned row; new cursors carry PostgreSQL microseconds themselves.
+      const timestamp = /\.\d{3}Z$/.test(decoded.createdAt)
+        ? "COALESCE((SELECT cursor_row.created_at FROM notifications cursor_row WHERE cursor_row.id=$3::uuid AND cursor_row.user_id=$1), $2::timestamptz)"
+        : '$2::timestamptz';
+      cursorClause = ` AND (created_at, id) < (${timestamp}, $3::uuid)`;
     }
     values.push(options.limit + 1);
-    const result = await this.pool.query<NotificationRow>(
-      `SELECT id, user_id, event_key, type, title, content, data, (read_at IS NOT NULL) AS is_read, created_at, read_at
+    const result = await this.pool.query<NotificationRow & { cursor_created_at: string }>(
+      `SELECT id, user_id, event_key, type, title, content, data, (read_at IS NOT NULL) AS is_read, created_at, read_at,
+         to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_created_at
        FROM notifications WHERE user_id = $1 AND inbox_visible${cursorClause}
        ORDER BY created_at DESC, id DESC LIMIT $${values.length}`,
       values,
@@ -75,9 +118,12 @@ export class NotificationRepository {
     const rows = hasMore ? result.rows.slice(0, options.limit) : result.rows;
     const last = rows.at(-1);
     const nextCursor = hasMore && last
-      ? Buffer.from(JSON.stringify({ createdAt: last.created_at instanceof Date ? last.created_at.toISOString() : String(last.created_at), id: String(last.id) })).toString('base64url')
+      ? Buffer.from(JSON.stringify({ createdAt: String(last.cursor_created_at), id: String(last.id) })).toString('base64url')
       : null;
-    return { items: rows.map(mapNotification), nextCursor };
+    const count = await this.pool.query<{ unread_count: string }>(
+      'SELECT count(*) AS unread_count FROM notifications WHERE user_id=$1 AND inbox_visible AND read_at IS NULL', [userId],
+    );
+    return { items: rows.map(mapNotification), nextCursor, unreadCount: Number(count.rows[0]?.unread_count ?? 0) };
   }
 
   async markRead(userId: string, notificationId: string): Promise<ReturnType<typeof mapNotification> | null> {
@@ -137,6 +183,13 @@ export class NotificationRepository {
 
   private async cancelStaleDeliveries(): Promise<void> {
     await this.pool.query(`UPDATE notification_deliveries d SET delivery_status='CANCELLED',
+      lease_owner=NULL,lease_expires_at=NULL,next_attempt_at=NULL,updated_at=now()
+      FROM notifications n WHERE d.notification_id=n.id AND d.delivery_status IN ('PENDING','RETRYABLE_FAILED')
+      AND n.type<>'LICENSE_STATUS_RECHECK' AND n.data ? 'chainEventId'
+      AND NOT EXISTS (SELECT 1 FROM chain_events ce WHERE ce.id::text=n.data->>'chainEventId'
+        AND ce.finality_status='CONFIRMED' AND ce.block_hash=n.data->>'canonicalBlockHash'
+        AND ce.reorg_count::text=n.data->>'reorgCount')`);
+    await this.pool.query(`UPDATE notification_deliveries d SET delivery_status='CANCELLED',
       lease_owner=NULL, lease_expires_at=NULL, next_attempt_at=NULL, updated_at=now()
       FROM notifications n, mobile_push_tokens t
       WHERE d.notification_id=n.id AND d.push_token_id=t.id
@@ -144,9 +197,53 @@ export class NotificationRepository {
         AND (t.user_id<>n.user_id OR t.generation<>d.token_generation OR t.status<>'ACTIVE')`);
   }
 
+  async deliveryIsCurrent(notificationId:string, claim?: { id: string; leaseOwner: string }):Promise<boolean> {
+    const result=await this.pool.query(`SELECT 1 FROM notifications n WHERE n.id=$1 AND
+      (n.type='LICENSE_STATUS_RECHECK' OR NOT (n.data ? 'chainEventId') OR EXISTS (
+        SELECT 1 FROM chain_events ce WHERE ce.id::text=n.data->>'chainEventId' AND ce.finality_status='CONFIRMED'
+        AND ce.block_hash=n.data->>'canonicalBlockHash' AND ce.reorg_count::text=n.data->>'reorgCount'))
+      AND (n.type<>'LICENSE_EXPIRING' OR EXISTS(SELECT 1 FROM licenses l WHERE l.id::text=n.data->>'licenseId'
+        AND l.status='ACTIVE' AND l.expires_at>statement_timestamp() AND l.expires_at=(n.data->>'expiresAt')::timestamptz))
+      AND ($2::uuid IS NULL OR EXISTS(SELECT 1 FROM notification_deliveries d
+        LEFT JOIN mobile_push_tokens t ON t.id=d.push_token_id
+        WHERE d.id=$2 AND d.notification_id=n.id AND d.lease_owner=$3
+          AND d.delivery_status='RETRYABLE_FAILED' AND d.lease_expires_at>clock_timestamp()
+          AND (d.channel='EMAIL' OR (t.status='ACTIVE' AND t.user_id=n.user_id AND t.generation=d.token_generation))))`,
+      [notificationId, claim?.id ?? null, claim?.leaseOwner ?? null]);
+    return result.rows.length>0;
+  }
+
+  async cancelDelivery(id:string,leaseOwner:string) {
+    await this.pool.query(`UPDATE notification_deliveries SET delivery_status='CANCELLED',lease_owner=NULL,lease_expires_at=NULL,
+      next_attempt_at=NULL,updated_at=now() WHERE id=$1 AND lease_owner=$2`,[id,leaseOwner]);
+  }
+
+  async createExpiryReminders():Promise<number> {
+    const client=await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const rows=await client.query<{id:string;customer_user_id:string;expires_at:Date;days:number}>(`SELECT l.id,l.customer_user_id,l.expires_at,m.days
+        FROM licenses l CROSS JOIN (VALUES(7),(1)) m(days)
+        JOIN chain_events ce ON ce.id=l.last_applied_chain_event_id AND ce.finality_status='CONFIRMED'
+        WHERE l.status='ACTIVE' AND l.expires_at>statement_timestamp()
+          AND l.expires_at<=statement_timestamp()+m.days*interval '1 day'
+          AND (m.days=1 OR l.expires_at>statement_timestamp()+interval '1 day')
+          AND NOT EXISTS(SELECT 1 FROM notifications n WHERE n.user_id=l.customer_user_id AND n.inbox_visible
+            AND n.event_key='expiry:'||l.id::text||':'||to_char(l.expires_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')||':'||m.days::text)
+        ORDER BY l.expires_at,l.id LIMIT 1000 FOR SHARE OF l SKIP LOCKED`);
+      for(const row of rows.rows) await this.enqueueInTransaction(client,{channel:'IN_APP',type:'LICENSE_EXPIRING',title:'Bản quyền sắp hết hạn',
+        content:`Bản quyền còn không quá ${row.days} ngày. Mở bản quyền để gia hạn.`,userId:row.customer_user_id,
+        eventKey:`expiry:${row.id}:${row.expires_at.toISOString()}:${row.days}`,data:{licenseId:row.id,expiresAt:row.expires_at.toISOString()}});
+      await client.query('COMMIT');return rows.rows.length;
+    }catch(error){await client.query('ROLLBACK');throw error;}finally{client.release();}
+  }
+
   async claimNext(workerId: string, leaseSeconds = 300) {
     await this.cancelStaleDeliveries();
-    const result = await this.pool.query<NotificationRecord & { notificationId: string; tokenGeneration: number; attemptCount: number; channel: 'EMAIL' | 'PUSH'; eventKey: string; title: string; content: string; data: Record<string, unknown>; type: string; userId: string; email: string; pushToken: string | null }>(
+    // A BullMQ job may be redelivered with the same ID after a stalled worker.
+    // Each database claim needs its own fencing token, not just a worker label.
+    const leaseOwner = `CLAIMED_BY:${workerId.slice(0, 130)}:${randomUUID()}`;
+    const result = await this.pool.query<NotificationRecord & { leaseOwner: string; notificationId: string; tokenGeneration: number; attemptCount: number; channel: 'EMAIL' | 'PUSH'; eventKey: string; title: string; content: string; data: Record<string, unknown>; type: string; userId: string; email: string; pushToken: string | null }>(
       `WITH candidate AS (
         SELECT d.id FROM notification_deliveries d
         WHERE d.delivery_status IN ('PENDING','RETRYABLE_FAILED')
@@ -157,14 +254,14 @@ export class NotificationRepository {
         UPDATE notification_deliveries d SET delivery_status='RETRYABLE_FAILED',attempt_count=attempt_count+1,
           lease_owner=$1,lease_expires_at=now()+($2*interval '1 second'),updated_at=now()
         FROM candidate c WHERE d.id=c.id RETURNING d.*
-      ) SELECT d.id,n.id AS "notificationId",n.user_id AS "userId", d.destination_key AS email,
+      ) SELECT d.id,d.lease_owner AS "leaseOwner",n.id AS "notificationId",n.user_id AS "userId", d.destination_key AS email,
         t.token AS "pushToken",d.token_generation AS "tokenGeneration", n.event_key AS "eventKey",n.type,
         n.title,n.content,n.data,d.channel,d.attempt_count AS "attemptCount",
         d.delivery_status AS "deliveryStatus",(n.read_at IS NOT NULL) AS "isRead"
         FROM claimed d JOIN notifications n ON n.id=d.notification_id
         LEFT JOIN mobile_push_tokens t ON t.id=d.push_token_id AND t.user_id=n.user_id
           AND t.generation=d.token_generation AND t.status='ACTIVE'`,
-      [`CLAIMED_BY:${workerId}`,leaseSeconds],
+      [leaseOwner,leaseSeconds],
     );
     return result.rows[0] ?? null;
   }

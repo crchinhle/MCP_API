@@ -11,6 +11,14 @@ import { CatalogAdminRepository } from '../../../../../EmuKey/backend/src/module
 import type { AuthPrincipal } from '../../../../../EmuKey/backend/src/modules/identity-access/identity.types.js';
 import { seedBaseline } from '../../../../../EmuKey/backend/src/platform/database/seed-baseline.js';
 import { planCommitmentForProvider, providerNamespaceDigest } from '../../../../../EmuKey/backend/src/platform/crypto/license-crypto.js';
+import { Test } from '@nestjs/testing';
+import request from 'supertest';
+import type { Server } from 'node:http';
+import { CatalogController } from '../../../../../EmuKey/backend/src/modules/catalog/presentation/catalog.controller.js';
+import { CatalogService } from '../../../../../EmuKey/backend/src/modules/catalog/application/catalog.service.js';
+import { CatalogRepository } from '../../../../../EmuKey/backend/src/modules/catalog/infrastructure/catalog.repository.js';
+import { ApiExceptionFilter } from '../../../../../EmuKey/backend/src/platform/http/api-exception.filter.js';
+import { AuthGuard } from '../../../../../EmuKey/backend/src/modules/identity-access/security.guards.js';
 
 describe('provider-scoped catalog lifecycle', () => {
   let container: StartedPostgreSqlContainer;
@@ -58,6 +66,45 @@ describe('provider-scoped catalog lifecycle', () => {
   afterAll(async () => {
     if (pool) await pool.end();
     if (container) await container.stop();
+  });
+
+  it('keeps equal provider product codes separate through the public HTTP boundary', async () => {
+    const first = await service.createProduct(providerA, { code: 'HTTP_SHARED', name: 'First HTTP product' });
+    const second = await service.createProduct(providerB, { code: 'HTTP_SHARED', name: 'Second HTTP product' });
+    await service.publishProduct(providerA, first.id);
+    await service.publishProduct(providerB, second.id);
+    const expectedPlans = new Map<string, string[]>();
+    for (const [actor, product, basePrice] of [[providerA, first, 100_000], [providerB, second, 200_000]] as const) {
+      const ids: string[] = [];
+      for (let index = 0; index < 2; index += 1) {
+        const plan = await service.createPlan(actor, { productId: product.id, code: `HTTP_PLAN_${index}`, name: `HTTP offer ${index}`, billingCycle: 'MONTHLY',
+          durationMonths: 1, maxActiveDevices: index + 1, priceVnd: basePrice + index * 10_000 });
+        await service.publishPlan(actor, plan.id);
+        ids.push(plan.id);
+      }
+      expectedPlans.set(product.id, ids);
+    }
+    const draft = await service.createProduct(providerA, { code: 'HTTP_DRAFT', name: 'Not public' });
+    const module = await Test.createTestingModule({ controllers: [CatalogController], providers: [
+      { provide: CatalogService, useValue: new CatalogService(new CatalogRepository(pool)) },
+      { provide: CatalogAdminService, useValue: service },
+    ] }).overrideGuard(AuthGuard).useValue({ canActivate: () => true }).compile();
+    const app = module.createNestApplication();
+    app.useGlobalFilters(new ApiExceptionFilter());
+    await app.init();
+    try {
+      const get = (path: string) => request(app.getHttpServer() as Server).get(path);
+      expect((await get(`/products/by-id/${first.id}`).expect(200)).body).toMatchObject({ id: first.id, providerId: providerA.sub, name: first.name });
+      expect((await get(`/products/by-id/${second.id}`).expect(200)).body).toMatchObject({ id: second.id, providerId: providerB.sub, name: second.name });
+      for (const product of [first, second]) {
+        const body = (await get(`/products/by-id/${product.id}`).expect(200)).body;
+        expect(body.plans.map((plan: { id: string }) => plan.id).sort()).toEqual(expectedPlans.get(product.id)!.sort());
+      }
+      expect((await get('/products/HTTP_SHARED').expect(409)).body).toMatchObject({ error: { code: 'AMBIGUOUS_PRODUCT_CODE' } });
+      await get(`/products/by-id/${draft.id}`).expect(404);
+      await get('/products/by-id/00000000-0000-4000-8000-000000000099').expect(404);
+      await get('/products/by-id/not-a-uuid').expect(400);
+    } finally { await app.close(); }
   });
 
   it('gates namespace plans before publication and binds commitments without a wallet', async () => {

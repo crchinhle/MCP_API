@@ -23,6 +23,11 @@ describe('structured log redaction', () => {
           activationKey: sentinel,
           activationSecret: sentinel,
           currentPassword: sentinel,
+          currentKey: sentinel,
+          actionToken: sentinel,
+          refreshToken: sentinel,
+          accessToken: sentinel,
+          proof: sentinel,
           envelope: sentinel,
           password: sentinel,
           passwordConfirmation: sentinel,
@@ -40,6 +45,7 @@ describe('structured log redaction', () => {
           'x-secret-key': sentinel,
         },
       },
+      res: { body: { accessToken: sentinel, refreshToken: sentinel, activationKey: sentinel } },
     });
     await new Promise<void>((resolve) => stream.end(resolve));
 

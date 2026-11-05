@@ -5,6 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { conversationContextLabels, conversationStatusLabels, useAppendConversationMessage, useAskAi, useConversationMessages, useConversations, useCreateConversation } from '../../application/assistance/assistanceQueries';
 import { useRequestSupport } from '../../application/assistance/supportQueries';
 import { ConversationPanel } from '../components/ConversationPanel';
+import { KnowledgeCitations } from '../components/KnowledgeCitations';
 import {
   PageLoading,
   FactList,
@@ -15,8 +16,8 @@ import {
 export function BuyerAssistanceScreen() {
   const conversations = useConversations();
   const [searchParams, setSearchParams] = useSearchParams();
-  const selectedId = searchParams.get('conversation');
-  const setSelectedId = (id: string) => setSearchParams({ conversation: id });
+  const selectedId = searchParams.get('conversationId') ?? searchParams.get('conversation');
+  const setSelectedId = (id: string) => setSearchParams({ conversationId: id });
   const append = useAppendConversationMessage();
   const askAi = useAskAi();
   const create = useCreateConversation();
@@ -24,7 +25,7 @@ export function BuyerAssistanceScreen() {
   const conversation = selectedId ? conversations.data?.find((item) => item.id === selectedId) : conversations.data?.[0];
   const messages = useConversationMessages(conversation?.id);
   const startConversation = () => create.mutate(
-    { contextType: 'GENERAL', title: 'Hội thoại hỗ trợ' },
+    { contextType: searchParams.get('orderId') ? 'ORDER' : 'GENERAL', ...(searchParams.get('orderId') ? { contextId: searchParams.get('orderId')! } : {}), title: 'Hội thoại hỗ trợ' },
     { onSuccess: (created) => { setSelectedId(created.id); askAi.reset(); } },
   );
   if (conversations.isLoading) return <PageLoading />;
@@ -74,16 +75,17 @@ export function BuyerAssistanceScreen() {
             author="Buyer"
             initialMessages={(messages.data ?? []).map((message) => ({
               body: message.content,
+              citationDetails:message.citationDetails??[],
               id: message.id,
               author: message.senderType === 'CUSTOMER' ? ('Buyer' as const) : message.senderType === 'AI' ? ('AI' as const) : ('Support' as const),
             }))}
             inputLabel="Tin nhắn hỗ trợ"
             onSubmit={(content, clientMessageId) => append.mutateAsync({ clientMessageId, content, conversationId: conversation.id })}
-            onAskAi={(question, clientMessageId) => askAi.mutateAsync({ conversationId: conversation.id, question, clientMessageId })}
+            {...(conversation.status === 'AI_ACTIVE' ? { onAskAi: (question: string, clientMessageId: string) => askAi.mutateAsync({ conversationId: conversation.id, question, clientMessageId }) } : {})}
             readOnly={conversation.status === 'CLOSED'}
             submitLabel="Gửi tin nhắn"
           />
-          {askAi.variables?.conversationId === conversation.id && askAi.data ? <section aria-label="Câu trả lời AI"><h3>Trợ lý AI</h3><p>{askAi.data.answer}</p><p className="muted-copy">{askAi.data.grounded ? `Nguồn tham khảo: ${askAi.data.citedSourceIds.join(', ')}` : 'Chưa tìm thấy nguồn xác thực. Bạn nên kiểm tra lại với nhân viên hỗ trợ.'}</p></section> : null}
+          {askAi.variables?.conversationId === conversation.id && askAi.data ? <section aria-label="Câu trả lời AI"><h3>Trợ lý AI</h3><p>{askAi.data.answer}</p><KnowledgeCitations citations={askAi.data.citationDetails??[]} /></section> : null}
         </section>
         <aside className="workspace-card detail-card">
           <h2>Thông tin liên quan</h2>

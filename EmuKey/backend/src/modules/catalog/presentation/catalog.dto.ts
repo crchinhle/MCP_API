@@ -185,6 +185,10 @@ export class PublicCatalogPlanDto {
 }
 
 export class PublicCatalogProductDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'uuid' }) providerId!: string;
+  @ApiProperty() providerDisplayName!: string;
+  @ApiProperty() code!: string;
   @ApiPropertyOptional({ nullable: true, type: String }) imageUrl!:
     | string
     | null;

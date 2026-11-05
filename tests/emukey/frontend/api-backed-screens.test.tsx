@@ -64,8 +64,8 @@ describe('API-backed workspace screens', () => {
       expect(await screen.findByLabelText('Đang chờ chấp nhận: 1')).toBeTruthy();
       expect(await screen.findByLabelText('Hết hạn: 1')).toBeTruthy();
       expect(await screen.findByLabelText('Đã chấp nhận: 1')).toBeTruthy();
-      expect(screen.getByRole('link', { name: 'Quản lý lời mời →' }).getAttribute('href')).toBe('/system/console?view=users#provider-invitations');
-      fireEvent.click(screen.getByRole('link', { name: 'Xem nhà cung cấp →' }));
+      expect(screen.getByRole('link', { name: 'Quản lý lời mời' }).getAttribute('href')).toBe('/system/console?view=users#provider-invitations');
+      fireEvent.click(screen.getByRole('link', { name: 'Xem nhà cung cấp' }));
       const users = await screen.findByRole('region', { name: 'Danh sách người dùng' });
       expect(await within(users).findByText('Active Provider')).toBeTruthy();
       expect(within(users).queryByText('Locked Provider')).toBeNull();
@@ -116,7 +116,7 @@ describe('API-backed workspace screens', () => {
     ])) : original(input, init));
     try {
       render(<App initialEntries={['/system/console']} />);
-      fireEvent.click(await screen.findByRole('link', { name: 'Xem tài liệu →' }));
+      fireEvent.click(await screen.findByRole('link', { name: 'Xem tài liệu' }));
       expect(await screen.findByRole('button', { name: 'Published guide' })).toBeTruthy();
       expect(screen.queryByRole('button', { name: 'Pending guide' })).toBeNull();
     } finally { vi.mocked(fetch).mockImplementation(original); }

@@ -13,10 +13,10 @@ import { ProductArtwork } from '../components/ProductArtwork';
 import { SiteHeader } from '../components/SiteHeader';
 
 export function ProductDetailScreen({ authenticated = false }: { readonly authenticated?: boolean }) {
-  const { slug = '' } = useParams();
+  const { slug = '', productId } = useParams();
   const navigate = useNavigate();
   const auth = useOptionalAuth();
-  const { data: product, isLoading, isError } = useProduct(slug);
+  const { data: product, isLoading, isError } = useProduct(slug, productId);
   const [selectedPlanId, setSelectedPlanId] = useState('');
   const [purchaseOpen, setPurchaseOpen] = useState(false);
 

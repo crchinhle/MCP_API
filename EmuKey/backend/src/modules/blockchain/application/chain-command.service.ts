@@ -8,6 +8,7 @@ import {
 import type { ChainCommandRepository } from '../infrastructure/chain-command.repository.js';
 import type { ChainCommandRecord } from '../infrastructure/chain-command.repository.js';
 import type { ActivationEnvelopeRecoveryService } from './activation-envelope-recovery.service.js';
+import type { ProviderHandoffService } from '../../licensing/application/provider-handoff.service.js';
 
 export class ChainCommandService {
   constructor(
@@ -15,6 +16,7 @@ export class ChainCommandService {
     private readonly relayer: ChainRelayerPort,
     private readonly envelopes: ActivationEnvelopePort,
     private readonly recovery?: ActivationEnvelopeRecoveryService,
+    private readonly handoff?: Pick<ProviderHandoffService, 'hasDurableCommandKey'>,
   ) {}
 
   async processNext(workerId: string): Promise<string | null> {
@@ -25,21 +27,24 @@ export class ChainCommandService {
         await this.repository.markPending(command.commandId, workerId);
       }
       if (command.commandType === 'ISSUE_LICENSE' || command.commandType === 'ROTATE_KEY') {
-        if (this.recovery) command = await this.recovery.ensure(command);
+        const hasDurableKey = await this.handoff?.hasDurableCommandKey(command) ?? false;
+        if (!hasDurableKey && this.recovery) command = await this.recovery.ensure(command);
         const [envelope, durable] = await Promise.all([
-          this.envelopes.read(command.commandId),
+          hasDurableKey ? null : this.envelopes.read(command.commandId),
           command.commandType === 'ISSUE_LICENSE'
             ? this.repository.getLicenseCommitment(command.licenseId)
             : this.repository.getRotationCommitment(command.licenseId),
         ]);
         if (
-          !envelope ||
           !durable ||
-          envelope.licenseId !== command.licenseId ||
-          envelope.commitment !== durable.commitment ||
-          envelope.keyVersion !== durable.keyVersion ||
           command.payload.activationCommitment !== durable.commitment ||
-          command.payload.keyVersion !== durable.keyVersion
+          command.payload.keyVersion !== durable.keyVersion ||
+          (!hasDurableKey && (
+            !envelope ||
+            envelope.licenseId !== command.licenseId ||
+            envelope.commitment !== durable.commitment ||
+            envelope.keyVersion !== durable.keyVersion
+          ))
         ) {
           throw new Error('ACTIVATION_ENVELOPE_PRECONDITION_FAILED');
         }

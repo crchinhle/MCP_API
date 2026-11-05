@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsString, IsUUID, Matches, MaxLength, MinLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, IsUUID, Matches, MaxLength, MinLength, ValidateIf } from 'class-validator';
 
 export class CreateOrderDto {
   // Catalog IDs already persisted by the demo seed are PostgreSQL UUIDs,
@@ -34,9 +34,18 @@ export class AcceptServiceTermsDto {
 }
 
 export class ReviewPaymentDto {
-  @ApiProperty({ enum: ['RESOLVED', 'CLOSED_NO_ACTION'] })
-  @IsIn(['RESOLVED', 'CLOSED_NO_ACTION'])
-  status!: 'CLOSED_NO_ACTION' | 'RESOLVED';
+  @ApiProperty({ enum: ['NO_ACTION', 'REFUND_CONFIRMED', 'REMATCHED', 'ACCEPT_AND_FULFILL'] })
+  @IsIn(['NO_ACTION', 'REFUND_CONFIRMED', 'REMATCHED', 'ACCEPT_AND_FULFILL'])
+  resolution!: 'NO_ACTION' | 'REFUND_CONFIRMED' | 'REMATCHED' | 'ACCEPT_AND_FULFILL';
+  @ApiPropertyOptional({ maxLength: 200 })
+  @ValidateIf((value: ReviewPaymentDto) => value.resolution === 'REFUND_CONFIRMED' || value.refundReference !== undefined)
+  @IsString() @MinLength(3) @MaxLength(200) refundReference?: string;
+  @ApiPropertyOptional({ format: 'uuid' })
+  @ValidateIf((value: ReviewPaymentDto) => ['REMATCHED','ACCEPT_AND_FULFILL'].includes(value.resolution) || value.orderId !== undefined)
+  @IsUUID() orderId?: string;
+  @ApiPropertyOptional({ format: 'uuid' })
+  @ValidateIf((value: ReviewPaymentDto) => ['REMATCHED','ACCEPT_AND_FULFILL'].includes(value.resolution) || value.paymentAttemptId !== undefined)
+  @IsUUID() paymentAttemptId?: string;
 
   @ApiProperty()
   @IsString()
@@ -121,6 +130,8 @@ export class RenewalPreviewDto {
 }
 
 export class PaymentRetryDecisionDto {
+  @ApiProperty({ enum: ['WAIT', 'VIEW_LICENSE', 'CONTACT_SUPPORT', 'CREATE_NEW_ORDER'] })
+  customerNextAction!: 'WAIT' | 'VIEW_LICENSE' | 'CONTACT_SUPPORT' | 'CREATE_NEW_ORDER';
   @ApiProperty() allowed!: boolean;
   @ApiProperty({ description: 'The existing live checkout can be resumed without creating another attempt.' }) canResume!: boolean;
   @ApiProperty({ enum: ['READY', 'ATTEMPT_PENDING', 'PAYMENT_REVIEW', 'ORDER_NOT_PAYABLE'] })
@@ -187,6 +198,8 @@ export class PaymentReceiptDto {
 }
 
 export class PaymentReviewDto {
+  @ApiPropertyOptional({ nullable: true, type: String }) reviewResolution!: string | null;
+  @ApiProperty({ type: Object }) reviewEvidence!: Record<string, unknown>;
   @ApiProperty() amountVnd!: number;
   @ApiProperty({ enum: PAYMENT_CLASSIFICATIONS }) classification!: string;
   @ApiProperty({ format: 'uuid' }) id!: string;

@@ -143,7 +143,7 @@ export class RpcChainIndexerService implements ChainRpcIndexerPort {
       | 'completeRange'
       | 'eventIdentities'
       | 'release'
-    >,
+    > & Partial<Pick<ChainIndexerCheckpointRepository, 'pendingReceiptBlocks'>>,
     private readonly indexer: Pick<
       ChainIndexerService,
       'ingest' | 'markReorged'
@@ -164,11 +164,21 @@ export class RpcChainIndexerService implements ChainRpcIndexerPort {
   async poll(workerId: string): Promise<number | null> {
     const latestBlock = await this.rpc.latestBlock();
     if (latestBlock < this.options.deploymentBlock) return null;
+    // Receipt lookup proves a submitted transaction's block without skipping
+    // any historical range. Read its canonical logs through the same ingestion
+    // path so a long offline backfill cannot delay already-paid purchases.
+    let receiptEvents = 0;
+    const receiptBlocks = await this.checkpoints.pendingReceiptBlocks?.(this.options) ?? [];
+    for (const block of receiptBlocks) {
+      if (block >= this.options.deploymentBlock && block <= latestBlock) {
+        receiptEvents += await this.indexRange(block, block, latestBlock);
+      }
+    }
     if (
       this.lastCompletedBlock !== undefined &&
       latestBlock <= this.lastCompletedBlock
     ) {
-      return null;
+      return receiptEvents > 0 ? receiptEvents : null;
     }
     const range = await this.checkpoints.claimRange(
       this.options,
@@ -178,31 +188,9 @@ export class RpcChainIndexerService implements ChainRpcIndexerPort {
       this.options.batchSize,
       this.options.requiredConfirmations + 1,
     );
-    if (!range) return null;
+    if (!range) return receiptEvents > 0 ? receiptEvents : null;
     try {
-      const [logs, existing] = await Promise.all([
-        this.contractEvents(range.fromBlock, range.toBlock),
-        this.checkpoints.eventIdentities(
-          this.options,
-          range.fromBlock,
-          range.toBlock,
-        ),
-      ]);
-      const canonical = new Map(
-        logs.map((log) => [
-          identity(log.transactionHash, log.logIndex),
-          log.blockHash.toLowerCase(),
-        ]),
-      );
-      for (const stored of existing) {
-        if (
-          canonical.get(identity(stored.transactionHash, stored.logIndex)) !==
-          stored.blockHash.toLowerCase()
-        ) {
-          await this.indexer.markReorged(stored.id);
-        }
-      }
-      for (const log of logs) await this.ingest(log, latestBlock);
+      const count = await this.indexRange(range.fromBlock, range.toBlock, latestBlock);
       await this.checkpoints.completeRange(
         this.options,
         workerId,
@@ -210,11 +198,28 @@ export class RpcChainIndexerService implements ChainRpcIndexerPort {
         await this.rpc.blockHash(range.toBlock),
       );
       this.lastCompletedBlock = range.toBlock;
-      return logs.length;
+      return receiptEvents + count;
     } catch (error) {
       await this.checkpoints.release(this.options, workerId);
       throw error;
     }
+  }
+
+  private async indexRange(fromBlock: number, toBlock: number, latestBlock: number): Promise<number> {
+    const [logs, existing] = await Promise.all([
+      this.contractEvents(fromBlock, toBlock),
+      this.checkpoints.eventIdentities(this.options, fromBlock, toBlock),
+    ]);
+    const canonical = new Map(logs.map((log) => [
+      identity(log.transactionHash, log.logIndex), log.blockHash.toLowerCase(),
+    ]));
+    for (const stored of existing) {
+      if (canonical.get(identity(stored.transactionHash, stored.logIndex)) !== stored.blockHash.toLowerCase()) {
+        await this.indexer.markReorged(stored.id);
+      }
+    }
+    for (const log of logs) await this.ingest(log, latestBlock);
+    return logs.length;
   }
 
   private async contractEvents(

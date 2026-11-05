@@ -1,6 +1,12 @@
 # Import dữ liệu demo
 
-> Từ 22/10/2026, `EmuKey/backend/database/schema.sql` là file khởi tạo duy nhất, khai báo thẳng cấu trúc cuối cùng. `db:initialize` (và alias `db:reset`) mặc định xóa schema `public` cùng các đối tượng phụ thuộc rồi tạo lại; không DROP DATABASE. Dừng API/worker và xác nhận đúng database, bản sao phục hồi trước khi chạy. Không còn lệnh `db:migrate`; file này không dùng để nâng cấp tại chỗ và giữ dữ liệu cũ.
+> Giao diện hiện hành dùng mục **Bản quyền**. Với bản quyền mới, theo dõi lần lượt **Đang xác nhận blockchain → Đang bàn giao cho nhà cung cấp → Nhà cung cấp đã nhận bản quyền → Mã bản quyền đã được nhận**. Chỉ bấm **Tôi đã lưu mã** sau khi đã lưu an toàn. Sau xác nhận, trang đơn hàng và danh sách bản quyền cập nhật cùng trạng thái; tải lại không cấp key lần nữa. Quota thiết bị trong gói do nhà cung cấp quản lý; điều khiển thiết bị của EmuKey chỉ còn cho dữ liệu legacy.
+
+> Nghiệm thu 05/11/2026: luồng PROVIDER_HANDOFF đã chạy qua SePay sandbox và Sepolia thật, receiver kiểm thử với database riêng, buyer nhận/ACK qua API và quay về trang đơn hàng. Phép đo mới: 19,039 giây đến vào block, 32,782 giây đến CONFIRMED, 33,943 giây đến provider ACK. Đây là một mẫu sandbox; xem bằng chứng và giới hạn trong `docs/emukey/traceability/canonical-e2e-golden-flow.json`.
+
+> Cập nhật 04/11/2026: `EmuKey/backend/database/schema.sql` là SQL authority duy nhất, hiện có 24 bảng. Database ở `cf17043` cần nâng lên `continuity_20261101` trước, sau đó chạy `db:upgrade --from=continuity_20261101 --to=provider_handoff_20261104`; xem hướng dẫn backup/restore trong `EmuKey/README.md`. `db:initialize` (alias `db:reset`) dành cho database mới; raw fresh SQL xóa schema `public` cùng các đối tượng phụ thuộc rồi tạo lại, không DROP DATABASE. CLI từ chối production và database không rỗng thiếu flag destructive. Không có `db:migrate` hay auto-sync.
+
+> Database development Neon PostgreSQL 18 đã nâng trực tiếp từ `9ed5729` lên `provider_handoff_20261104` sau khi backup/restore và đối chiếu hash dữ liệu. Với database khác còn ở đúng baseline này, dùng `db:upgrade --from=9ed5729 --to=provider_handoff_20261104`; không chạy initializer. Đường này giữ token estimate và lịch sử thông báo, chặn dữ liệu cũ chưa có ánh xạ an toàn. Chi tiết giới hạn và trạng thái sandbox xem kế hoạch handoff.
 
 > Seed demo cũng nằm ở cuối `schema.sql`: từ thư mục `EmuKey`, chạy `corepack pnpm --dir backend db:seed:demo` sau khi build backend, với `NODE_ENV=development`. Database mới có thể dùng `corepack pnpm --dir backend db:initialize --demo` để tạo cấu trúc và seed trong cùng transaction. Dữ liệu gồm 50 sản phẩm, 30 gói và 30 tài khoản demo; seed không tự chạy khi khởi động API.
 
@@ -131,7 +137,14 @@ Trên mobile, nếu tải điều khoản gia hạn thất bại, chọn **Tải
 
 ## Khôi phục mã từ email và xem thông báo
 
-Liên kết khôi phục được kiểm tra trước khi mở đúng bản quyền. Nếu liên kết hết hạn, mở danh sách bản quyền để yêu cầu email mới. Nếu lỗi kết nối, chọn **Thử lại**. Mã xác nhận được xóa khỏi URL; tải lại trang trước khi gửi yêu cầu có thể cần mở lại liên kết email. Liên kết thu hồi thiết bị hoặc đổi mã không dùng cho form khôi phục; tiếp tục trong ứng dụng đã gửi yêu cầu.
+Liên kết email được kiểm tra quyền trước khi mở đúng bản quyền và form khôi phục/đổi mã. Các thao tác thiết bị chỉ còn dành dữ liệu legacy. Nếu hết hạn, mở danh sách bản quyền để yêu cầu email mới; nếu lỗi kết nối, chọn **Thử lại**. Token được xóa khỏi URL. Mobile có thể yêu cầu email rồi xác nhận trên web; sau đó chọn **Quay lại ứng dụng** để mở đúng bản quyền và đọc lại trạng thái. Không cần chép token vào mobile. Thu hồi từ xa/khôi phục yêu cầu mật khẩu theo backend; đổi mã cần mã hiện tại và token đúng mục đích.
+
+Khi nhận mã trên web, lưu mã rồi bấm **Tôi đã lưu mã** để đóng receipt. Mất phản hồi trước ACK có thể thử lại cùng yêu cầu trong tối đa 5 phút, không kéo dài thời hạn bằng retry; sau ACK hoặc hết hạn phải dùng khôi phục. Trên mobile, app lưu mã vào SecureStore rồi ACK, thử lại ACK khi mất kết nối; dữ liệu được gắn owner và phiên bản key. Đăng xuất xóa mã do phiên bản app hiện tại quản lý. Mã cũ không được hiển thị như mã hiện tại sau rotation/recovery.
+
+AI chỉ nhận câu hỏi trong hội thoại AI_ACTIVE; khi chuyển cho nhân viên, dùng phần tin nhắn hỗ trợ. Nguồn AI có tên/phiên bản/đoạn trích; mở nguồn phải còn quyền đọc. Lịch sử cũ thiếu nguồn không được coi là đã xác thực.
+
+Cập nhật 02/11/2026: ở console hỗ trợ, quay lại tab sẽ tạm khóa form để xác minh hội thoại vẫn thuộc mình. Nếu lỗi kết nối, bấm **Làm mới**; không cần nhận lại hội thoại khi phiên còn hiệu lực. Nếu phiên đã hết hạn hoặc người khác đã nhận, tải lại hàng đợi và chỉ nhận lại khi còn khả dụng. Nội dung chưa gửi được giữ lại khi thao tác lỗi; gửi lại dùng phiên xử lý hiện tại. Đóng/trả hội thoại đã thành công có thể thử lại sau khi mất response mà không tạo thêm lần cập nhật; yêu cầu từ phiên cũ không được tác động đến phiên mới.
+
 
 Trong biểu tượng thông báo, chọn **Xem thêm thông báo** để tải trang tiếp theo từ backend; cursor được giới hạn và sắp xếp ổn định, không chỉ cắt mảng trên UI. Mobile cũng có **Tải thêm thông báo**, refresh và retry. Khi đánh dấu đã đọc thất bại, trạng thái không tự đổi và hiển thị lỗi để thử lại. Target hợp lệ điều hướng theo order/license/conversation ở màn hình tương ứng; target không còn quyền không được mở dữ liệu. Trên màn hình nhỏ của Provider/Support/System, mở menu vai trò để thấy biểu tượng thông báo. Nếu tạo hỗ trợ từ chi tiết đơn hàng thất bại, thông báo lỗi xuất hiện ngay trong chi tiết đơn; có thể bấm lại **Cần hỗ trợ về đơn này**.
 
@@ -141,12 +154,17 @@ Trong biểu tượng thông báo, chọn **Xem thêm thông báo** để tải 
 - Notification worker đã được đăng ký trong `WorkerModule`; cần cung cấp Redis reachable (biến hiện tại đang là `REDIS_URL=redis://127.0.0.1:6379`) trước khi chạy `corepack pnpm start:worker`.
 - Chưa gọi là nghiệm thu thật nếu chưa có domain HTTPS/CORS/callback, hộp thư kiểm thử, Redis host, SePay sandbox callback, Gemini/Brevo thật và giao dịch Sepolia có receipt/finality/indexer. Mobile chưa được nghiệm thu trên thiết bị Android thật.
 
-## Kiến trúc trạng thái thiết bị
 
-Individual device state is operational data owned by PostgreSQL. Blockchain does not store device identity. Blockchain stores only an asynchronously synchronized aggregate active-device count. License lifecycle finality remains on-chain.
+## Cấu hình tiếp nhận bản quyền của nhà cung cấp — 04/11/2026
 
-- Activate/revoke xác minh ownership, license ACTIVE/chưa hết hạn, activation commitment, challenge, EIP-191 proof, signer và binding generation; sau đó ghi `license_devices.ACTIVE` hoặc `REVOKED` ngay trong transaction PostgreSQL.
-- License row được khóa khi tính quota. `active_device_count` lấy từ các row `ACTIVE`; `device_state_version` tăng đơn điệu trong cùng transaction. Retry không chờ blockchain và không cấp thêm quota.
-- Backend enqueue command `SYNC_DEVICE_COUNT` bất đồng bộ. Payload chỉ gồm license id, active count, version, protocol version và command id. Worker retry lỗi; lỗi/reorg không rollback device state và không chặn entitlement.
-- Entitlement cần license lifecycle chain-confirmed, còn hạn, và device `ACTIVE` trong PostgreSQL. Device không có finality blockchain riêng.
-- Cấu trúc thiết bị PostgreSQL đã nằm trong schema cuối cùng. Contract có `syncActiveDeviceCount`; cần quy trình deploy riêng và cập nhật địa chỉ/ABI trước khi chạy relayer thật. Việc sửa file SQL không deploy contract.
+1. Dùng backend đã nâng schema `provider_handoff_20261104`; không khởi tạo lại database có dữ liệu. Chạy API và worker cùng phiên bản.
+2. Đăng nhập provider → Thanh toán & đối soát → tab **Tích hợp**.
+3. Nhập URL HTTPS nhận bản quyền và token mà máy chủ của bạn chấp nhận. Token chỉ giữa hai máy chủ, không đưa vào sản phẩm của người mua.
+4. Chọn xác nhận ủy quyền, **Lưu cấu hình**, **Kiểm tra kết nối**, rồi **Bật tiếp nhận**. Mỗi lần sửa cấu hình phải kiểm tra lại.
+5. Bảng Bàn giao cho biết đang chờ, đang gửi, chờ gửi lại, đã giao hoặc lỗi. Sửa cấu hình nếu cần, probe/bật lại rồi chọn **Gửi lại** với lý do; thao tác giữ nguyên mã đã phát hành.
+
+Endpoint cần hỗ trợ probe và message schemaVersion=1, ghi dữ liệu/receipt trước khi trả HTTP 200/201. Nhà cung cấp upsert snapshot theo revision, từ chối revision cũ và kiểm tra đúng sản phẩm/thời hạn/trạng thái khi khách sử dụng key.
+
+Người mua theo dõi **Đơn hàng/Bản quyền**: đã thanh toán chưa đồng nghĩa đã bàn giao. Chờ nhà cung cấp xác nhận rồi nhận/lưu mã; nếu bàn giao lỗi, liên hệ hỗ trợ theo đơn, không thanh toán lại. Giữ nút **Xem đơn hàng đã mua** về `/buyer/orders`.
+
+Gia hạn, đổi mã, tạm ngưng và thu hồi cần đồng bộ sang hệ thống bên bán. Khi chưa có xác nhận, hiển thị đang chờ đồng bộ; không kết luận sản phẩm bên bán đã mở/khóa. Phần mềm của bên bán quản lý thiết bị và quyền sử dụng thực tế.

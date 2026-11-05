@@ -21,6 +21,7 @@ function fixture() {
     }),
   };
   const commands = {
+    recoverDeadLetter: vi.fn().mockResolvedValue({ commandId: 'command', status: 'PENDING' }),
     reconcileReceipt: vi.fn().mockResolvedValue(null),
     reconcileUnknown: vi
       .fn()
@@ -58,6 +59,13 @@ function fixture() {
 }
 
 describe('BlockchainReconciliationService', () => {
+  it.each(['SUPPORT_STAFF', 'CUSTOMER', 'PROVIDER_ADMIN'] as const)('rejects %s before manual dead-letter recovery', async (role) => {
+    const setup = fixture();
+    await expect(setup.service.recoverDeadLetter({ role, sessionVersion: 1, sub: 'actor' }, 'command', {
+      mode: 'REQUEUE_NO_SUBMISSION', reason: 'Investigated command',
+    })).rejects.toBeInstanceOf(ForbiddenException);
+    expect(setup.commands.recoverDeadLetter).not.toHaveBeenCalled();
+  });
   it('indexes real RPC ranges, reconciles durable commands and repairs canonical projections', async () => {
     const setup = fixture();
 

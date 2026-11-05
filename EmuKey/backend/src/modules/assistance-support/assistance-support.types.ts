@@ -1,10 +1,13 @@
 import type { Role } from '../identity-access/identity.types.js';
+import type { CitationDetail } from './application/ports/ai-gateway.port.js';
 
 export type ConversationStatus = 'AI_ACTIVE' | 'WAITING_SUPPORT' | 'SUPPORT_ACTIVE' | 'CLOSED';
 export type ConversationContextType = 'GENERAL' | 'PRODUCT' | 'PLAN' | 'ORDER' | 'LICENSE';
 export type MessageSenderType = 'CUSTOMER' | 'SUPPORT' | 'AI' | 'SYSTEM';
 
 export interface ConversationRecord {
+  claimVersion: number;
+  claimExpiresAt: string | null;
   assignedSupportUserId: string | null;
   contextId: string | null;
   contextType: ConversationContextType;
@@ -16,6 +19,7 @@ export interface ConversationRecord {
 }
 
 export interface MessageRecord {
+  citationDetails?: CitationDetail[];
   clientMessageId: string;
   content: string;
   conversationId: string;

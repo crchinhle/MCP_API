@@ -215,7 +215,7 @@ async function validate() {
     }
   }
 
-  const schema = await readFile(schemaPath, 'utf8');
+  const schema = (await readFile(schemaPath, 'utf8')).replace(/\/\*[\s\S]*?\*\//g, '');
   const tables = [
     ...schema.matchAll(/^\s*CREATE TABLE\s+([a-z_][a-z0-9_]*)/gim),
   ].map((match) => match[1]);

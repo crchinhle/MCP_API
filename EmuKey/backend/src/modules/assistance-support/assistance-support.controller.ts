@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { CurrentUser, Roles } from '../identity-access/security.decorators.js';
@@ -6,6 +6,7 @@ import { AuthGuard, RolesGuard } from '../identity-access/security.guards.js';
 import type { AuthPrincipal } from '../identity-access/identity.types.js';
 import { AiAnswerDto, AiAskDto, AppendMessageDto, ConversationDto, CreateConversationDto, MessageDto, RequestSupportDto } from './assistance-support.dto.js';
 import { AssistanceSupportService } from './assistance-support.service.js';
+import { SupportClaimDto, CloseConversationDto } from './assistance-support.dto.js';
 
 @ApiTags('assistance')
 @Controller('conversations')
@@ -45,11 +46,13 @@ export class AssistanceSupportController {
   messages(@CurrentUser() actor: AuthPrincipal, @Param('conversationId', ParseUUIDPipe) conversationId: string) { return this.service.listMessages(actor, conversationId); }
 
   @Post(':conversationId/ai-ask')
+  @HttpCode(200)
   @Roles('CUSTOMER')
   @ApiOkResponse({ type: AiAnswerDto })
   askAi(@CurrentUser() actor: AuthPrincipal, @Param('conversationId', ParseUUIDPipe) conversationId: string, @Body() dto: AiAskDto) { return this.service.askAi(actor, conversationId, dto.question, dto.clientMessageId); }
 
   @Post(':conversationId/request-support')
+  @HttpCode(200)
   @Roles('CUSTOMER')
   @ApiOperation({ summary: 'Escalate an AI conversation to the Support queue' })
   @ApiOkResponse({ type: ConversationDto })
@@ -62,18 +65,27 @@ export class AssistanceSupportController {
   queuePreviewMessages(@CurrentUser() actor: AuthPrincipal, @Param('conversationId', ParseUUIDPipe) conversationId: string) { return this.service.listQueuePreviewMessages(actor, conversationId); }
 
   @Post(':conversationId/claim')
+  @HttpCode(200)
   @Roles('SUPPORT_STAFF')
   @ApiOkResponse({ type: ConversationDto })
   claim(@CurrentUser() actor: AuthPrincipal, @Param('conversationId', ParseUUIDPipe) conversationId: string) { return this.service.claim(actor, conversationId); }
 
   @Post(':conversationId/release')
+  @HttpCode(200)
   @Roles('SUPPORT_STAFF')
   @ApiOperation({ summary: 'Release a claimed conversation back to the queue' })
   @ApiOkResponse({ type: ConversationDto })
-  release(@CurrentUser() actor: AuthPrincipal, @Param('conversationId', ParseUUIDPipe) conversationId: string) { return this.service.release(actor, conversationId); }
+  release(@CurrentUser() actor: AuthPrincipal, @Param('conversationId', ParseUUIDPipe) conversationId: string, @Body() dto: SupportClaimDto) { return this.service.release(actor, conversationId, dto.claimVersion); }
+
+  @Post(':conversationId/heartbeat')
+  @HttpCode(200)
+  @Roles('SUPPORT_STAFF')
+  @ApiOkResponse({ type: ConversationDto })
+  heartbeat(@CurrentUser() actor: AuthPrincipal, @Param('conversationId', ParseUUIDPipe) conversationId: string, @Body() dto: SupportClaimDto) { return this.service.heartbeat(actor,conversationId,dto.claimVersion); }
 
   @Post(':conversationId/close')
+  @HttpCode(200)
   @Roles('CUSTOMER', 'SUPPORT_STAFF', 'SYSTEM_ADMIN')
   @ApiOkResponse({ type: ConversationDto })
-  close(@CurrentUser() actor: AuthPrincipal, @Param('conversationId', ParseUUIDPipe) conversationId: string) { return this.service.close(actor, conversationId); }
+  close(@CurrentUser() actor: AuthPrincipal, @Param('conversationId', ParseUUIDPipe) conversationId: string, @Body() dto: CloseConversationDto) { return this.service.close(actor, conversationId, dto?.claimVersion); }
 }

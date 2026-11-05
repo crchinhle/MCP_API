@@ -21,6 +21,8 @@ export interface NotificationApiRecord {
   readonly isRead?: boolean;
   readonly metadata?: Record<string, unknown> | null;
   readonly occurredAt?: string | null;
+  readonly createdAt?: string | null;
+  readonly target?: NotificationRecord['target'];
   readonly readAt?: string | null;
   readonly title?: string | null;
 }
@@ -28,6 +30,7 @@ export interface NotificationApiRecord {
 export interface NotificationPage {
   readonly items: NotificationApiRecord[];
   readonly nextCursor: string | null;
+  readonly unreadCount: number;
 }
 
 export const notificationTypeLabels: Record<string, string> = {
@@ -46,7 +49,7 @@ export function mapNotificationRecord(source: NotificationApiRecord): Notificati
   const title = source.title
     ?? (type ? notificationTypeLabels[type] : undefined)
     ?? 'Thông báo';
-  const createdAt = source.occurredAt ?? undefined;
+  const createdAt = source.createdAt ?? source.occurredAt ?? undefined;
   return {
     id: source.id,
     title,
@@ -54,7 +57,7 @@ export function mapNotificationRecord(source: NotificationApiRecord): Notificati
     isRead: source.isRead === true,
     ...(createdAt ? { createdAt } : {}),
     ...(source.readAt !== undefined ? { readAt: source.readAt } : {}),
-    target: source.metadata && typeof source.metadata.target === 'object' ? source.metadata.target as NotificationRecord['target'] : null,
+    target: source.target ?? (source.metadata && typeof source.metadata.target === 'object' ? source.metadata.target as NotificationRecord['target'] : null),
     ...(type ? { type } : {}),
   };
 }
@@ -64,11 +67,10 @@ export function useNotifications() {
     queryKey: ['notifications'],
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam }) => {
-      // Use the API's default page size; its query DTO rejects a string limit.
       const params = new URLSearchParams();
       if (pageParam) params.set('cursor', pageParam);
       const page = await requestJson<NotificationPage>(`/notifications${params.size ? `?${params.toString()}` : ''}`);
-      return { items: page.items.map(mapNotificationRecord), nextCursor: page.nextCursor };
+      return { items: page.items.map(mapNotificationRecord), nextCursor: page.nextCursor, unreadCount: page.unreadCount };
     },
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     refetchInterval: 15_000,

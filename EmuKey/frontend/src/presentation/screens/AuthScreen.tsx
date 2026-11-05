@@ -84,7 +84,7 @@ export function AuthScreen() {
         <Brand inverted />
         <h1 id="auth-story-title">Quản lý bản quyền phần mềm đa Provider bằng Blockchain</h1>
         <ul className="benefit-list">
-          <li><span aria-hidden="true">✓</span>Quản lý License và thiết bị</li>
+          <li><span aria-hidden="true">✓</span>Quản lý bản quyền đã mua</li>
           <li><span aria-hidden="true">✓</span>Theo dõi đơn hàng và thanh toán</li>
           <li><span aria-hidden="true">✓</span>Xác minh công khai trên Blockchain</li>
         </ul>
