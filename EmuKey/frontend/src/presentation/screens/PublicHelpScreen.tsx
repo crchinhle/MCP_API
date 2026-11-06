@@ -27,7 +27,7 @@ export function PublicHelpScreen() {
   return (
     <div className="page-shell">
       <SiteHeader />
-      <main className="public-help-content">
+      <main className="public-help-content" id="main-content" tabIndex={-1}>
         <section aria-labelledby="public-help-title" className="public-help-card">
           <h1 id="public-help-title">Hướng dẫn sử dụng EmuKey</h1>
           <Input.Search

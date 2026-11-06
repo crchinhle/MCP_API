@@ -1,7 +1,8 @@
-import { Outlet, NavLink } from 'react-router-dom';
+import { Link, Outlet, NavLink, useLocation } from 'react-router-dom';
 import { SiteHeader } from './SiteHeader';
 
 function CustomerNavigation() {
+  const location = useLocation();
   const items = [
     { label: 'Tổng quan', to: '/buyer', end: true },
     { label: 'Mua sắm', to: '/catalog' },
@@ -12,7 +13,9 @@ function CustomerNavigation() {
 
   return (
     <nav aria-label="Điều hướng Customer" className="customer-navigation">
-      {items.map((item) => (
+      {items.map((item) => item.to === '/catalog' && location.pathname.startsWith('/buyer/products') ? (
+        <Link className="active" aria-current="page" key={item.to} to={item.to}>{item.label}</Link>
+      ) : (
         <NavLink
           className={({ isActive }) => isActive ? 'active' : ''}
           {...(item.end ? { end: true } : {})}
@@ -29,9 +32,9 @@ function CustomerNavigation() {
 export function CustomerLayout() {
   return (
     <div className="page-shell customer-layout">
-      <SiteHeader />
+      <SiteHeader skipTargetId="customer-content" />
       <CustomerNavigation />
-      <Outlet />
+      <div id="customer-content" tabIndex={-1}><Outlet /></div>
     </div>
   );
 }

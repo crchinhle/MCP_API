@@ -88,11 +88,11 @@ export function SupportConsoleScreen() {
   if (queue.isLoading && !queue.data) return <PageLoading />;
   return (
     <>
-      <Button onClick={()=>setShowDeliveries(!showDeliveries)}>Theo dõi bàn giao bản quyền</Button>{showDeliveries?<ProviderDeliveryPanel scope="operations"/>:null}
       <PageHeader
         title="Hàng đợi hỗ trợ"
-        action={<><Button onClick={() => { setRefreshing(true); setLease({ key: leaseKey, state: 'CHECKING' }); void queue.refetch().finally(() => { setRefreshing(false); setLeaseRevision((value) => value + 1); }); }} disabled={refreshing}>Làm mới</Button><LoadingOverlay active={refreshing} label="Đang tải lại hàng đợi hỗ trợ" /></>}
+        action={<div className="workspace-actions"><Button aria-expanded={showDeliveries} aria-controls="support-deliveries" onClick={()=>setShowDeliveries(!showDeliveries)}>Theo dõi bàn giao bản quyền</Button><Button onClick={() => { setRefreshing(true); setLease({ key: leaseKey, state: 'CHECKING' }); void queue.refetch().finally(() => { setRefreshing(false); setLeaseRevision((value) => value + 1); }); }} disabled={refreshing}>Làm mới</Button><LoadingOverlay active={refreshing} label="Đang tải lại hàng đợi hỗ trợ" /></div>}
       />
+      {showDeliveries ? <div id="support-deliveries"><ProviderDeliveryPanel scope="operations" /></div> : null}
       {queue.isError ? <Alert showIcon type="error" message="Không thể tải hàng đợi hỗ trợ." action={<Button onClick={() => void queue.refetch()}>Thử lại</Button>} /> : null}
       {selectedId && !selected && !queue.isLoading && !queue.isError ? <Alert type="warning" title="Hội thoại không có trong hàng đợi hiện tại hoặc quyền truy cập đã thay đổi." action={<Button onClick={() => setSelectedId(undefined)}>Xem hàng đợi</Button>} /> : null}
           {claim.isError || close.isError || release.isError ? <Alert type="error" title="Không thể cập nhật hội thoại. Vui lòng thử lại." /> : null}

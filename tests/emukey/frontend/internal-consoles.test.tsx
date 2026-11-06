@@ -127,7 +127,7 @@ describe('W17-W18 Internal consoles', () => {
     render(<App initialEntries={['/system/console']} />);
     expect(screen.queryByRole('link', { name: 'Hồ sơ', exact: true })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Thông báo', exact: true })).toBeNull();
-    fireEvent.click(await screen.findByRole('button', { name: 'Mở menu tài khoản Test User' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Mở menu tài khoản.*Test User/ }));
     expect(await screen.findByRole('menuitem', { name: /Hồ sơ tài khoản/ })).toBeTruthy();
     fireEvent.click(screen.getByRole('menuitem', { name: /Đổi mật khẩu/ }));
     expect(await screen.findByRole('dialog', { name: 'Đổi mật khẩu' })).toBeTruthy();

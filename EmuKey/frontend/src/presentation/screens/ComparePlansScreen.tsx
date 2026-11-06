@@ -50,7 +50,7 @@ export function ComparePlansScreen() {
     })),
   );
 
-  if (products.isLoading) return <div className="page-shell"><SiteHeader /><PageLoading /></div>;
+  if (products.isLoading) return <div className="page-shell"><SiteHeader /><main id="main-content" tabIndex={-1}><PageLoading /></main></div>;
 
   return (
     <div className="page-shell">

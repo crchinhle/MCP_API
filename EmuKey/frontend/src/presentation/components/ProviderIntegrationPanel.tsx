@@ -1,10 +1,11 @@
-import { Alert, Button, Checkbox, Form, Input, Space, Tag } from 'antd';
+import { Alert, Button, Checkbox, Form, Input, Space } from 'antd';
 import { useState } from 'react';
 import {
   useProviderIntegration,
   useUpdateProviderIntegration,
 } from '../../application/operations/operationsQueries';
 import { ProviderDeliveryPanel } from './ProviderDeliveryPanel';
+import { StatusChip } from './WorkspacePrimitives';
 
 export function ProviderIntegrationPanel() {
   const integration = useProviderIntegration();
@@ -27,16 +28,16 @@ export function ProviderIntegrationPanel() {
       />
     );
   return (
-    <section className="workspace-card" aria-label="Tích hợp nhà cung cấp">
+    <section className="workspace-card section-card" aria-label="Tích hợp nhà cung cấp">
       <h2>Kết nối hệ thống nhận bản quyền</h2>
       <p>
         EmuKey phát hành và tự động gửi mã bản quyền đến máy chủ của bạn sau
         thanh toán. Hệ thống của bạn lưu mã hợp lệ và kiểm tra khi khách sử dụng
         sản phẩm.
       </p>
-      <Tag color={config?.status === 'ENABLED' ? 'green' : 'default'}>
+      <StatusChip tone={config?.status === 'ENABLED' ? 'success' : 'neutral'}>
         {config?.status === 'ENABLED' ? 'Đang bật' : 'Chưa bật tiếp nhận'}
-      </Tag>
+      </StatusChip>
       {config?.verifiedAt ? (
         <p>
           Kết nối đã kiểm tra:{' '}

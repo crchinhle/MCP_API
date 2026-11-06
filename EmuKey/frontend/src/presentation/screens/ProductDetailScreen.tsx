@@ -24,7 +24,7 @@ export function ProductDetailScreen({ authenticated = false }: { readonly authen
   const selectedPlan =
     product?.plans.find((plan) => plan.id === selectedPlanId) ?? defaultPlan;
 
-  if (isLoading) return <div className="page-shell">{!authenticated ? <SiteHeader /> : null}<PageLoading /></div>;
+  if (isLoading) return <div className="page-shell">{!authenticated ? <SiteHeader /> : null}<main id="main-content" tabIndex={-1}><PageLoading /></main></div>;
   if (isError) {
     return (
       <Result
@@ -58,7 +58,7 @@ export function ProductDetailScreen({ authenticated = false }: { readonly authen
   return (
     <div className="page-shell">
         {!authenticated ? <SiteHeader /> : null}
-      <main className="detail-content">
+      <main className="detail-content" id="main-content" tabIndex={-1}>
         <nav aria-label="Breadcrumb" className="breadcrumb">
           <Link to={authenticated ? '/buyer/products' : '/products'}>Sản phẩm</Link>
           <span>/</span>

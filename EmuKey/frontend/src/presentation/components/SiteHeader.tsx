@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { roleHomePath, roleSettingsPath } from '../../domain/workspace';
 import { useOptionalAuth } from '../../application/auth/authContext';
-import { UserAvatar } from './Avatar';
+import { computeInitials, UserAvatar } from './Avatar';
 import { NotificationCenter } from './NotificationCenter';
 
 /**
@@ -12,7 +12,7 @@ import { NotificationCenter } from './NotificationCenter';
  * Brand (wordmark) -> /, public navigation in the middle, and a fixed
  * account cluster (Tổng quan + notification + account dropdown) when logged in.
  */
-export function SiteHeader() {
+export function SiteHeader({ skipTargetId = 'main-content' }: { readonly skipTargetId?: string }) {
   const location = useLocation();
   const publicCatalogMatch = useMatch('/products/*');
   const customerCatalogMatch = useMatch('/buyer/products/*');
@@ -21,17 +21,27 @@ export function SiteHeader() {
   const user = auth?.user ?? null;
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setMenuOpen(false);
-  }, [location.pathname]);
+  }, [location.pathname, location.search]);
 
   useEffect(() => {
     if (!menuOpen) return;
+    const focusable = () => Array.from(mobileMenuRef.current?.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), [tabindex="0"]') ?? []);
+    focusable()[0]?.focus();
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setMenuOpen(false);
         menuButtonRef.current?.focus();
+      }
+      if (event.key === 'Tab') {
+        const elements = focusable();
+        const first = elements[0];
+        const last = elements.at(-1);
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
       }
     };
     document.addEventListener('keydown', closeOnEscape);
@@ -59,7 +69,7 @@ export function SiteHeader() {
 
   return (
     <header className="site-header public-header">
-      <a className="skip-link" href="#main-content">Bỏ qua đến nội dung chính</a>
+      <a className="skip-link" href={`#${skipTargetId}`}>Bỏ qua đến nội dung chính</a>
       <Link aria-label="Về trang chủ EmuKey" className="brand-wordmark brand-wordmark--header" to="/">
         EmuKey
       </Link>
@@ -90,8 +100,8 @@ export function SiteHeader() {
           <div className="header-action-group">
             <NotificationCenter />
             <Dropdown menu={{ items: accountMenu }} placement="bottomRight" trigger={['click']}>
-              <button aria-label="Mở menu tài khoản" className="account-pill" type="button">
-                <UserAvatar name={user.displayName} />
+              <button aria-label={`Mở menu tài khoản ${computeInitials(user.displayName)} ${user.displayName}`} className="account-pill" type="button">
+                <UserAvatar name={user.displayName} />{' '}
                 <span className="account-name">{user.displayName}</span>
               </button>
             </Dropdown>
@@ -125,7 +135,8 @@ export function SiteHeader() {
             onClick={() => setMenuOpen(false)}
             type="button"
           />
-          <div className="mobile-menu-panel" id="site-mobile-menu" role="dialog" aria-label="Menu chính">
+          <div ref={mobileMenuRef} className="mobile-menu-panel" id="site-mobile-menu" role="dialog" aria-modal="true" aria-label="Menu chính">
+            <Button onClick={() => { setMenuOpen(false); menuButtonRef.current?.focus(); }}>Đóng menu</Button>
             <nav aria-label="Điều hướng chính trên thiết bị di động">
               <Link to="/">Trang chủ</Link>
               <Link to="/catalog">Mua sắm</Link>

@@ -375,21 +375,33 @@ const publicHomeStyles = `
   .public-home-dots {
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 4px;
   }
 
   .public-home-dots button {
-    width: 12px;
-    height: 12px;
+    width: 32px;
+    height: 32px;
     padding: 0;
+    display: grid;
+    place-items: center;
     border: 0;
     border-radius: 50%;
-    background: var(--border);
+    background: transparent;
     cursor: pointer;
+  }
+
+  .public-home-dots button::before {
+    content: '';
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--border);
     transition: background 120ms ease, transform 120ms ease;
   }
 
-  .public-home-dots button.active {
+  .public-home-dots button.active::before {
     background: var(--primary);
     transform: scale(1.15);
   }
@@ -467,7 +479,8 @@ const publicHomeStyles = `
 
   @media (prefers-reduced-motion: reduce) {
     .public-home-track { transition: none; }
-    .public-home-dots button { transition: none; }
+    .public-home-dots button,
+    .public-home-dots button::before { transition: none; }
     .public-home-featured-card { transition: none; }
   }
 `;
@@ -578,13 +591,13 @@ export function PublicHomeScreen() {
   const { data: products = [], isLoading, isError, refetch } = useProducts();
   const featured = products.slice(0, 6);
 
-  if (isLoading) return <div className="page-shell"><SiteHeader /><PageLoading /></div>;
+  if (isLoading) return <div className="page-shell"><SiteHeader /><main id="main-content" tabIndex={-1}><PageLoading /></main></div>;
 
   return (
     <div className="page-shell public-home-screen">
       <style>{publicHomeStyles}</style>
       <SiteHeader />
-      <main className="public-home-content">
+      <main className="public-home-content" id="main-content" tabIndex={-1}>
         <section aria-labelledby="public-home-title" className="public-home-hero">
           <div className="public-home-hero-copy">
             <span className="public-home-eyebrow">

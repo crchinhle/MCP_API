@@ -47,7 +47,7 @@ export function CatalogScreen({ authenticated = false }: { readonly authenticate
   }, [products, debouncedSearch, sort]);
   const currentPage = Math.min(page, Math.max(1, Math.ceil(visibleProducts.length / 12)));
 
-  if (isLoading) return <div className="page-shell">{!authenticated ? <SiteHeader /> : null}<PageLoading /></div>;
+  if (isLoading) return <div className="page-shell">{!authenticated ? <SiteHeader /> : null}<main id="main-content" tabIndex={-1}><PageLoading /></main></div>;
 
   return (
     <div className="page-shell">

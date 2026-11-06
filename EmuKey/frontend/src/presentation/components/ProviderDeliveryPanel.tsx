@@ -1,4 +1,5 @@
-import { Alert, Button, Input, Modal, Select, Space, Table } from 'antd';
+import { Alert, Button, Empty, Input, Modal, Select, Space, Table } from 'antd';
+import { PageLoading } from './WorkspacePrimitives';
 import { useState } from 'react';
 import type { ProviderDeliveryViewDto } from '../../infrastructure/api/generated';
 import {
@@ -54,7 +55,9 @@ export function ProviderDeliveryPanel({
       {deliveries.isError ? (
         <Alert type="error" title="Không thể tải lịch sử bàn giao" />
       ) : null}
-      <Table<ProviderDeliveryViewDto>
+      {deliveries.isPending ? <PageLoading label="Đang tải lịch sử bàn giao" /> : !deliveries.isError && !deliveries.data?.length ? (
+        <Empty description="Chưa có bản quyền bàn giao." />
+      ) : !deliveries.isError ? <Table<ProviderDeliveryViewDto>
         rowKey="id"
         loading={deliveries.isPending}
         dataSource={deliveries.data ?? []}
@@ -92,8 +95,8 @@ export function ProviderDeliveryPanel({
               ) : null,
           },
         ]}
-      />
-      <Space>
+      /> : null}
+      {!deliveries.isError && (page > 0 || Boolean(deliveries.data?.length)) ? <Space>
         <Button disabled={page === 0} onClick={() => setPage(page - 1)}>
           Trang trước
         </Button>
@@ -104,7 +107,7 @@ export function ProviderDeliveryPanel({
         >
           Trang sau
         </Button>
-      </Space>
+      </Space> : null}
       <Modal
         title="Gửi lại bản quyền"
         open={!!selected}

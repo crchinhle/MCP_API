@@ -7,7 +7,7 @@ import { describeApiError } from '../../application/auth/authContext';
 import { useCreateConversation } from '../../application/assistance/assistanceQueries';
 import { useNavigate } from 'react-router-dom';
 import { orderStatusLabel, orderStatusTone, type OrderSummary, useOrder, useOrderMutations, useOrders, useOrderTerms } from '../../application/orders/orderQueries';
-import { CopyableId, PageLoading, formatMoney, FactList, StatusChip, useDebouncedValue } from '../components/WorkspacePrimitives';
+import { CopyableId, PageHeader, PageLoading, formatMoney, FactList, StatusChip, useDebouncedValue } from '../components/WorkspacePrimitives';
 import { entitlementLabel } from '../components/OrderSummary';
 import { providerHandoffStatus, useLicenses } from '../../application/licenses/licenseQueries';
 
@@ -81,7 +81,8 @@ export function BuyerOrdersScreen() {
   return (
     <div className="buyer-orders-screen">
 
-      <main className="buyer-orders-main">
+      <main className="buyer-orders-main" id="main-content" tabIndex={-1}>
+        <PageHeader title="Đơn hàng của tôi" />
         <nav aria-label="Bộ lọc đơn hàng" className="buyer-orders-tabs">
           <button className={tab === 'all' ? 'active' : ''} onClick={() => setTab('all')} type="button">Tất cả {orders.length}</button>
           <button className={tab === 'sign' ? 'active' : ''} onClick={() => { setTab('sign'); setPage(1); }} type="button">Chờ đồng ý điều khoản</button>

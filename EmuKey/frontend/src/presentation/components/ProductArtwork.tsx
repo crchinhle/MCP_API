@@ -1,4 +1,5 @@
 import type { ProductTone } from '../../domain/product';
+import { useState } from 'react';
 import cloudStudioArtworkUrl from '../../assets/figma/cloudstudio-artwork.svg';
 import dataGuardArtworkUrl from '../../assets/figma/dataguard-artwork.svg';
 import secureDeskArtworkUrl from '../../assets/figma/securedesk-artwork.svg';
@@ -16,6 +17,7 @@ export function ProductArtwork({
   productName,
   large = false,
 }: ProductArtworkProps) {
+  const [failedImage, setFailedImage] = useState<string | null>(null);
   const figmaArtworkByTone = {
     brand: secureDeskArtworkUrl,
     module: cloudStudioArtworkUrl,
@@ -29,12 +31,13 @@ export function ProductArtwork({
     .filter(Boolean)
     .join(' ');
 
-  if (imageUrl) {
+  if (imageUrl && failedImage !== imageUrl) {
     return (
       <img
         alt={'Minh họa ' + productName}
         className={className}
         loading="lazy"
+        onError={() => setFailedImage(imageUrl)}
         src={imageUrl}
       />
     );

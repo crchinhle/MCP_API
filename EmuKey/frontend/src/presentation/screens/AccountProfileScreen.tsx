@@ -1,5 +1,5 @@
 import { LoadingOverlay } from '../components/WorkspacePrimitives';
-import { Alert, Button, Form, Input, Modal, Tag } from 'antd';
+import { Alert, Button, Form, Input, Modal } from 'antd';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
@@ -9,7 +9,7 @@ import {
   type ProfileInput,
   useAuth,
 } from '../../application/auth/authContext';
-import { FactList, PageHeader } from '../components/WorkspacePrimitives';
+import { FactList, PageHeader, StatusChip } from '../components/WorkspacePrimitives';
 
 const roleLabels: Record<string, string> = {
   CUSTOMER: 'Người mua',
@@ -107,7 +107,7 @@ export function AccountProfileScreen() {
     <>
       <PageHeader
         title="Hồ sơ tài khoản"
-        action={!isSystem ? <Tag color={user.status === 'ACTIVE' ? 'green' : 'orange'}>{statusLabel}</Tag> : undefined}
+        action={!isSystem ? <StatusChip tone={user.status === 'ACTIVE' ? 'success' : 'warning'}>{statusLabel}</StatusChip> : undefined}
       />
       <div className="workspace-two-column profile-layout">
         <section className="workspace-card section-card">

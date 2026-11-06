@@ -15,7 +15,7 @@ export function PublicVerificationScreen() {
   return (
     <div className="page-shell">
       <SiteHeader />
-      <main className="verification-content">
+      <main className="verification-content" id="main-content" tabIndex={-1}>
         <section className="verification-query" aria-labelledby="verify-title">
           <h1 id="verify-title">Xác minh Blockchain</h1>
           <label>

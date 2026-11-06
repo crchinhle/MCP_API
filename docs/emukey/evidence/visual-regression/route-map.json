@@ -1,7 +1,7 @@
 {
   "fileKey": "ys1A2io0Ozz1TvR2o9S4Nb",
   "screens": [
-    { "route": "/", "component": "CatalogScreen", "screenName": "public-home", "figmaNodeId": "519:1591", "sectionId": null, "screenRootId": "519:1591", "viewport": "1440x1024", "referenceFile": "public-home.png", "fixtureFile": "public-home-fixture.json", "status": "VERIFIED" },
+    { "route": "/", "component": "PublicHomeScreen", "screenName": "public-home", "figmaNodeId": "519:1591", "sectionId": null, "screenRootId": "519:1591", "viewport": "1440x1024", "referenceFile": "public-home.png", "fixtureFile": "public-home-fixture.json", "status": "VERIFIED" },
     { "route": "/products", "component": "CatalogScreen", "screenName": "public-catalog", "figmaNodeId": "48:62", "sectionId": null, "screenRootId": "48:62", "viewport": "1440x1024", "referenceFile": "public-catalog.png", "fixtureFile": "public-catalog-fixture.json", "status": "VERIFIED" },
     { "route": "/products/:slug", "component": "ProductDetailScreen", "screenName": "product-detail", "figmaNodeId": "48:201", "sectionId": null, "screenRootId": "48:201", "viewport": "1440x1024", "referenceFile": "product-detail.png", "fixtureFile": "product-detail-fixture.json", "status": "VERIFIED" },
     { "route": "/auth", "component": "AuthScreen", "screenName": "auth", "figmaNodeId": null, "sectionId": null, "screenRootId": null, "viewport": "1440x1024", "referenceFile": null, "fixtureFile": null, "status": "NEEDS_VERIFICATION" },

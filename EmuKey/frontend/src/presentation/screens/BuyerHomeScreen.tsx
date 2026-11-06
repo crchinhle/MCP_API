@@ -1,4 +1,4 @@
-import { PageLoading } from '../components/WorkspacePrimitives';
+import { PageHeader, PageLoading } from '../components/WorkspacePrimitives';
 import { Alert, Button } from 'antd';
 import { useNavigate } from 'react-router-dom';
 
@@ -27,7 +27,8 @@ export function BuyerHomeScreen() {
 
   return (
     <div className="buyer-home-screen">
-      <main className="buyer-home-main">
+      <main className="buyer-home-main" id="main-content" tabIndex={-1}>
+        <PageHeader title="Tổng quan tài khoản" />
         {failed ? <Alert showIcon message="Không thể tải dữ liệu trang chủ." type="error" /> : null}
 
         <section aria-label="Tóm tắt tài khoản" className="buyer-home-metrics">

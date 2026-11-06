@@ -54,8 +54,8 @@ async function systemFixture(page: Page) {
     if (path === '/payments/history') return route.fulfill({ json: payments() });
     if (path === '/payments/review') return route.fulfill({ json: [{ ...payments()[0], id: 'review', reviewReason: state.reviewStatus === 'OPEN' ? null : 'Đã kiểm tra chứng từ ngân hàng' }] });
     if (path === '/payments/review/review') {
-      expect(route.request().postDataJSON()).toEqual({ status: 'RESOLVED', reason: 'Đã kiểm tra chứng từ ngân hàng' });
-      state.reviewStatus = 'RESOLVED';
+      expect(route.request().postDataJSON()).toEqual({ resolution: 'NO_ACTION', reason: 'Đã kiểm tra chứng từ ngân hàng' });
+      state.reviewStatus = 'CLOSED_NO_ACTION';
       return route.fulfill({ json: { id: 'review', reviewStatus: state.reviewStatus } });
     }
     const documents = [
@@ -103,8 +103,11 @@ for (const [width, height] of [[320, 800], [768, 1024], [1024, 768], [1440, 1024
       await expect(page.locator('.system-tabs')).toHaveCount(0);
       await expect(page.getByRole('region', { name: 'Sức khỏe hệ thống' })).toHaveCount(0);
       expect(state.requests.some((request) => request.includes('/health/ready'))).toBe(false);
-      if (path !== '/system/console') {
-        expect(state.requests.some((request) => request.includes('/health/'))).toBe(false);
+      const healthRequests = state.requests.filter((request) => request.includes('/health/'));
+      if (path?.includes('view=blockchain')) {
+        expect(healthRequests).toEqual(['GET /operations/health/assistance']);
+      } else {
+        expect(healthRequests).toEqual([]);
       }
       if (width === 320 && path?.includes('view=users')) {
         await page.getByRole('row', { name: /buyer@example.test/ }).getByRole('button', { name: 'Xem chi tiết' }).click();
@@ -302,7 +305,7 @@ test('profile dirty state, failed save and password session invalidation', async
 test('account menu keyboard, Escape and outside click; mobile focus trap', async ({ page }) => {
   await systemFixture(page);
   await page.goto('/system/console');
-  const account = page.getByRole('button', { name: 'Mở menu tài khoản System Administrator' });
+  const account = page.getByRole('button', { name: /Mở menu tài khoản.*System Administrator/ });
   await expect(account.locator('[data-icon="down"]')).toHaveCount(0);
   await expect(page.getByRole('link', { name: /[←→↑↓↗↘]/ })).toHaveCount(0);
   await account.focus();
@@ -345,7 +348,7 @@ test('overview focuses on work and account request failures remain retryable', a
   await expect(page.getByRole('row', { name: /buyer@example.test/ })).toBeVisible();
 });
 
-test('sidebar account name and role meet AA contrast against the rendered background', async ({ page }) => {
+test('sidebar account name meets AA contrast against the rendered background', async ({ page }) => {
   await systemFixture(page);
   await page.goto('/system/console');
   const ratios = await page.locator('.system-account-trigger').evaluate((trigger) => {
@@ -357,7 +360,7 @@ test('sidebar account name and role meet AA contrast against the rendered backgr
       return values[0]! * 0.2126 + values[1]! * 0.7152 + values[2]! * 0.0722;
     };
     const background = luminance(getComputedStyle(document.querySelector('.role-sidebar')!).backgroundColor);
-    return ['strong', 'small'].map((selector) => {
+    return ['strong'].map((selector) => {
       const foreground = luminance(getComputedStyle(trigger.querySelector(selector)!).color);
       return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
     });

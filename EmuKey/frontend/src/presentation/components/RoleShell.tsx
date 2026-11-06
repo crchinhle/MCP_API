@@ -7,6 +7,7 @@ import { roleSettingsPath, type RoleShellConfig } from '../../domain/workspace';
 import { useOptionalAuth } from '../../application/auth/authContext';
 import { NotificationCenter } from './NotificationCenter';
 import { Brand } from './Brand';
+import { computeInitials } from './Avatar';
 
 export const buyerShell: RoleShellConfig = {
   role: 'CUSTOMER',
@@ -126,6 +127,7 @@ export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
 
   return (
     <div className={`role-shell${config.role === 'PROVIDER_ADMIN' ? ' role-shell--provider' : isSystem ? ' role-shell--system' : ''}`}>
+      <a className="skip-link" href="#main-content">Bỏ qua đến nội dung chính</a>
       <aside className="role-sidebar">
         <div className="role-brand"><Brand /></div>
         <button
@@ -138,7 +140,7 @@ export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
           type="button"
         >
           <span aria-hidden="true">☰</span>
-          <span>Điều hướng</span>
+          <span>Menu</span>
         </button>
         <div className="role-desktop-nav">{navigation}</div>
         {auth?.user && isSystem ? <div className="role-account-footer">
@@ -154,8 +156,8 @@ export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
             if (key === 'logout') void auth.logout();
             else void navigate(`${roleSettingsPath(auth.user!.role)}${key === 'password' ? '?password=change' : ''}`);
           } }}>
-            <button type="button" className="system-account-trigger" aria-label={`Mở menu tài khoản ${auth.user.displayName}`} aria-haspopup="menu" aria-expanded={accountMenuOpen} onKeyDown={(event) => { if (event.key === ' ') { event.preventDefault(); setAccountMenuOpen((open) => !open); } }}>
-              <span className="system-account-avatar" aria-hidden="true">{auth.user.displayName.trim().split(/\s+/).slice(-2).map((part) => part[0]).join('').toLocaleUpperCase('vi')}</span>
+            <button type="button" className="system-account-trigger" aria-label={`Mở menu tài khoản ${computeInitials(auth.user.displayName)} ${auth.user.displayName}`} aria-haspopup="menu" aria-expanded={accountMenuOpen} onKeyDown={(event) => { if (event.key === ' ') { event.preventDefault(); setAccountMenuOpen((open) => !open); } }}>
+              <span className="system-account-avatar" aria-hidden="true">{computeInitials(auth.user.displayName)}</span>{' '}
               <span className="role-account-identity"><strong>{auth.user.displayName}</strong></span>
             </button>
           </Dropdown>
@@ -171,8 +173,8 @@ export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
             if (key === 'logout') void auth.logout();
             else void navigate(`${roleSettingsPath(auth.user!.role)}${key === 'password' ? '?password=change' : ''}`);
           } }}>
-            <button type="button" className="provider-account-trigger" aria-label={`Mở menu tài khoản ${auth.user.displayName}`}>
-              <span className="provider-account-avatar" aria-hidden="true">{auth.user.displayName.trim().split(/\s+/).slice(-2).map((part) => part[0]).join('').toLocaleUpperCase('vi')}</span>
+            <button type="button" className="provider-account-trigger" aria-label={`Mở menu tài khoản ${computeInitials(auth.user.displayName)} ${auth.user.displayName}`}>
+              <span className="provider-account-avatar" aria-hidden="true">{computeInitials(auth.user.displayName)}</span>{' '}
               <span className="role-account-identity"><strong title={auth.user.displayName}>{auth.user.displayName}</strong></span>
             </button>
           </Dropdown>
@@ -200,7 +202,7 @@ export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
           </div>
         </>
       ) : null}
-      <main className="role-main"><Outlet /></main>
+      <main className="role-main" id="main-content" tabIndex={-1}><Outlet /></main>
     </div>
   );
 }

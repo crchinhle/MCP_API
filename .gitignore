@@ -39,6 +39,7 @@ Thumbs.db
 /.kilo/agent-manager.json
 
 # Generated visual captures and comparison outputs (reference fixtures stay versioned)
+/artifacts/ui-audit/
 /docs/emukey/evidence/visual-regression/artifacts/
 /docs/emukey/evidence/visual-regression/diff/
 /docs/emukey/evidence/visual-regression/runtime-before/

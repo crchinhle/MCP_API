@@ -40,6 +40,11 @@ details[open] > summary::before { content: '−'; }
 .ant-pagination .ant-pagination-prev,
 .ant-pagination .ant-pagination-next { min-width: 48px; padding-inline: 8px; }
 
+.ant-picker .ant-picker-separator,
+.ant-table-wrapper .ant-table-tbody > tr.ant-table-placeholder {
+  color: var(--muted);
+}
+
 h1,
 h2,
 p {
@@ -338,6 +343,7 @@ a {
 .role-account-row {
   min-width: 0;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-start;
   gap: 8px;
@@ -380,16 +386,18 @@ a {
 
 .role-account-row .ant-btn {
   flex: 0 0 auto;
-  color: var(--sidebar-text);
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--control);
 }
 
 .role-account-row .ant-btn:first-child {
-  flex: 1 1 auto;
+  flex: 1 0 100%;
   justify-content: flex-start;
   min-width: 0;
 }
 
-.role-account-row .ant-btn:hover { color: var(--sidebar-text); }
+.role-account-row .ant-btn:hover { color: var(--primary); background: var(--surface-selected); }
 
 .role-main {
   min-width: 0;
@@ -653,6 +661,7 @@ a {
 @media (max-width: 760px) {
   .role-shell {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .role-sidebar {
@@ -1633,8 +1642,8 @@ a {
 }
 
 .catalog-hero {
-  min-height: 112px;
-  padding: 32px;
+  min-height: 0;
+  padding: 0;
   display: flex;
   align-items: center;
   border-radius: 0;
@@ -1715,11 +1724,19 @@ a {
 
 .comparison-content {
   display: grid;
+  align-content: start;
   gap: 24px;
 }
 
 .comparison-hero {
-  grid-template-columns: minmax(0, 0.85fr) minmax(360px, 1.15fr);
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  align-items: start;
+  gap: 32px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
 }
 
 .comparison-selection {
@@ -1752,12 +1769,11 @@ a {
 .product-card {
   min-height: 324px;
   border-color: var(--border);
-  cursor: pointer;
   transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
 .product-card:hover,
-.product-card:focus-visible {
+.product-card:focus-within {
   border-color: var(--primary);
   box-shadow: 0 8px 24px rgb(31 30 28 / 12%);
   outline: none;
@@ -3521,7 +3537,12 @@ body {
   }
 
   .catalog-hero {
-    padding: 24px;
+    padding: 0;
+  }
+
+  .comparison-hero {
+    padding: 20px;
+    gap: 20px;
   }
 
   .product-artwork--large {

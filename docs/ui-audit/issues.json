@@ -1,0 +1,358 @@
+{
+  "issues": [
+    {
+      "id": "UI-0001",
+      "severity": "P1",
+      "category": "Accessibility",
+      "kind": "VERIFIED_DEFECT",
+      "role": "GUEST",
+      "route": "/catalog",
+      "state": "mobile-menu",
+      "viewport": "390x844",
+      "title": "Menu mobile không quản lý focus",
+      "actual": "SiteHeader mở dialog không aria-modal, không đưa focus vào và không giữ vòng Tab.",
+      "expected": "Focus bắt đầu trong menu, Tab không thoát ra nền, Escape trả focus.",
+      "rootCause": "SiteHeader mở dialog không aria-modal, không đưa focus vào và không giữ vòng Tab.",
+      "fix": "Đã thêm modal semantics, nút đóng, focus ban đầu/vòng Tab và trả focus.",
+      "files": [
+        "EmuKey/frontend/src/presentation/components/SiteHeader.tsx"
+      ],
+      "evidenceBefore": "artifacts/ui-audit/2026-11-06-web/before-fixture-original/menu-mobile.png",
+      "verificationMethod": "Playwright ui-audit.spec.ts: mobile public navigation; review ảnh after; 15/15 regression đạt; đối chiếu cặp ảnh cùng fixture từ source gốc và working tree",
+      "status": "VERIFIED",
+      "evidenceAfter": [
+        "artifacts/ui-audit/2026-11-06-web/after-fixture-original/menu-mobile.png"
+      ],
+      "reproduction": [
+        "Mở route ở role/viewport ghi trong issue.",
+        "Tái hiện trạng thái ghi trong issue; đối chiếu regression test."
+      ]
+    },
+    {
+      "id": "UI-0002",
+      "severity": "P2",
+      "category": "Navigation",
+      "kind": "VERIFIED_DEFECT",
+      "role": "CUSTOMER",
+      "route": "/buyer/products",
+      "state": "normal",
+      "viewport": "1440x900",
+      "title": "Mục Mua sắm không active ở catalog người mua",
+      "actual": "NavLink trỏ /catalog nên không khớp route /buyer/products và route chi tiết con.",
+      "expected": "Menu Mua sắm active ở toàn bộ khu vực sản phẩm của người mua.",
+      "rootCause": "NavLink trỏ /catalog nên không khớp route /buyer/products và route chi tiết con.",
+      "fix": "Giữ href canonical /catalog và thêm trạng thái active/aria-current cho alias người mua.",
+      "files": [
+        "EmuKey/frontend/src/presentation/components/CustomerLayout.tsx"
+      ],
+      "evidenceBefore": "artifacts/ui-audit/2026-11-06-web/before-fixture-original/buyer-shopping.png",
+      "verificationMethod": "Playwright ui-audit.spec.ts: customer shopping navigation; review ảnh after; 15/15 regression đạt; đối chiếu cặp ảnh cùng fixture từ source gốc và working tree",
+      "status": "VERIFIED",
+      "evidenceAfter": [
+        "artifacts/ui-audit/2026-11-06-web/after-fixture-original/buyer-shopping.png"
+      ],
+      "reproduction": [
+        "Mở route ở role/viewport ghi trong issue.",
+        "Tái hiện trạng thái ghi trong issue; đối chiếu regression test."
+      ]
+    },
+    {
+      "id": "UI-0003",
+      "severity": "P2",
+      "category": "Structure",
+      "kind": "VERIFIED_DEFECT",
+      "role": "CUSTOMER",
+      "route": "/buyer",
+      "state": "normal",
+      "viewport": "1440x900",
+      "title": "Tiêu đề và đích bỏ qua nội dung chưa nhất quán",
+      "actual": "BuyerHome và BuyerOrders không có h1, main không có id mà skip link của header đang trỏ tới. Các màn public và một số màn Customer cũng thiếu đích skip.",
+      "expected": "Có tiêu đề rõ và đúng một đích #main-content.",
+      "rootCause": "BuyerHome và BuyerOrders không có h1, main không có id mà skip link của header đang trỏ tới. Các màn public và một số màn Customer cũng thiếu đích skip.",
+      "fix": "Dùng PageHeader cho tổng quan/đơn hàng; main public có id/tabIndex, CustomerLayout sở hữu đích ổn định cho cả loading/error/normal, RoleShell có skip link.",
+      "files": [
+        "EmuKey/frontend/src/presentation/screens/BuyerHomeScreen.tsx",
+        "EmuKey/frontend/src/presentation/screens/BuyerOrdersScreen.tsx",
+        "EmuKey/frontend/src/presentation/components/RoleShell.tsx",
+        "EmuKey/frontend/src/presentation/components/CustomerLayout.tsx",
+        "EmuKey/frontend/src/presentation/components/SiteHeader.tsx",
+        "EmuKey/frontend/src/presentation/screens/CatalogScreen.tsx",
+        "EmuKey/frontend/src/presentation/screens/ComparePlansScreen.tsx",
+        "EmuKey/frontend/src/presentation/screens/ProductDetailScreen.tsx",
+        "EmuKey/frontend/src/presentation/screens/PublicHomeScreen.tsx",
+        "EmuKey/frontend/src/presentation/screens/PublicHelpScreen.tsx",
+        "EmuKey/frontend/src/presentation/screens/PublicVerificationScreen.tsx"
+      ],
+      "evidenceBefore": "artifacts/ui-audit/2026-11-06-web/before-fixture-original/buyer-overview.png",
+      "verificationMethod": "7 ca skip navigation FAIL trước sửa, đạt sau sửa; bộ UI/bàn giao 31/31 đạt; focus đến đúng đích qua Enter.",
+      "status": "VERIFIED",
+      "evidenceAfter": [
+        "artifacts/ui-audit/2026-11-06-web/after-fixture-original/buyer-overview.png",
+        "artifacts/ui-audit/2026-11-06-web/after-fixture-original/buyer-orders.png"
+      ],
+      "reproduction": [
+        "Mở route ở role/viewport ghi trong issue.",
+        "Tái hiện trạng thái ghi trong issue; đối chiếu regression test."
+      ]
+    },
+    {
+      "id": "UI-0004",
+      "severity": "P2",
+      "category": "Resilience",
+      "kind": "VERIFIED_DEFECT",
+      "role": "GUEST",
+      "route": "/catalog",
+      "state": "image-error",
+      "viewport": "1440x900",
+      "title": "Ảnh sản phẩm lỗi không có hình thay thế",
+      "actual": "ProductArtwork chỉ fallback khi không có URL; URL trả 404 vẫn render img lỗi.",
+      "expected": "Ảnh không tải được chuyển artwork SVG local, giữ tên/CTA.",
+      "rootCause": "ProductArtwork chỉ fallback khi không có URL; URL trả 404 vẫn render img lỗi.",
+      "fix": "Thêm trạng thái failed URL và fallback local, đổi URL mới vẫn thử tải lại.",
+      "files": [
+        "EmuKey/frontend/src/presentation/components/ProductArtwork.tsx"
+      ],
+      "evidenceBefore": "artifacts/ui-audit/2026-11-06-web/before-fixture-original/image-error.png",
+      "verificationMethod": "Playwright ui-audit.spec.ts: failed product image; review ảnh after; 15/15 regression đạt; đối chiếu cặp ảnh cùng fixture từ source gốc và working tree",
+      "status": "VERIFIED",
+      "evidenceAfter": [
+        "artifacts/ui-audit/2026-11-06-web/after-fixture-original/image-error.png"
+      ],
+      "reproduction": [
+        "Mở route ở role/viewport ghi trong issue.",
+        "Tái hiện trạng thái ghi trong issue; đối chiếu regression test."
+      ]
+    },
+    {
+      "id": "UI-0005",
+      "severity": "P2",
+      "category": "Layout",
+      "kind": "VERIFIED_DEFECT",
+      "role": "GUEST",
+      "route": "/compare",
+      "state": "normal",
+      "viewport": "768x1024",
+      "title": "Khoảng trống lớn và chọn gói khó quét trên tablet",
+      "actual": "Grid main bị giãn track theo min-height; comparison-hero khai báo grid columns nhưng vẫn display flex.",
+      "expected": "Heading và chọn gói bắt đầu gần đầu trang, xếp lại rõ ở màn nhỏ.",
+      "rootCause": "Grid main bị giãn track theo min-height; comparison-hero khai báo grid columns nhưng vẫn display flex.",
+      "fix": "align-content:start cho main, grid thật cho comparison hero, responsive một cột và spacing chung.",
+      "files": [
+        "EmuKey/frontend/src/presentation/styles.css"
+      ],
+      "evidenceBefore": "artifacts/ui-audit/2026-11-06-web/before-fixture-original/compare-tablet.png",
+      "verificationMethod": "Playwright ui-audit.spec.ts: tablet comparison; review ảnh after; 15/15 regression đạt; đối chiếu cặp ảnh cùng fixture từ source gốc và working tree",
+      "status": "VERIFIED",
+      "evidenceAfter": [
+        "artifacts/ui-audit/2026-11-06-web/after-fixture-original/compare-tablet.png"
+      ],
+      "reproduction": [
+        "Mở route ở role/viewport ghi trong issue.",
+        "Tái hiện trạng thái ghi trong issue; đối chiếu regression test."
+      ]
+    },
+    {
+      "id": "UI-0006",
+      "severity": "P2",
+      "category": "Layout/Discovery",
+      "kind": "VERIFIED_DEFECT",
+      "role": "SUPPORT_STAFF",
+      "route": "/support",
+      "state": "empty",
+      "viewport": "390x844",
+      "title": "Hàng đợi trống bị đẩy xuống thấp; entry bàn giao rời tiêu đề",
+      "actual": "Grid role có hai auto row chia khoảng dư; nút bàn giao nằm trước PageHeader như một bước tách biệt.",
+      "expected": "Nội dung sát dưới header; bàn giao là panel thao tác trong cùng console.",
+      "rootCause": "Grid role có hai auto row chia khoảng dư; nút bàn giao nằm trước PageHeader như một bước tách biệt.",
+      "fix": "Cố định row header auto/content 1fr; đưa toggle bàn giao vào header, thêm aria-expanded/controls.",
+      "files": [
+        "EmuKey/frontend/src/presentation/styles.css",
+        "EmuKey/frontend/src/presentation/screens/SupportConsoleScreen.tsx"
+      ],
+      "evidenceBefore": "artifacts/ui-audit/2026-11-06-web/before-fixture-original/support-empty.png",
+      "verificationMethod": "Playwright ui-audit.spec.ts: empty support queue; review ảnh after; 15/15 regression đạt; đối chiếu cặp ảnh cùng fixture từ source gốc và working tree",
+      "status": "VERIFIED",
+      "evidenceAfter": [
+        "artifacts/ui-audit/2026-11-06-web/after-fixture-original/support-empty.png"
+      ],
+      "reproduction": [
+        "Mở route ở role/viewport ghi trong issue.",
+        "Tái hiện trạng thái ghi trong issue; đối chiếu regression test."
+      ]
+    },
+    {
+      "id": "UI-0007",
+      "severity": "P1",
+      "category": "Accessibility",
+      "kind": "VERIFIED_DEFECT",
+      "role": "MULTIPLE",
+      "route": "multiple",
+      "state": "interactive",
+      "viewport": "390x844 / desktop",
+      "title": "Tên đọc của nút tài khoản/menu lệch chữ hiển thị",
+      "actual": "aria-label bỏ tên và initials của tài khoản; menu ghi Điều hướng nhưng tên đọc là Mở menu vai trò.",
+      "expected": "Tên đọc chứa nhãn hiển thị để hỗ trợ voice control.",
+      "rootCause": "aria-label bỏ tên và initials của tài khoản; menu ghi Điều hướng nhưng tên đọc là Mở menu vai trò.",
+      "fix": "Dùng computeInitials hiện có, thêm tên/initials và khoảng trắng; nhãn menu mobile là Menu.",
+      "files": [
+        "EmuKey/frontend/src/presentation/components/SiteHeader.tsx",
+        "EmuKey/frontend/src/presentation/components/RoleShell.tsx"
+      ],
+      "evidenceBefore": "artifacts/ui-audit/2026-11-06-web/before-fixture/account-label-PROVIDER_ADMIN.png",
+      "evidenceAfter": [
+        "artifacts/ui-audit/2026-11-06-web/after-fixture/account-label-PROVIDER_ADMIN.png"
+      ],
+      "verificationMethod": "3 ca nhãn tài khoản, 1 ca menu và axe correction: 0 violation",
+      "status": "VERIFIED",
+      "reproduction": [
+        "Mở màn hình tại role/viewport tương ứng.",
+        "Dùng keyboard hoặc đối chiếu kích thước, computed style với regression test."
+      ]
+    },
+    {
+      "id": "UI-0008",
+      "severity": "P1",
+      "category": "Accessibility",
+      "kind": "VERIFIED_DEFECT",
+      "role": "GUEST",
+      "route": "/",
+      "state": "interactive",
+      "viewport": "390x844 / desktop",
+      "title": "Chấm chuyển trang sản phẩm quá nhỏ trên mobile",
+      "actual": "Vùng bấm của mỗi tab chỉ 12×12px.",
+      "expected": "Vùng chạm đủ lớn, vẫn giữ hình chấm nhỏ.",
+      "rootCause": "Vùng bấm của mỗi tab chỉ 12×12px.",
+      "fix": "Nút 32×32px với chấm ::before 12px, cho phép wrap ở màn hẹp và giữ reduced motion.",
+      "files": [
+        "EmuKey/frontend/src/presentation/screens/PublicHomeScreen.tsx"
+      ],
+      "evidenceBefore": "artifacts/ui-audit/2026-11-06-web/before-fixture/featured-touch-mobile.png",
+      "evidenceAfter": [
+        "artifacts/ui-audit/2026-11-06-web/after-fixture/featured-touch-mobile.png"
+      ],
+      "verificationMethod": "Playwright đo từng vùng bấm; axe target-size không còn vi phạm",
+      "status": "VERIFIED",
+      "reproduction": [
+        "Mở màn hình tại role/viewport tương ứng.",
+        "Dùng keyboard hoặc đối chiếu kích thước, computed style với regression test."
+      ]
+    },
+    {
+      "id": "UI-0009",
+      "severity": "P1",
+      "category": "Accessibility",
+      "kind": "VERIFIED_DEFECT",
+      "role": "SUPPORT_STAFF",
+      "route": "/support",
+      "state": "interactive",
+      "viewport": "390x844 / desktop",
+      "title": "Nút sidebar nhân viên thiếu tương phản và tràn nhãn",
+      "actual": "Màu chữ sáng trên nền trắng; Hồ sơ tràn khỏi nút khi chia cùng hàng với thông báo và đăng xuất.",
+      "expected": "Chữ >=4.5:1 và nhãn nằm trong biên nút.",
+      "rootCause": "Màu chữ sáng trên nền trắng; Hồ sơ tràn khỏi nút khi chia cùng hàng với thông báo và đăng xuất.",
+      "fix": "Màu chữ lấy semantic token, profile chiếm một hàng và footer wrap.",
+      "files": [
+        "EmuKey/frontend/src/presentation/styles.css"
+      ],
+      "evidenceBefore": "artifacts/ui-audit/2026-11-06-web/before-fixture/support-logout-contrast.png",
+      "evidenceAfter": [
+        "artifacts/ui-audit/2026-11-06-web/after-fixture/support-logout-contrast.png"
+      ],
+      "verificationMethod": "Playwright đo contrast và biên nhãn; axe correction 0 violation; review ảnh sidebar",
+      "status": "VERIFIED",
+      "reproduction": [
+        "Mở màn hình tại role/viewport tương ứng.",
+        "Dùng keyboard hoặc đối chiếu kích thước, computed style với regression test."
+      ]
+    },
+    {
+      "id": "UI-0010",
+      "severity": "P1",
+      "category": "Accessibility",
+      "kind": "VERIFIED_DEFECT",
+      "role": "CUSTOMER / PROVIDER_ADMIN / SUPPORT_STAFF",
+      "route": "profile",
+      "state": "normal",
+      "viewport": "desktop/tablet/mobile",
+      "title": "Nhãn trạng thái hồ sơ và tích hợp thiếu tương phản",
+      "actual": "Tag green mặc định có tương phản 3.37:1 trên nền #f6ffed ở cỡ chữ 14px. Cùng preset green cũng được dùng ở trạng thái tích hợp nhà cung cấp.",
+      "expected": "Chữ thường đạt ít nhất 4.5:1; dùng màu semantic nhất quán.",
+      "rootCause": "AccountProfileScreen dùng Tag màu preset thay vì StatusChip đã được kiểm chứng của dự án.",
+      "fix": "Tái sử dụng StatusChip success/warning/neutral từ WorkspacePrimitives cho cả hai owner. Tab tích hợp dùng thêm section-card để có khoảng đệm 20px như các form hiện hữu, tránh chữ/control chạm viền.",
+      "files": [
+        "EmuKey/frontend/src/presentation/screens/AccountProfileScreen.tsx",
+        "EmuKey/frontend/src/presentation/components/ProviderIntegrationPanel.tsx"
+      ],
+      "evidenceBefore": "artifacts/ui-audit/2026-11-06-web/before-fixture/profile-status.png",
+      "evidenceAfter": [
+        "artifacts/ui-audit/2026-11-06-web-correction/manifest-after.json",
+        "artifacts/ui-audit/2026-11-06-web-correction/after/PROVIDER_ADMIN/_provider_operations_tab_integration/tablet/normal.png",
+        "artifacts/ui-audit/2026-11-06-web-correction/after/CUSTOMER/_buyer_profile/mobile/normal.png"
+      ],
+      "verificationMethod": "Bộ UI/bàn giao 31/31 đạt; axe kiểm tra lại 45 tổ hợp: 0 violation; review ảnh profile và integration sau sửa.",
+      "status": "VERIFIED",
+      "reproduction": [
+        "Đăng nhập Customer, mở /buyer/profile.",
+        "Đo computed color hoặc chạy axe WCAG AA trên nhãn Đang hoạt động."
+      ]
+    },
+    {
+      "id": "UI-0011",
+      "severity": "P1",
+      "category": "Accessibility/Resilience",
+      "kind": "VERIFIED_DEFECT",
+      "role": "PROVIDER_ADMIN",
+      "route": "/provider/operations",
+      "state": "normal",
+      "viewport": "desktop/tablet/mobile",
+      "title": "Chữ bộ lọc thời gian và bảng rỗng quá nhạt",
+      "actual": "Axe ghi nhận chữ phân cách DatePicker và thông báo bảng rỗng chỉ đạt 2.56:1 vì nhận màu disabled.",
+      "expected": "Thông tin đang hiển thị có thể đọc với tương phản ít nhất 4.5:1.",
+      "rootCause": "Axe ghi nhận chữ phân cách DatePicker và thông báo bảng rỗng chỉ đạt 2.56:1 vì nhận màu disabled.",
+      "fix": "Override đúng selector hiển thị bằng token muted; không thay màu disabled toàn theme.",
+      "files": [
+        "EmuKey/frontend/src/presentation/styles.css"
+      ],
+      "evidenceBefore": "artifacts/ui-audit/2026-11-06-web-final/manifest-after.json",
+      "evidenceAfter": [
+        "artifacts/ui-audit/2026-11-06-web-correction/manifest-after.json",
+        "artifacts/ui-audit/2026-11-06-web-correction/after/PROVIDER_ADMIN/_provider_operations_tab_integration/tablet/normal.png"
+      ],
+      "verificationMethod": "Bộ UI/bàn giao 31/31 đạt; axe kiểm tra lại 45 tổ hợp: 0 violation; review ảnh profile và integration sau sửa.",
+      "status": "VERIFIED",
+      "reproduction": [
+        "Mở trang với role và viewport tương ứng.",
+        "Đối chiếu kết quả axe hoặc fixture API rỗng/503."
+      ]
+    },
+    {
+      "id": "UI-0012",
+      "severity": "P2",
+      "category": "Accessibility/Resilience",
+      "kind": "VERIFIED_DEFECT",
+      "role": "PROVIDER_ADMIN",
+      "route": "/provider/operations?tab=integration",
+      "state": "empty/error",
+      "viewport": "desktop/tablet/mobile",
+      "title": "Bàn giao không phân biệt lỗi với rỗng và tạo vùng cuộn thừa",
+      "actual": "ProviderDeliveryPanel luôn render Table scroll 720px; bảng rỗng không có phần tử focus và lỗi API vẫn kèm thông báo chưa có bản quyền.",
+      "expected": "Loading, lỗi, rỗng tách biệt; rỗng không tạo bảng ngang vô ích.",
+      "rootCause": "ProviderDeliveryPanel luôn render Table scroll 720px; bảng rỗng không có phần tử focus và lỗi API vẫn kèm thông báo chưa có bản quyền.",
+      "fix": "Tái sử dụng PageLoading/Empty; render Table khi có dữ liệu; lỗi giữ nút tải lại; không hiện phân trang ở trang đầu rỗng.",
+      "files": [
+        "EmuKey/frontend/src/presentation/components/ProviderDeliveryPanel.tsx"
+      ],
+      "evidenceBefore": "artifacts/ui-audit/2026-11-06-web-final/manifest-after.json",
+      "evidenceAfter": [
+        "artifacts/ui-audit/2026-11-06-web-correction/manifest-after.json",
+        "artifacts/ui-audit/2026-11-06-web-correction/after/PROVIDER_ADMIN/_provider_operations_tab_integration/tablet/normal.png"
+      ],
+      "verificationMethod": "Bộ UI/bàn giao 31/31 đạt; axe kiểm tra lại 45 tổ hợp: 0 violation; review ảnh profile và integration sau sửa.",
+      "status": "VERIFIED",
+      "reproduction": [
+        "Mở trang với role và viewport tương ứng.",
+        "Đối chiếu kết quả axe hoặc fixture API rỗng/503."
+      ]
+    }
+  ]
+}
