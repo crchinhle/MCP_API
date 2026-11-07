@@ -188,7 +188,7 @@ export const antTheme: ThemeConfig = {
     colorText: colorPalette.text,
     colorTextDescription: colorPalette.textSecondary,
     colorTextDisabled: colorPalette.textDisabled,
-    colorTextPlaceholder: colorPalette.textDisabled,
+    colorTextPlaceholder: colorPalette.muted,
     colorTextQuaternary: colorPalette.textDisabled,
     colorTextSecondary: colorPalette.textSecondary,
     colorTextTertiary: colorPalette.muted,

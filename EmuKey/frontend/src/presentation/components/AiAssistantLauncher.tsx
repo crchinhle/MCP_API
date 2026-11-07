@@ -47,6 +47,7 @@ function AssistantSession() {
 
   return (
     <Popover
+      classNames={{ root: 'ai-assistant-popover' }}
       content={
         <section
           aria-label="Trợ lý AI Emukey"

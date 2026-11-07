@@ -53,7 +53,7 @@ export function NotificationCenter() {
 
   return (
     <div className="notification-wrapper">
-      <Popover content={<div className="notification-popover">{content}</div>} placement="bottomRight" trigger="click">
+      <Popover content={<div className="notification-popover">{content}</div>} placement="bottom" trigger="click">
         <Badge count={unread} overflowCount={99} size="small">
           <Button aria-label="Thông báo" icon={<BellOutlined />} type="default" />
         </Badge>

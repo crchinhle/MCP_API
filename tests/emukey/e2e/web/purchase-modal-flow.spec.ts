@@ -107,6 +107,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
     await dialog.getByRole('radio', { name: /Gói năm/ }).check();
     await dialog.getByRole('button', { name: 'Tiếp tục' }).click();
     await expect(dialog.getByRole('region', { name: 'Điều khoản dịch vụ' })).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: `Xác nhận ${product.name}`, exact: true })).toBeFocused();
     expect(creates).toBe(1);
     await expect(dialog.getByText('1.200.000 ₫')).toBeVisible();
     const payment = dialog.getByRole('button', { name: 'Thanh toán qua SePay' });

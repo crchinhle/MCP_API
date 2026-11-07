@@ -8,7 +8,7 @@ export function KnowledgeCitations({citations=[]}:{citations?:readonly CitationD
   const [error,setError]=useState(false);
   const [pending,setPending]=useState(false);
   if (!citations.length) return <small>Nguồn không còn khả dụng hoặc câu trả lời chưa có nguồn xác thực.</small>;
-  return <section aria-label="Nguồn tham khảo">
+  return <section aria-label="Nguồn tham khảo" className="knowledge-citations">
     {citations.map((citation)=><article key={citation.chunkId}>
       <Button type="link" disabled={pending} onClick={()=>{
         setPending(true);setError(false);

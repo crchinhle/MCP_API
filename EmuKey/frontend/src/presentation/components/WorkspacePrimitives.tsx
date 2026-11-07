@@ -30,6 +30,22 @@ export function CopyableId({ value, onOpen }: { readonly value: string; readonly
   </span>;
 }
 
+/** Keep Tab at dialog boundaries, including when its final action is disabled.
+ * The library restores escaped DOM focus, but Tab may otherwise reach browser
+ * chrome before another focusin event. Leave portalled Selects/child dialogs alone.
+ */
+export function ModalFocusBoundary({ children }: { readonly children: ReactNode }) {
+  return <div onKeyDown={(event) => {
+    if (event.key !== 'Tab' || event.defaultPrevented || !event.currentTarget.contains(event.target as Node)) return;
+    const elements = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button, a[href], input, textarea, select, [tabindex]'))
+      .filter((element) => element.tabIndex >= 0 && !element.matches(':disabled') && element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden');
+    const first = elements[0];
+    const last = elements.at(-1);
+    const destination = event.shiftKey && document.activeElement === first ? last : !event.shiftKey && document.activeElement === last ? first : undefined;
+    if (destination) { event.preventDefault(); destination.focus(); }
+  }}>{children}</div>;
+}
+
 const pendingOverlays = new Set<string>();
 const overlayListeners = new Set<() => void>();
 const subscribeToOverlays = (listener: () => void) => {

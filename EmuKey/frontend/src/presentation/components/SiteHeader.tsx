@@ -95,10 +95,10 @@ export function SiteHeader({ skipTargetId = 'main-content' }: { readonly skipTar
         ) : null}
       </nav>
 
+      {user ? <NotificationCenter /> : null}
       <div className="header-actions">
         {user ? (
           <div className="header-action-group">
-            <NotificationCenter />
             <Dropdown menu={{ items: accountMenu }} placement="bottomRight" trigger={['click']}>
               <button aria-label={`Mở menu tài khoản ${computeInitials(user.displayName)} ${user.displayName}`} className="account-pill" type="button">
                 <UserAvatar name={user.displayName} />{' '}

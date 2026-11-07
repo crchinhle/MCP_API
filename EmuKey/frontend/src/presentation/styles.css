@@ -1940,6 +1940,32 @@ a {
 
 .ai-assistant-panel {
   width: 280px;
+  max-height: min(640px, calc(100dvh - 120px));
+  overflow: auto;
+  overflow-wrap: anywhere;
+  overscroll-behavior: contain;
+}
+
+.knowledge-citations,
+.knowledge-citations article {
+  min-width: 0;
+}
+
+.knowledge-citations .ant-btn-link {
+  max-width: 100%;
+  height: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.knowledge-citations blockquote {
+  margin-inline: 12px;
+}
+
+.purchase-flow-modal__title {
+  margin: 0;
+  font: inherit;
 }
 
 .ai-assistant-panel h2 {
@@ -2684,6 +2710,24 @@ a {
 .provider-catalog-screen .ant-table-expanded-row > .ant-table-cell { padding: 12px 16px; background: var(--canvas); }
 .provider-catalog-screen .ant-table-expanded-row .table-card { padding: 16px; }
 .document-content { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.knowledge-document-drawer .ant-drawer-body {
+  padding: 0;
+  overflow: hidden;
+}
+
+.document-reading-region {
+  height: 100%;
+  padding: 24px;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.document-reading-region:focus-visible,
+.purchase-flow-modal__title:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
 .document-list .data-row > span:first-child { min-width: 0; overflow-wrap: anywhere; }
 
 .license-device-section {
@@ -3016,6 +3060,18 @@ a {
   .mobile-menu-panel nav a:hover,
   .mobile-menu-panel nav a:focus-visible {
     background: var(--surface-selected);
+  }
+
+  .mobile-menu-panel nav a.active {
+    color: var(--sidebar-text);
+    background: var(--sidebar-selected);
+  }
+
+  /* Floating assistance is background content while a navigation modal is open. */
+  body:has(.mobile-menu-panel) .ai-assistant-launcher,
+  body:has(.mobile-menu-panel) .ai-assistant-popover {
+    visibility: hidden;
+    pointer-events: none;
   }
 
   .mobile-menu-actions {

@@ -246,6 +246,32 @@ test('payment history, review evidence and pagination remain usable', async ({ p
   await expect(page.getByRole('dialog', { name: 'Chi tiết giao dịch' }).getByText('SEPAY-10')).toBeVisible();
 });
 
+for (const width of [320, 768, 1440]) {
+  test(`payment review keeps keyboard focus in the child modal at ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await systemFixture(page);
+    await page.goto('/system/console?view=payments');
+    await page.getByRole('button', { name: 'Kiểm tra giao dịch', exact: true }).click();
+    await page.getByRole('button', { name: 'Ghi kết quả kiểm tra', exact: true }).click();
+    const modal = page.getByRole('dialog', { name: 'Xác nhận kết quả kiểm tra', exact: true });
+    await modal.getByLabel('Kết quả kiểm tra thanh toán').click();
+    await page.getByText('Ghép lại đúng đơn và cấp quyền', { exact: true }).click();
+    await expect(modal.getByLabel('UUID lần thanh toán', { exact: true })).toBeVisible();
+    await expect(modal.getByRole('button', { name: 'Lưu kết quả', exact: true })).toBeDisabled();
+    await modal.getByRole('button', { name: 'Hủy', exact: true }).focus();
+    for (const key of ['Tab', 'Shift+Tab']) {
+      for (let i = 0; i < 14; i++) {
+        await page.keyboard.press(key);
+        expect(await modal.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+      }
+    }
+    await page.keyboard.press('Escape');
+    await expect(modal).toBeHidden();
+    await expect(page.getByRole('dialog', { name: 'Chi tiết rà soát thanh toán', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Ghi kết quả kiểm tra', exact: true })).toBeFocused();
+  });
+}
+
 test('blockchain failure can retry and remaining mismatches stay visible', async ({ page }) => {
   const state = await systemFixture(page);
   state.failReconciliation = true;

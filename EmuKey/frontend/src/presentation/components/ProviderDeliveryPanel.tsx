@@ -112,6 +112,10 @@ export function ProviderDeliveryPanel({
         title="Gửi lại bản quyền"
         open={!!selected}
         confirmLoading={retry.isPending}
+        cancelButtonProps={{ disabled: retry.isPending }}
+        closable={{ disabled: retry.isPending }}
+        keyboard={!retry.isPending}
+        mask={{ closable: !retry.isPending }}
         okText="Xác nhận gửi lại"
         cancelText="Hủy"
         okButtonProps={{ disabled: reason.trim().length < 3 }}
@@ -128,6 +132,7 @@ export function ProviderDeliveryPanel({
           Gửi lại cùng bản quyền và mã đã phát hành, dùng cấu hình kết nối đã
           được kiểm tra.
         </p>
+        {retry.isPending ? <p role="status">Đang gửi yêu cầu. Vui lòng chờ kết quả trước khi đóng.</p> : null}
         <label htmlFor="provider-retry-reason">Lý do gửi lại</label>
         <Input.TextArea
           id="provider-retry-reason"

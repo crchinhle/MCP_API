@@ -79,7 +79,8 @@ export function AiKnowledgeScreen() {
         <p>Tải tài liệu hướng dẫn sử dụng để khách hàng và trợ lý AI cùng tham khảo sau khi System Admin duyệt. Chấp nhận PDF hoặc TXT tối đa {maxFileLabel}. Tải lại cùng tên cho cùng sản phẩm sẽ tạo phiên bản mới; phiên bản đang công bố vẫn được sử dụng cho đến khi bản mới được duyệt.</p>
         {capabilities.isError ? <Alert type="error" title="Không thể tải giới hạn tài liệu" action={<Button onClick={() => void capabilities.refetch()}>Thử lại</Button>} /> : null}
         <div className="file-picker">
-          <Select aria-label="Sản phẩm của tài liệu" onChange={setProductId} options={(products.data ?? []).filter((product) => product.status !== 'ARCHIVED').map((product) => ({ label: product.name, value: product.id }))} placeholder="Chọn sản phẩm" {...(productId ? { value: productId } : {})} />
+          <label htmlFor="knowledge-upload-product">Sản phẩm của tài liệu</label>
+          <Select id="knowledge-upload-product" aria-label="Sản phẩm của tài liệu" onChange={setProductId} options={(products.data ?? []).filter((product) => product.status !== 'ARCHIVED').map((product) => ({ label: product.name, value: product.id }))} placeholder="Chọn sản phẩm" {...(productId ? { value: productId } : {})} />
           <label htmlFor="knowledge-upload">Chọn tài liệu hướng dẫn</label>
           <Upload
             accept=".pdf,.txt"
@@ -122,7 +123,8 @@ export function AiKnowledgeScreen() {
           ...(canApprove ? [{ title: 'Thao tác', render: (_: unknown, document: KnowledgeDocumentDto) => <div className="table-actions"><Button onClick={() => setSelected(document)}>Xem chi tiết</Button>{documentState(document) === 'READY' ? <Button disabled={publish.isPending} onClick={() => confirmPublication(document)}>Công bố</Button> : null}</div> }] : []),
         ]} /> : null}
       </section>
-      <Drawer {...(canApprove ? { className: 'system-drawer' } : {})} title={selected?.title ?? 'Chi tiết tài liệu'} size="large" open={Boolean(selected)} onClose={() => setSelected(undefined)}>
+      <Drawer className={`knowledge-document-drawer${canApprove ? ' system-drawer' : ''}`} title={selected?.title ?? 'Chi tiết tài liệu'} size="large" open={Boolean(selected)} onClose={() => setSelected(undefined)}>
+        <section aria-label="Nội dung tài liệu" className="document-reading-region" tabIndex={0}>
         {selected ? <><p className="muted-copy">{selected.logicalDocumentKey} · v{selected.version} · {statusLabels[documentState(selected)] ?? selected.status}</p><h2>Nội dung tài liệu</h2></> : null}
         {detail.isPending ? <p role="status">Đang tải nội dung…</p> : detail.isError ? <Alert type="error" title="Không thể tải nội dung tài liệu" action={<Button onClick={() => void detail.refetch()}>Thử lại</Button>} /> : <div className="document-content">{detail.data?.chunks.join('\n\n') || 'Chưa có nội dung để hiển thị.'}</div>}
         {canApprove && selected ? <dl className="fact-list">
@@ -131,6 +133,7 @@ export function AiKnowledgeScreen() {
           <div><dt>Mã nhà cung cấp</dt><dd>{selected.providerUserId ?? 'Chưa cung cấp'}</dd></div>
         </dl> : null}
         {canApprove && selected && documentState(selected) === 'READY' ? <Button type="primary" disabled={detail.isPending || detail.isError || publish.isPending} onClick={() => confirmPublication(selected)}>Công bố tài liệu</Button> : null}
+        </section>
       </Drawer>
       <Modal title="Công bố tài liệu?" open={Boolean(publishing)} confirmLoading={publish.isPending} okText="Xác nhận công bố" cancelText="Hủy" onCancel={() => { if (!publish.isPending) setPublishing(undefined); }} onOk={() => {
         if (publishing && !publish.isPending) publish.mutate({ id: publishing.id, expectedCurrentVersion: observedVersion }, { onSuccess: () => { setPublishing(undefined); void messageApi.success('Đã công bố tài liệu.'); } });

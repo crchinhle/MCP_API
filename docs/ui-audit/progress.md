@@ -1,5 +1,17 @@
 # Tiến độ audit UI/UX EmuKey
 
+## Review bổ sung popup — 06/11/2026
+
+Đã kiểm kê 41 vị trí overlay trong frontend và mở các nhóm Modal, Drawer, Dropdown, Popover, Popconfirm, menu dialog và xác nhận bỏ thay đổi. Có 130 capture tổng quát ở ba viewport và 59 quan sát bổ sung, dùng CONTROLLED_FIXTURE; đây là số quan sát, không phải số test đạt.
+
+Sau yêu cầu “Sửa luôn đi”, **đã sửa và kiểm chứng 7 lỗi cùng cải thiện focus OV-008**, chi tiết tại [overlay-review.md](overlay-review.md); inventory và bằng chứng theo từng lỗi tại [overlay-review.json](overlay-review.json). Đã xử lý contrast menu/placeholder, chặn AI khi menu mở, vùng cuộn tài liệu dùng bàn phím, ngắt dòng trích dẫn, thông báo responsive và trạng thái đóng khi retry pending. Focus chuyển bước mua hàng và vòng Tab hai chiều trong Modal thanh toán cũng đã kiểm tra lại.
+
+Browser đạt **73 ca phân biệt**: 20 ca tập trung, 3 ca focus lồng và 50 ca hồi quy; hai ca thông báo trong bộ 20 được thay bằng lượt cuối mạnh hơn, không cộng trùng. Có 31 capture bổ sung, 12 lượt axe ở 320 không có violation tự động và 7 quan sát ảnh AI/menu/thông báo. Lint, typecheck và build đạt; cảnh báo chunk JS khoảng 1,65 MB vẫn còn.
+
+Unit đầy đủ ban đầu đạt 261/262, exit 1: ca giữ quyền nâng cao khi lưu gói báo STACK_TRACE_ERROR sau 32,7 giây. Chạy lại toàn bộ provider-workspace.test.tsx đạt 19/19, exit 0; ca trên hoàn tất trong 22,6 giây, không sửa source/test hoặc tăng timeout giữa hai lượt. Kết quả cuối theo ca phân biệt là **262/262 đạt sau thay kết quả file bằng lượt kiểm tra lại**, không gọi lượt đầy đủ ban đầu là xanh. Giữ cả hai báo cáo tại `artifacts/ui-audit/2026-11-06-overlay-fixes/`; còn rủi ro test nhạy thời gian dưới tải. Hygiene và diff check hai repo đạt.
+
+Các mã OV độc lập với 12 lỗi đã sửa của audit trang trước. Kết quả axe 192 tổ hợp trang nền dưới đây không bao gồm popup vừa mở, nên không dùng để kết luận overlay đã đạt accessibility. Native vẫn hoãn; test popup dùng CONTROLLED_FIXTURE, không thực hiện mutation API thật hoặc thanh toán mới. Đợt sửa không thay đổi backend, SQL, sơ đồ, dependency hoặc lockfile. Yêu cầu bàn giao Git ngày 07/11/2026: commit phần UI, test và báo cáo trên cả hai repo với nội dung `Chinh sua ui `; giữ các thay đổi ngoài phạm vi UI tại local.
+
 Kế hoạch: `docs/emukey/plans/2026-11-06-full-application-ui-ux-audit-plan.md`. Cập nhật ngày 06/11/2026. Native hoãn theo yêu cầu “Tiếp tục web, để native sau”.
 
 ## Kết quả web

@@ -1,0 +1,2633 @@
+{
+  "status": "VERIFIED_REPORTED_FINDINGS",
+  "reviewDate": "2026-11-06",
+  "sourceCommit": "c70a99944198564f46896237f26d1cca125750fe",
+  "dataMode": "CONTROLLED_FIXTURE",
+  "productSourceChanged": true,
+  "viewports": [
+    {
+      "width": 320,
+      "height": 900
+    },
+    {
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "width": 1440,
+      "height": 900
+    }
+  ],
+  "counts": {
+    "sourcePlacements": 41,
+    "byKind": {
+      "Popover": 2,
+      "Modal": 20,
+      "Popconfirm": 2,
+      "Drawer": 7,
+      "Dropdown": 6,
+      "custom-dialog": 2,
+      "hook-confirm": 2
+    },
+    "stableCaptures": 130,
+    "supplementaryObservations": 59,
+    "totalObservations": 189,
+    "confirmedDefects": 7,
+    "improvements": 1,
+    "verifiedDefects": 7,
+    "verifiedImprovements": 1
+  },
+  "report": "docs/ui-audit/overlay-review.md",
+  "inventory": [
+    {
+      "file": "EmuKey/frontend/src/presentation/components/AiAssistantLauncher.tsx",
+      "line": 48,
+      "kind": "Popover",
+      "title": ""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/components/KnowledgeCitations.tsx",
+      "line": 22,
+      "kind": "Modal",
+      "title": "{source?.title}"
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/components/LicenseRecoveryPanel.tsx",
+      "line": 58,
+      "kind": "Popconfirm",
+      "title": "\"Thay thế mã bản quyền cũ?\""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/components/NotificationCenter.tsx",
+      "line": 56,
+      "kind": "Popover",
+      "title": ""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/components/PaymentReviewPanel.tsx",
+      "line": 40,
+      "kind": "Drawer",
+      "title": "\"Chi tiết rà soát thanh toán\""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/components/PaymentReviewPanel.tsx",
+      "line": 51,
+      "kind": "Modal",
+      "title": "\"Xác nhận kết quả kiểm tra\""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/components/ProviderDeliveryPanel.tsx",
+      "line": 111,
+      "kind": "Modal",
+      "title": "\"Gửi lại bản quyền\""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/components/ProviderInvitationsPanel.tsx",
+      "line": 60,
+      "kind": "Drawer",
+      "title": "\"Chi tiết lời mời\""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/components/ProviderInvitationsPanel.tsx",
+      "line": 63,
+      "kind": "Modal",
+      "title": "\"Mời nhà cung cấp\""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/components/ProviderLicenseDetailsDrawer.tsx",
+      "line": 70,
+      "kind": "Drawer",
+      "title": "\"Chi tiết bản quyền\""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/components/ProviderLicenseSummary.tsx",
+      "line": 106,
+      "kind": "Dropdown",
+      "title": ""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/components/PurchaseFlowModal.tsx",
+      "line": 292,
+      "kind": "Modal",
+      "title": "{stage === 'configuration' ? `Mua ${product.name}` : stage === 'terms' ? `Xác nhận ${product.name}` : `Trạng thái đơn hàng`}"
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/components/RoleShell.tsx",
+      "line": 147,
+      "kind": "Dropdown",
+      "title": ""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/components/RoleShell.tsx",
+      "line": 165,
+      "kind": "Dropdown",
+      "title": ""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/components/RoleShell.tsx",
+      "line": 198,
+      "kind": "custom-dialog",
+      "title": "\"Menu điều hướng\""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/components/SiteHeader.tsx",
+      "line": 102,
+      "kind": "Dropdown",
+      "title": ""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/components/SiteHeader.tsx",
+      "line": 138,
+      "kind": "custom-dialog",
+      "title": "\"Menu chính\""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/components/SystemBlockchainPanel.tsx",
+      "line": 65,
+      "kind": "Modal",
+      "title": "\"Chạy đối soát blockchain?\""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/components/SystemBlockchainPanel.tsx",
+      "line": 84,
+      "kind": "Modal",
+      "title": "\"Xác nhận phục hồi lệnh\""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/components/SystemUsersPanel.tsx",
+      "line": 58,
+      "kind": "Dropdown",
+      "title": ""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/components/SystemUsersPanel.tsx",
+      "line": 80,
+      "kind": "Drawer",
+      "title": "\"Chi tiết tài khoản\""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/components/SystemUsersPanel.tsx",
+      "line": 87,
+      "kind": "Modal",
+      "title": "{confirmation ? `${actionLabels[confirmation.action]} tài khoản?` : 'Xác nhận'}"
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/components/WorkspacePrimitives.tsx",
+      "line": 58,
+      "kind": "Modal",
+      "title": "{label}"
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/screens/AccountProfileScreen.tsx",
+      "line": 169,
+      "kind": "Modal",
+      "title": "\"Đổi mật khẩu\""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/screens/AiKnowledgeScreen.tsx",
+      "line": 71,
+      "kind": "Modal",
+      "title": "\"Tải tài liệu sản phẩm\""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/screens/AiKnowledgeScreen.tsx",
+      "line": 125,
+      "kind": "Drawer",
+      "title": "{selected?.title ?? 'Chi tiết tài liệu'}"
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/screens/AiKnowledgeScreen.tsx",
+      "line": 135,
+      "kind": "Modal",
+      "title": "\"Công bố tài liệu?\""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/screens/BuyerLicenseHubScreen.tsx",
+      "line": 109,
+      "kind": "Modal",
+      "title": "{keyDialogOpen ? 'Mã bản quyền của bạn' : tab === 'devices' ? 'Quản lý thiết bị' : 'Chi tiết bản quyền'}"
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/screens/BuyerOrdersScreen.tsx",
+      "line": 123,
+      "kind": "Modal",
+      "title": "\"Xác nhận hủy đơn hàng\""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/screens/BuyerOrdersScreen.tsx",
+      "line": 135,
+      "kind": "Drawer",
+      "title": "{`Chi tiết ${detailQuery.data?.orderNumber ?? ''}`}"
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/screens/PaymentStatusScreen.tsx",
+      "line": 116,
+      "kind": "Modal",
+      "title": "{processingTitle}"
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/screens/PaymentStatusScreen.tsx",
+      "line": 422,
+      "kind": "Modal",
+      "title": "\"Mã bản quyền của bạn\""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/screens/ProviderCatalogScreen.tsx",
+      "line": 92,
+      "kind": "hook-confirm",
+      "title": "Bỏ thay đổi chưa lưu?"
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/screens/ProviderCatalogScreen.tsx",
+      "line": 108,
+      "kind": "hook-confirm",
+      "title": "Bỏ thay đổi chưa lưu?"
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/screens/ProviderCatalogScreen.tsx",
+      "line": 186,
+      "kind": "Popconfirm",
+      "title": "\"Xóa gói nháp?\""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/screens/ProviderCatalogScreen.tsx",
+      "line": 209,
+      "kind": "Dropdown",
+      "title": ""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/screens/ProviderCatalogScreen.tsx",
+      "line": 213,
+      "kind": "Modal",
+      "title": "\"Xóa sản phẩm nháp?\""
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/screens/ProviderCatalogScreen.tsx",
+      "line": 220,
+      "kind": "Modal",
+      "title": "{editingProduct ? 'Sửa sản phẩm' : 'Tạo sản phẩm'}"
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/screens/ProviderCatalogScreen.tsx",
+      "line": 229,
+      "kind": "Modal",
+      "title": "{editingPlan ? 'Sửa gói' : 'Tạo gói'}"
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/screens/ProviderLicensesScreen.tsx",
+      "line": 568,
+      "kind": "Modal",
+      "title": "{`${selected ? providerActionLabels[selected.action] : ''} bản quyền?`}"
+    },
+    {
+      "file": "EmuKey/frontend/src/presentation/screens/ProviderOperationsScreen.tsx",
+      "line": 85,
+      "kind": "Drawer",
+      "title": "\"Chi tiết giao dịch\""
+    }
+  ],
+  "findings": [
+    {
+      "id": "OV-001",
+      "priority": "P1",
+      "kind": "DEFECT",
+      "status": "VERIFIED",
+      "title": "Chữ mục active trong menu mobile thiếu tương phản",
+      "owners": [
+        "EmuKey/frontend/src/presentation/styles.css",
+        "EmuKey/frontend/src/presentation/components/RoleShell.tsx"
+      ],
+      "evidence": [
+        "artifacts/ui-audit/2026-11-06-overlays/stable-role-menu-PROVIDER_ADMIN-320-final.png",
+        "artifacts/ui-audit/2026-11-06-overlays/manifest.json"
+      ],
+      "verificationEvidence": [
+        "artifacts/ui-audit/2026-11-06-overlay-fixes/green.json"
+      ]
+    },
+    {
+      "id": "OV-002",
+      "priority": "P1",
+      "kind": "DEFECT",
+      "status": "VERIFIED",
+      "title": "AI nhận tương tác ngoài menu khai báo modal",
+      "owners": [
+        "EmuKey/frontend/src/presentation/components/SiteHeader.tsx",
+        "EmuKey/frontend/src/presentation/components/AiAssistantLauncher.tsx"
+      ],
+      "evidence": [
+        "artifacts/ui-audit/2026-11-06-overlays/keyboard-menu-ai-layer-320.png",
+        "artifacts/ui-audit/2026-11-06-overlays/keyboard-menu-ai-layer-768.png",
+        "artifacts/ui-audit/2026-11-06-overlays/keyboard.json"
+      ],
+      "verificationEvidence": [
+        "artifacts/ui-audit/2026-11-06-overlay-fixes/green.json"
+      ]
+    },
+    {
+      "id": "OV-003",
+      "priority": "P1",
+      "kind": "DEFECT",
+      "status": "VERIFIED",
+      "title": "Drawer tài liệu dài thiếu vùng cuộn tiếp cận bằng bàn phím",
+      "owners": [
+        "EmuKey/frontend/src/presentation/screens/AiKnowledgeScreen.tsx"
+      ],
+      "evidence": [
+        "artifacts/ui-audit/2026-11-06-overlays/keyboard-document-scroll-320.png",
+        "artifacts/ui-audit/2026-11-06-overlays/keyboard.json",
+        "artifacts/ui-audit/2026-11-06-overlays/manifest.json"
+      ],
+      "verificationEvidence": [
+        "artifacts/ui-audit/2026-11-06-overlay-fixes/green.json"
+      ]
+    },
+    {
+      "id": "OV-004",
+      "priority": "P2",
+      "kind": "DEFECT",
+      "status": "VERIFIED",
+      "title": "Placeholder chọn sản phẩm trong hộp tải tài liệu quá nhạt",
+      "owners": [
+        "EmuKey/frontend/src/presentation/screens/AiKnowledgeScreen.tsx"
+      ],
+      "evidence": [
+        "artifacts/ui-audit/2026-11-06-overlays/stable-provider-upload-320-final.png",
+        "artifacts/ui-audit/2026-11-06-overlays/manifest.json"
+      ],
+      "verificationEvidence": [
+        "artifacts/ui-audit/2026-11-06-overlay-fixes/green.json"
+      ]
+    },
+    {
+      "id": "OV-005",
+      "priority": "P2",
+      "kind": "DEFECT",
+      "status": "VERIFIED",
+      "title": "Trích dẫn dài tràn ngang Popover AI",
+      "owners": [
+        "EmuKey/frontend/src/presentation/components/AiAssistantLauncher.tsx",
+        "EmuKey/frontend/src/presentation/components/KnowledgeCitations.tsx"
+      ],
+      "evidence": [
+        "artifacts/ui-audit/2026-11-06-overlays/probe-ai-overflow-320.png",
+        "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+      ],
+      "verificationEvidence": [
+        "artifacts/ui-audit/2026-11-06-overlay-fixes/green.json"
+      ]
+    },
+    {
+      "id": "OV-006",
+      "priority": "P2",
+      "kind": "DEFECT",
+      "status": "VERIFIED",
+      "title": "Customer thiếu lối mở thông báo trên responsive",
+      "owners": [
+        "EmuKey/frontend/src/presentation/components/SiteHeader.tsx"
+      ],
+      "evidence": [
+        "artifacts/ui-audit/2026-11-06-overlays/extra-notification-reachability-320.png",
+        "artifacts/ui-audit/2026-11-06-overlays/extra-notification-reachability-768.png",
+        "artifacts/ui-audit/2026-11-06-overlays/extra.json"
+      ],
+      "verificationEvidence": [
+        "artifacts/ui-audit/2026-11-06-overlay-fixes/notification-green.json"
+      ]
+    },
+    {
+      "id": "OV-007",
+      "priority": "P2",
+      "kind": "DEFECT",
+      "status": "VERIFIED",
+      "title": "Hủy vẫn enabled nhưng không phản hồi khi gửi lại pending",
+      "owners": [
+        "EmuKey/frontend/src/presentation/components/ProviderDeliveryPanel.tsx"
+      ],
+      "evidence": [
+        "artifacts/ui-audit/2026-11-06-overlays/probe-delivery-pending-320.png",
+        "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+      ],
+      "verificationEvidence": [
+        "artifacts/ui-audit/2026-11-06-overlay-fixes/green.json"
+      ]
+    },
+    {
+      "id": "OV-008",
+      "priority": "P3",
+      "kind": "IMPROVEMENT",
+      "status": "VERIFIED",
+      "title": "Focus chưa rõ ràng khi chuyển bước hoặc vòng Tab",
+      "owners": [
+        "EmuKey/frontend/src/presentation/components/PurchaseFlowModal.tsx",
+        "EmuKey/frontend/src/presentation/components/PaymentReviewPanel.tsx"
+      ],
+      "evidence": [
+        "artifacts/ui-audit/2026-11-06-overlays/probes.json",
+        "artifacts/ui-audit/2026-11-06-overlays/keyboard.json",
+        "artifacts/ui-audit/2026-11-06-overlays/extra-rematch.json",
+        "artifacts/ui-audit/2026-11-06-overlays/extra-rematch-focus.json"
+      ],
+      "verificationEvidence": [
+        "artifacts/ui-audit/2026-11-06-overlay-fixes/focus.json",
+        "artifacts/ui-audit/2026-11-06-overlay-fixes/green.json"
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "id": "public-menu",
+      "name": "final",
+      "role": "GUEST",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-public-menu-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "role-menu-PROVIDER_ADMIN",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-role-menu-PROVIDER_ADMIN-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "role-menu-SUPPORT_STAFF",
+      "name": "final",
+      "role": "SUPPORT_STAFF",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-role-menu-SUPPORT_STAFF-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "role-menu-SYSTEM_ADMIN",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-role-menu-SYSTEM_ADMIN-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "ai-guest",
+      "name": "final",
+      "role": "GUEST",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-ai-guest-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "ai-customer",
+      "name": "panel",
+      "role": "CUSTOMER",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-ai-customer-320-panel.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "ai-customer",
+      "name": "final",
+      "role": "CUSTOMER",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-ai-customer-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "buyer-order",
+      "name": "final",
+      "role": "CUSTOMER",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-buyer-order-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "buyer-cancel",
+      "name": "final",
+      "role": "CUSTOMER",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-buyer-cancel-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "buyer-license",
+      "name": "overview",
+      "role": "CUSTOMER",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-buyer-license-320-overview.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "buyer-license",
+      "name": "key-tab",
+      "role": "CUSTOMER",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-buyer-license-320-key-tab.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "buyer-license",
+      "name": "final",
+      "role": "CUSTOMER",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-buyer-license-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "buyer-recovery",
+      "name": "final",
+      "role": "CUSTOMER",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-buyer-recovery-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "purchase",
+      "name": "configuration",
+      "role": "CUSTOMER",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-purchase-320-configuration.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "purchase",
+      "name": "final",
+      "role": "CUSTOMER",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-purchase-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "payment-progress",
+      "name": "final",
+      "role": "CUSTOMER",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-payment-progress-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "password-CUSTOMER",
+      "name": "final",
+      "role": "CUSTOMER",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-password-CUSTOMER-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "password-PROVIDER_ADMIN",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-password-PROVIDER_ADMIN-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "password-SUPPORT_STAFF",
+      "name": "final",
+      "role": "SUPPORT_STAFF",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-password-SUPPORT_STAFF-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "password-SYSTEM_ADMIN",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-password-SYSTEM_ADMIN-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "product-form",
+      "name": "create",
+      "role": "PROVIDER_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-product-form-320-create.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "product-form",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-product-form-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "product-edit",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-product-edit-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "product-delete",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-product-delete-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "plan-form",
+      "name": "create",
+      "role": "PROVIDER_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-plan-form-320-create.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "plan-form",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-plan-form-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "plan-edit",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-plan-edit-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "plan-delete",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-plan-delete-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "provider-license",
+      "name": "drawer",
+      "role": "PROVIDER_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-provider-license-320-drawer.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "provider-license",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-provider-license-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "provider-delivery",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-provider-delivery-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "provider-upload",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-provider-upload-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "provider-document",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-provider-document-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-user",
+      "name": "drawer",
+      "role": "SYSTEM_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-user-320-drawer.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-user",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-user-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-invite",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-invite-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-invitation-detail",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-invitation-detail-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-review",
+      "name": "drawer",
+      "role": "SYSTEM_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-review-320-drawer.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-review",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-review-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-payment",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-payment-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-publish",
+      "name": "drawer",
+      "role": "SYSTEM_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-publish-320-drawer.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-publish",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-publish-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-reconcile",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-reconcile-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-recover",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 320,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-recover-320-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "account-PROVIDER_ADMIN",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-account-PROVIDER_ADMIN-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "account-SYSTEM_ADMIN",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-account-SYSTEM_ADMIN-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "ai-guest",
+      "name": "final",
+      "role": "GUEST",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-ai-guest-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "ai-customer",
+      "name": "panel",
+      "role": "CUSTOMER",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-ai-customer-768-panel.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "ai-customer",
+      "name": "final",
+      "role": "CUSTOMER",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-ai-customer-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "buyer-order",
+      "name": "final",
+      "role": "CUSTOMER",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-buyer-order-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "buyer-cancel",
+      "name": "final",
+      "role": "CUSTOMER",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-buyer-cancel-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "buyer-license",
+      "name": "overview",
+      "role": "CUSTOMER",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-buyer-license-768-overview.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "buyer-license",
+      "name": "key-tab",
+      "role": "CUSTOMER",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-buyer-license-768-key-tab.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "buyer-license",
+      "name": "final",
+      "role": "CUSTOMER",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-buyer-license-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "buyer-recovery",
+      "name": "final",
+      "role": "CUSTOMER",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-buyer-recovery-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "purchase",
+      "name": "configuration",
+      "role": "CUSTOMER",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-purchase-768-configuration.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "purchase",
+      "name": "final",
+      "role": "CUSTOMER",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-purchase-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "payment-progress",
+      "name": "final",
+      "role": "CUSTOMER",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-payment-progress-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "password-CUSTOMER",
+      "name": "final",
+      "role": "CUSTOMER",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-password-CUSTOMER-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "password-PROVIDER_ADMIN",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-password-PROVIDER_ADMIN-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "password-SUPPORT_STAFF",
+      "name": "final",
+      "role": "SUPPORT_STAFF",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-password-SUPPORT_STAFF-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "password-SYSTEM_ADMIN",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-password-SYSTEM_ADMIN-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "product-form",
+      "name": "create",
+      "role": "PROVIDER_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-product-form-768-create.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "product-form",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-product-form-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "product-edit",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-product-edit-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "product-delete",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-product-delete-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "plan-form",
+      "name": "create",
+      "role": "PROVIDER_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-plan-form-768-create.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "plan-form",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-plan-form-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "plan-edit",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-plan-edit-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "plan-delete",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-plan-delete-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "provider-license",
+      "name": "drawer",
+      "role": "PROVIDER_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-provider-license-768-drawer.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "provider-license",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-provider-license-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "provider-delivery",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-provider-delivery-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "provider-upload",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-provider-upload-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "provider-document",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-provider-document-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-user",
+      "name": "drawer",
+      "role": "SYSTEM_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-user-768-drawer.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-user",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-user-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-invite",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-invite-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-invitation-detail",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-invitation-detail-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-review",
+      "name": "drawer",
+      "role": "SYSTEM_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-review-768-drawer.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-review",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-review-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-payment",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-payment-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-publish",
+      "name": "drawer",
+      "role": "SYSTEM_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-publish-768-drawer.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-publish",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-publish-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-reconcile",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-reconcile-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-recover",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 768,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-recover-768-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "account-CUSTOMER",
+      "name": "final",
+      "role": "CUSTOMER",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-account-CUSTOMER-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "account-PROVIDER_ADMIN",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-account-PROVIDER_ADMIN-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "account-SYSTEM_ADMIN",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-account-SYSTEM_ADMIN-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "notifications",
+      "name": "final",
+      "role": "CUSTOMER",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-notifications-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "ai-guest",
+      "name": "final",
+      "role": "GUEST",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-ai-guest-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "ai-customer",
+      "name": "panel",
+      "role": "CUSTOMER",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-ai-customer-1440-panel.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "ai-customer",
+      "name": "final",
+      "role": "CUSTOMER",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-ai-customer-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "buyer-order",
+      "name": "final",
+      "role": "CUSTOMER",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-buyer-order-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "buyer-cancel",
+      "name": "final",
+      "role": "CUSTOMER",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-buyer-cancel-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "buyer-license",
+      "name": "overview",
+      "role": "CUSTOMER",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-buyer-license-1440-overview.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "buyer-license",
+      "name": "key-tab",
+      "role": "CUSTOMER",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-buyer-license-1440-key-tab.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "buyer-license",
+      "name": "final",
+      "role": "CUSTOMER",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-buyer-license-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "buyer-recovery",
+      "name": "final",
+      "role": "CUSTOMER",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-buyer-recovery-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "purchase",
+      "name": "configuration",
+      "role": "CUSTOMER",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-purchase-1440-configuration.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "purchase",
+      "name": "final",
+      "role": "CUSTOMER",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-purchase-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "payment-progress",
+      "name": "final",
+      "role": "CUSTOMER",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-payment-progress-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "password-CUSTOMER",
+      "name": "final",
+      "role": "CUSTOMER",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-password-CUSTOMER-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "password-PROVIDER_ADMIN",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-password-PROVIDER_ADMIN-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "password-SUPPORT_STAFF",
+      "name": "final",
+      "role": "SUPPORT_STAFF",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-password-SUPPORT_STAFF-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "password-SYSTEM_ADMIN",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-password-SYSTEM_ADMIN-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "product-form",
+      "name": "create",
+      "role": "PROVIDER_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-product-form-1440-create.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "product-form",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-product-form-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "product-edit",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-product-edit-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "product-delete",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-product-delete-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "plan-form",
+      "name": "create",
+      "role": "PROVIDER_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-plan-form-1440-create.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "plan-form",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-plan-form-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "plan-edit",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-plan-edit-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "plan-delete",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-plan-delete-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "provider-license",
+      "name": "drawer",
+      "role": "PROVIDER_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-provider-license-1440-drawer.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "provider-license",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-provider-license-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "provider-delivery",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-provider-delivery-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "provider-upload",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-provider-upload-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "provider-document",
+      "name": "final",
+      "role": "PROVIDER_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-provider-document-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-user",
+      "name": "drawer",
+      "role": "SYSTEM_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-user-1440-drawer.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-user",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-user-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-invite",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-invite-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-invitation-detail",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-invitation-detail-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-review",
+      "name": "drawer",
+      "role": "SYSTEM_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-review-1440-drawer.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-review",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-review-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-payment",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-payment-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-publish",
+      "name": "drawer",
+      "role": "SYSTEM_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-publish-1440-drawer.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-publish",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-publish-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-reconcile",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-reconcile-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "system-recover",
+      "name": "final",
+      "role": "SYSTEM_ADMIN",
+      "width": 1440,
+      "status": "CAPTURED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/stable-system-recover-1440-final.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/manifest-stable.json"
+    },
+    {
+      "id": "purchase-focus",
+      "name": null,
+      "role": null,
+      "width": 320,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-purchase-focus-320.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "ai-overflow",
+      "name": null,
+      "role": null,
+      "width": 320,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-ai-overflow-320.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "citation-settled",
+      "name": null,
+      "role": null,
+      "width": 320,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-citation-settled-320.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "plan-create",
+      "name": null,
+      "role": null,
+      "width": 320,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-plan-create-320.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "plan-dirty-confirm",
+      "name": null,
+      "role": null,
+      "width": 320,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-plan-dirty-confirm-320.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "payment-key",
+      "name": null,
+      "role": null,
+      "width": 320,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-payment-key-320.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "loading-overlay",
+      "name": null,
+      "role": null,
+      "width": 320,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-loading-overlay-320.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "password-error",
+      "name": null,
+      "role": null,
+      "width": 320,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-password-error-320.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "delivery-pending",
+      "name": null,
+      "role": null,
+      "width": 320,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-delivery-pending-320.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "upload-reopen",
+      "name": null,
+      "role": null,
+      "width": 320,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-upload-reopen-320.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "purchase-focus",
+      "name": null,
+      "role": null,
+      "width": 768,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-purchase-focus-768.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "ai-overflow",
+      "name": null,
+      "role": null,
+      "width": 768,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-ai-overflow-768.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "citation-settled",
+      "name": null,
+      "role": null,
+      "width": 768,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-citation-settled-768.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "plan-create",
+      "name": null,
+      "role": null,
+      "width": 768,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-plan-create-768.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "plan-dirty-confirm",
+      "name": null,
+      "role": null,
+      "width": 768,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-plan-dirty-confirm-768.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "payment-key",
+      "name": null,
+      "role": null,
+      "width": 768,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-payment-key-768.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "loading-overlay",
+      "name": null,
+      "role": null,
+      "width": 768,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-loading-overlay-768.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "password-error",
+      "name": null,
+      "role": null,
+      "width": 768,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-password-error-768.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "delivery-pending",
+      "name": null,
+      "role": null,
+      "width": 768,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-delivery-pending-768.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "upload-reopen",
+      "name": null,
+      "role": null,
+      "width": 768,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-upload-reopen-768.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "purchase-focus",
+      "name": null,
+      "role": null,
+      "width": 1440,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-purchase-focus-1440.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "ai-overflow",
+      "name": null,
+      "role": null,
+      "width": 1440,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-ai-overflow-1440.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "citation-settled",
+      "name": null,
+      "role": null,
+      "width": 1440,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-citation-settled-1440.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "plan-create",
+      "name": null,
+      "role": null,
+      "width": 1440,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-plan-create-1440.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "plan-dirty-confirm",
+      "name": null,
+      "role": null,
+      "width": 1440,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-plan-dirty-confirm-1440.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "payment-key",
+      "name": null,
+      "role": null,
+      "width": 1440,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-payment-key-1440.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "loading-overlay",
+      "name": null,
+      "role": null,
+      "width": 1440,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-loading-overlay-1440.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "password-error",
+      "name": null,
+      "role": null,
+      "width": 1440,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-password-error-1440.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "delivery-pending",
+      "name": null,
+      "role": null,
+      "width": 1440,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-delivery-pending-1440.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "upload-reopen",
+      "name": null,
+      "role": null,
+      "width": 1440,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-upload-reopen-1440.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/probes.json"
+    },
+    {
+      "id": "purchase-escape",
+      "name": null,
+      "role": null,
+      "width": 320,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/keyboard-purchase-escape-320.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/keyboard.json"
+    },
+    {
+      "id": "document-scroll",
+      "name": null,
+      "role": null,
+      "width": 320,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/keyboard-document-scroll-320.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/keyboard.json"
+    },
+    {
+      "id": "menu-ai-layer",
+      "name": null,
+      "role": null,
+      "width": 320,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/keyboard-menu-ai-layer-320.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/keyboard.json"
+    },
+    {
+      "id": "purchase-escape",
+      "name": null,
+      "role": null,
+      "width": 768,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/keyboard-purchase-escape-768.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/keyboard.json"
+    },
+    {
+      "id": "document-scroll",
+      "name": null,
+      "role": null,
+      "width": 768,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/keyboard-document-scroll-768.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/keyboard.json"
+    },
+    {
+      "id": "account-enter",
+      "name": null,
+      "role": null,
+      "width": 768,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/keyboard-account-enter-768.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/keyboard.json"
+    },
+    {
+      "id": "menu-ai-layer",
+      "name": null,
+      "role": null,
+      "width": 768,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/keyboard-menu-ai-layer-768.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/keyboard.json"
+    },
+    {
+      "id": "purchase-escape",
+      "name": null,
+      "role": null,
+      "width": 1440,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/keyboard-purchase-escape-1440.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/keyboard.json"
+    },
+    {
+      "id": "document-scroll",
+      "name": null,
+      "role": null,
+      "width": 1440,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/keyboard-document-scroll-1440.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/keyboard.json"
+    },
+    {
+      "id": "account-enter",
+      "name": null,
+      "role": null,
+      "width": 1440,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/keyboard-account-enter-1440.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/keyboard.json"
+    },
+    {
+      "id": "catalog-action-menu",
+      "name": null,
+      "role": null,
+      "width": 320,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/extra-catalog-action-menu-320.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/extra.json"
+    },
+    {
+      "id": "license-action-menu",
+      "name": null,
+      "role": null,
+      "width": 320,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/extra-license-action-menu-320.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/extra.json"
+    },
+    {
+      "id": "system-action-menu",
+      "name": null,
+      "role": null,
+      "width": 320,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/extra-system-action-menu-320.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/extra.json"
+    },
+    {
+      "id": "provider-payment",
+      "name": null,
+      "role": null,
+      "width": 320,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/extra-provider-payment-320.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/extra.json"
+    },
+    {
+      "id": "notification-reachability",
+      "name": null,
+      "role": null,
+      "width": 320,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/extra-notification-reachability-320.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/extra.json"
+    },
+    {
+      "id": "catalog-action-menu",
+      "name": null,
+      "role": null,
+      "width": 768,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/extra-catalog-action-menu-768.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/extra.json"
+    },
+    {
+      "id": "license-action-menu",
+      "name": null,
+      "role": null,
+      "width": 768,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/extra-license-action-menu-768.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/extra.json"
+    },
+    {
+      "id": "system-action-menu",
+      "name": null,
+      "role": null,
+      "width": 768,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/extra-system-action-menu-768.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/extra.json"
+    },
+    {
+      "id": "provider-payment",
+      "name": null,
+      "role": null,
+      "width": 768,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/extra-provider-payment-768.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/extra.json"
+    },
+    {
+      "id": "notification-reachability",
+      "name": null,
+      "role": null,
+      "width": 768,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/extra-notification-reachability-768.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/extra.json"
+    },
+    {
+      "id": "catalog-action-menu",
+      "name": null,
+      "role": null,
+      "width": 1440,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/extra-catalog-action-menu-1440.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/extra.json"
+    },
+    {
+      "id": "license-action-menu",
+      "name": null,
+      "role": null,
+      "width": 1440,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/extra-license-action-menu-1440.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/extra.json"
+    },
+    {
+      "id": "system-action-menu",
+      "name": null,
+      "role": null,
+      "width": 1440,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/extra-system-action-menu-1440.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/extra.json"
+    },
+    {
+      "id": "provider-payment",
+      "name": null,
+      "role": null,
+      "width": 1440,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/extra-provider-payment-1440.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/extra.json"
+    },
+    {
+      "id": "notification-empty",
+      "name": null,
+      "role": null,
+      "width": 1440,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/extra-notification-empty-1440.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/extra.json"
+    },
+    {
+      "id": "notification-error",
+      "name": null,
+      "role": null,
+      "width": 1440,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/extra-notification-error-1440.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/extra.json"
+    },
+    {
+      "id": "system-review-rematch",
+      "name": null,
+      "role": null,
+      "width": 320,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/extra-system-review-rematch-320-confirmed.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/extra.json"
+    },
+    {
+      "id": "ai-provider",
+      "name": null,
+      "role": null,
+      "width": 320,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/extra-ai-provider-320.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/extra.json"
+    },
+    {
+      "id": "plan-position",
+      "name": null,
+      "role": null,
+      "width": 768,
+      "status": "OBSERVED",
+      "screenshot": "artifacts/ui-audit/2026-11-06-overlays/probe-plan-position-768.png",
+      "evidenceManifest": "artifacts/ui-audit/2026-11-06-overlays/plan-position.json"
+    }
+  ],
+  "limits": [
+    "Fixtures only; no real API mutation or new payment/licensing end-to-end acceptance.",
+    "Not every role, status, data combination, screen reader, zoom or native behavior verified.",
+    "Select, calendar, tooltip and toast instances are not exhaustively inventoried.",
+    "Evidence artifacts are local ignored output; retained report contains reproduction and measurements.",
+    "Original review observation status means captured/observed, not functional PASS. Only verification browser results are PASS.",
+    "Inventory source line numbers describe the review baseline; fixes have shifted some lines."
+  ],
+  "verification": {
+    "sourceState": "VERIFIED_WORKING_TREE_BEFORE_COMMIT",
+    "baselineCommit": "c70a99944198564f46896237f26d1cca125750fe",
+    "dataMode": "CONTROLLED_FIXTURE",
+    "browserDistinctPassed": 73,
+    "browserRuns": {
+      "green": 20,
+      "focus": 3,
+      "regression": 50,
+      "notification-green": 2
+    },
+    "browserResults": [
+      {
+        "file": "purchase-modal-flow.spec.ts",
+        "title": "purchase modal keeps selection and actions usable at 320px",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/green.json"
+      },
+      {
+        "file": "purchase-modal-flow.spec.ts",
+        "title": "purchase modal keeps selection and actions usable at 390px",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/green.json"
+      },
+      {
+        "file": "purchase-modal-flow.spec.ts",
+        "title": "purchase modal keeps selection and actions usable at 768px",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/green.json"
+      },
+      {
+        "file": "purchase-modal-flow.spec.ts",
+        "title": "purchase modal keeps selection and actions usable at 1024px",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/green.json"
+      },
+      {
+        "file": "purchase-modal-flow.spec.ts",
+        "title": "purchase modal keeps selection and actions usable at 1440px",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/green.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "active mobile navigation is readable for PROVIDER_ADMIN",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/green.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "active mobile navigation is readable for SUPPORT_STAFF",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/green.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "active mobile navigation is readable for SYSTEM_ADMIN",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/green.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "AI citation wraps inside its popup at 320",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/green.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "delivery retry clearly blocks closing while pending at 320",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/green.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "AI citation wraps inside its popup at 768",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/green.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "delivery retry clearly blocks closing while pending at 768",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/green.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "AI citation wraps inside its popup at 1440",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/green.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "delivery retry clearly blocks closing while pending at 1440",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/green.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "mobile menu blocks the floating assistant at 320",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/green.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "customer notifications remain reachable at 320",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/notification-green.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "mobile menu blocks the floating assistant at 768",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/green.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "customer notifications remain reachable at 768",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/notification-green.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "long document content can receive keyboard focus and scroll",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/green.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "upload product placeholder is readable",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/green.json"
+      },
+      {
+        "file": "system-admin.spec.ts",
+        "title": "payment review keeps keyboard focus in the child modal at 320",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/focus.json"
+      },
+      {
+        "file": "system-admin.spec.ts",
+        "title": "payment review keeps keyboard focus in the child modal at 768",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/focus.json"
+      },
+      {
+        "file": "system-admin.spec.ts",
+        "title": "payment review keeps keyboard focus in the child modal at 1440",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/focus.json"
+      },
+      {
+        "file": "purchase-modal-flow.spec.ts",
+        "title": "purchase recovery handles cancelled",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "purchase-modal-flow.spec.ts",
+        "title": "purchase recovery handles cancelled-deeplink",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "purchase-modal-flow.spec.ts",
+        "title": "purchase recovery handles switch-plan-deeplink",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "purchase-modal-flow.spec.ts",
+        "title": "purchase recovery handles expired-pending",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "purchase-modal-flow.spec.ts",
+        "title": "purchase recovery handles paid-elsewhere",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "purchase-modal-flow.spec.ts",
+        "title": "purchase recovery handles decision-changed",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "purchase-modal-flow.spec.ts",
+        "title": "purchase recovery handles checkout-conflict",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "system-admin.spec.ts",
+        "title": "all system routes fit 320x800",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "system-admin.spec.ts",
+        "title": "all system routes fit 768x1024",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "system-admin.spec.ts",
+        "title": "all system routes fit 1024x768",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "system-admin.spec.ts",
+        "title": "all system routes fit 1440x1024",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "system-admin.spec.ts",
+        "title": "all system routes fit 1440x900",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "system-admin.spec.ts",
+        "title": "sidebar supports history, deep links, refresh and extra filters",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "system-admin.spec.ts",
+        "title": "email-only invitations validate, confirm delivery and refresh the targeted invitation section",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "system-admin.spec.ts",
+        "title": "recipient onboarding verifies email and completes the profile at 320x800",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "system-admin.spec.ts",
+        "title": "recipient onboarding verifies email and completes the profile at 768x1024",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "system-admin.spec.ts",
+        "title": "recipient onboarding verifies email and completes the profile at 1024x768",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "system-admin.spec.ts",
+        "title": "recipient onboarding verifies email and completes the profile at 1440x1024",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "system-admin.spec.ts",
+        "title": "user actions require confirmation, preserve details and allow unlock",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "system-admin.spec.ts",
+        "title": "payment history, review evidence and pagination remain usable",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "system-admin.spec.ts",
+        "title": "blockchain failure can retry and remaining mismatches stay visible",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "system-admin.spec.ts",
+        "title": "document publication confirms the observed version and refreshes the queue",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "system-admin.spec.ts",
+        "title": "profile dirty state, failed save and password session invalidation",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "system-admin.spec.ts",
+        "title": "account menu keyboard, Escape and outside click; mobile focus trap",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "system-admin.spec.ts",
+        "title": "overview focuses on work and account request failures remain retryable",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "system-admin.spec.ts",
+        "title": "sidebar account name meets AA contrast against the rendered background",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "mobile public navigation moves focus into its modal and restores it on Escape",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "customer shopping navigation stays selected on authenticated catalog aliases",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "buyer overview has a visible main heading and a working skip destination",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "skip navigation reaches the content at /",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "skip navigation reaches the content at /help",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "skip navigation reaches the content at /verify",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "skip navigation reaches the content at /products/audit-product",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "skip navigation reaches the content at /buyer/licenses",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "skip navigation reaches the content at /buyer/profile",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "skip navigation reaches the content at /buyer/checkout",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "a failed product image uses the local artwork instead of a broken image",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "tablet comparison starts near the page heading without a large blank gap",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "catalog error has a retry and does not retain stale pagination",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "direct access by the wrong role shows 403 without leaking the system workspace",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "an empty support queue starts below the mobile header and exposes delivery as a panel",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "account control includes its visible label for CUSTOMER",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "account control includes its visible label for PROVIDER_ADMIN",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "account control includes its visible label for SYSTEM_ADMIN",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "featured page controls have a usable touch target on mobile",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "support sidebar logout text has readable contrast on its button",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "support sidebar actions keep their labels inside each button",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "mobile role menu includes its visible text in the accessible name",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "empty provider deliveries do not create a keyboard-inaccessible horizontal table",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      },
+      {
+        "file": "ui-audit.spec.ts",
+        "title": "a delivery API failure does not claim that there are no deliveries",
+        "ok": true,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/regression.json"
+      }
+    ],
+    "captureManifest": "artifacts/ui-audit/2026-11-06-overlay-fixes/capture/manifest-stable.json",
+    "captureCount": 31,
+    "axeRunsAt320": 12,
+    "axeViolations": 0,
+    "supplementaryCaptureManifest": "artifacts/ui-audit/2026-11-06-overlay-fixes/after-probes.json",
+    "supplementaryCaptures": 7,
+    "lint": "PASSED",
+    "typecheck": "PASSED",
+    "build": "PASSED",
+    "buildWarning": "Large JS chunk remains: approximately 1.65 MB, gzip 503 KB.",
+    "unit": {
+      "status": "PASSED_AFTER_FILE_RECHECK",
+      "distinctTestsPassed": 262,
+      "distinctTestsTotal": 262,
+      "initialRun": {
+        "passed": 261,
+        "failed": 1,
+        "exitCode": 1,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/unit.json"
+      },
+      "fileRecheck": {
+        "file": "tests/emukey/frontend/provider-workspace.test.tsx",
+        "passed": 19,
+        "failed": 0,
+        "exitCode": 0,
+        "evidence": "artifacts/ui-audit/2026-11-06-overlay-fixes/unit-provider-recheck.json"
+      },
+      "risk": "Initial entitlement-preservation case failed after 32.7 seconds; it passed in 22.6 seconds in the file recheck. Time sensitivity remains; no source/test/timeout change between these runs."
+    },
+    "committedAtVerification": false,
+    "pushedAtVerification": false,
+    "hygiene": "PASSED",
+    "diffCheckBothRepos": "PASSED"
+  }
+}

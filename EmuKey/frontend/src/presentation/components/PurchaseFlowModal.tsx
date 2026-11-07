@@ -19,6 +19,7 @@ import {
 import { resolvePurchasableOffer, type DevicePlan, type Product } from '../../domain/product';
 import type { CheckoutSessionDto } from '../../infrastructure/api/generated';
 import { OrderSummary } from './OrderSummary';
+import { ModalFocusBoundary } from './WorkspacePrimitives';
 
 export interface PurchaseFlowModalProps {
   readonly open: boolean;
@@ -95,6 +96,10 @@ export function PurchaseFlowModal({
   const { user } = useAuth();
   const mutations = useOrderMutations();
   const [stage, setStage] = useState<Stage>('configuration');
+  const stageTitleRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (open) stageTitleRef.current?.focus();
+  }, [open, stage]);
   const [selectedPlanId, setSelectedPlanId] = useState('');
   const [order, setOrder] = useState<OrderDetail>();
   const [accepted, setAccepted] = useState(false);
@@ -297,8 +302,10 @@ export function PurchaseFlowModal({
       footer={stage === 'configuration' ? configurationFooter : stage === 'terms' ? termsFooter : statusFooter}
       mask={{ closable: !pending }}
       onCancel={() => { if (!pending) close(); }}
+      afterOpenChange={(visible) => { if (visible) stageTitleRef.current?.focus(); }}
+      modalRender={(node) => <ModalFocusBoundary>{node}</ModalFocusBoundary>}
       open={open}
-      title={stage === 'configuration' ? `Mua ${product.name}` : stage === 'terms' ? `Xác nhận ${product.name}` : `Trạng thái đơn hàng`}
+      title={<h2 className="purchase-flow-modal__title" ref={stageTitleRef} tabIndex={-1}>{stage === 'configuration' ? `Mua ${product.name}` : stage === 'terms' ? `Xác nhận ${product.name}` : 'Trạng thái đơn hàng'}</h2>}
       width={720}
       zIndex={1200}
     >
