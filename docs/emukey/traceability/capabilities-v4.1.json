@@ -27,7 +27,6 @@
     "notification_deliveries",
     "mobile_push_tokens",
     "license_key_deliveries",
-    "schema_versions",
     "provider_integrations",
     "license_key_materials",
     "provider_license_deliveries"

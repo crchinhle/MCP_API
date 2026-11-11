@@ -241,6 +241,12 @@ export function PaymentStatusScreen() {
             </StatusChip>
           </header>
           {current.orderStatus !== 'PAYMENT_ACCEPTED' ? <OrderSummary order={{
+            orderStatus: current.orderStatus, orderType: current.orderType,
+            providerName: current.providerNameSnapshot,
+            buyerName: current.purchaseSnapshot?.buyerName ?? user?.displayName ?? '—',
+            buyerEmail: current.purchaseSnapshot?.buyerEmail ?? user?.email ?? '—',
+            pricing: current.purchaseSnapshot ?? null,
+            createdAt: current.createdAt, paymentDueAt: current.paymentDueAt,
             total: current.priceVndSnapshot, productName: current.productNameSnapshot,
             planName: current.planNameSnapshot, billingCycle: current.billingCycleSnapshot,
             durationMonths: current.durationMonthsSnapshot, maxActiveDevices: current.maxActiveDevicesSnapshot,

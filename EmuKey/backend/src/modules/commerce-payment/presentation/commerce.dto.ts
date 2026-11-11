@@ -1,7 +1,17 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsString, IsUUID, Matches, MaxLength, MinLength, ValidateIf } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, Min, MaxLength, MinLength, ValidateIf } from 'class-validator';
 
 export class CreateOrderDto {
+  @ApiPropertyOptional({ minimum: 1, maximum: 2147483647, type: Number })
+  @ValidateIf((value: CreateOrderDto) => value.deviceQuantity !== undefined)
+  @IsInt() @Min(1) @Max(2147483647)
+  deviceQuantity?: number;
+
+  @ApiPropertyOptional({ enum: [1, 2, 3, 6, 12], type: Number })
+  @ValidateIf((value: CreateOrderDto) => value.durationMonths !== undefined)
+  @IsIn([1, 2, 3, 6, 12])
+  durationMonths?: number;
+
   // Catalog IDs already persisted by the demo seed are PostgreSQL UUIDs,
   // but may not carry RFC version/variant bits. Validate their full syntax;
   // the repository still requires an existing published plan/product.
@@ -69,7 +79,19 @@ const PAYMENT_CLASSIFICATIONS = [
   'INVALID',
 ] as const;
 
+export class PurchaseSnapshotDto {
+  @ApiProperty() buyerName!: string;
+  @ApiProperty() buyerEmail!: string;
+  @ApiProperty() basePriceVnd!: number;
+  @ApiProperty() baseDeviceQuantity!: number;
+  @ApiProperty() baseDurationMonths!: number;
+  @ApiProperty({ type: Number, nullable: true }) requestedDeviceQuantity!: number | null;
+  @ApiProperty({ type: Number, nullable: true }) requestedDurationMonths!: number | null;
+}
+
 export class OrderDto {
+  @ApiPropertyOptional({ type: PurchaseSnapshotDto, nullable: true })
+  purchaseSnapshot?: PurchaseSnapshotDto | null;
   @ApiPropertyOptional({ nullable: true, type: String, description: 'Latest RENEW_LICENSE command status for this exact order, not the original issuance.' })
   renewalStatus?: string | null;
   @ApiPropertyOptional({ format: 'date-time', nullable: true, type: String, description: 'Target expiry of this renewal; effective only after canonical chain confirmation.' })

@@ -8,7 +8,7 @@ import { useCreateConversation } from '../../application/assistance/assistanceQu
 import { useNavigate } from 'react-router-dom';
 import { orderStatusLabel, orderStatusTone, type OrderSummary, useOrder, useOrderMutations, useOrders, useOrderTerms } from '../../application/orders/orderQueries';
 import { CopyableId, PageHeader, PageLoading, formatMoney, FactList, StatusChip, useDebouncedValue } from '../components/WorkspacePrimitives';
-import { entitlementLabel } from '../components/OrderSummary';
+import { OrderEntitlements } from '../components/OrderSummary';
 import { providerHandoffStatus, useLicenses } from '../../application/licenses/licenseQueries';
 
 type OrderTab = 'all' | 'sign' | 'payment' | 'complete';
@@ -143,8 +143,7 @@ export function BuyerOrdersScreen() {
             { label: 'Phiên bản gói', value: detailQuery.data.planVersionSnapshot },
             { label: 'Loại đơn', value: detailQuery.data.orderType === 'RENEWAL' ? 'Gia hạn bản quyền' : 'Mua bản quyền mới' },
           ]} />
-          <h4>Quyền lợi của gói</h4>
-          <ul>{Object.entries(detailQuery.data.entitlementsSnapshot ?? {}).map(([key, value]) => <li key={key}>{entitlementLabel(key, value)}</li>)}</ul>
+          <OrderEntitlements entitlements={detailQuery.data.entitlementsSnapshot} />
           <p className="muted-copy">Thông tin được lưu tại thời điểm tạo đơn. Đơn chưa thanh toán có thời hạn 30 phút.</p>
         </section> : null}
         {detailQuery.data?.orderStatus === 'WAITING_SERVICE_TERMS_ACCEPTANCE' ? <section className="checkout-stack">{terms.isPending ? <LoadingOverlay /> : terms.isError ? <Alert type="error" title="Không thể tải điều khoản" action={<Button onClick={() => void terms.refetch()}>Thử lại</Button>} /> : <><details><summary>Xem điều khoản dịch vụ</summary><pre className="terms-document">{terms.data?.content}</pre></details><Checkbox checked={accepted} onChange={(event) => setAccepted(event.target.checked)}>Tôi đã đọc và đồng ý điều khoản</Checkbox><><Button type="primary" disabled={(!accepted || !terms.data || terms.isFetching || terms.isError) || (mutations.acceptServiceTerms.isPending)}  onClick={acceptTerms}>Xác nhận điều khoản</Button><LoadingOverlay active={mutations.acceptServiceTerms.isPending} label="Đang xử lý yêu cầu: Xác nhận điều khoản" /></></>}{mutations.acceptServiceTerms.isError ? <Alert type="error" title="Không thể xác nhận điều khoản. Vui lòng thử lại." action={<Button disabled={!accepted || !terms.data || terms.isFetching || terms.isError || mutations.acceptServiceTerms.isPending} onClick={acceptTerms}>Thử lại</Button>} /> : null}</section> : null}

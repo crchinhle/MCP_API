@@ -13,7 +13,7 @@ export function useDebouncedValue(value: string, delay = 300): string {
   return debounced;
 }
 
-export function CopyableId({ value, onOpen }: { readonly value: string; readonly onOpen?: () => void }) {
+export function CopyableId({ value, onOpen, copyLabel = 'Copy ID' }: { readonly value: string; readonly onOpen?: () => void; readonly copyLabel?: string }) {
   const [copyStatus, setCopyStatus] = useState('');
   const copy = async () => {
     try {
@@ -25,7 +25,7 @@ export function CopyableId({ value, onOpen }: { readonly value: string; readonly
   };
   return <span className="copyable-id">
     <Tooltip title={value}>{onOpen ? <button className="buyer-orders-id" onClick={onOpen} type="button">{value}</button> : <span className="buyer-orders-id">{value}</span>}</Tooltip>
-    <Button aria-label="Copy ID" size="small" onClick={() => void copy()}>Copy ID</Button>
+    <Button aria-label={copyLabel} size="small" onClick={() => void copy()}>{copyLabel}</Button>
     {copyStatus ? <span className="copyable-id-status" role="status" aria-live="polite">{copyStatus}</span> : null}
   </span>;
 }

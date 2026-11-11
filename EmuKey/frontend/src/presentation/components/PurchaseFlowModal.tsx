@@ -18,7 +18,7 @@ import {
 } from '../../application/orders/orderQueries';
 import { resolvePurchasableOffer, type DevicePlan, type Product } from '../../domain/product';
 import type { CheckoutSessionDto } from '../../infrastructure/api/generated';
-import { OrderSummary } from './OrderSummary';
+import { OrderEntitlements, OrderSummary } from './OrderSummary';
 import { ModalFocusBoundary } from './WorkspacePrimitives';
 
 export interface PurchaseFlowModalProps {
@@ -81,7 +81,7 @@ function snapshotConflict(order: OrderDetail | undefined, offer: DevicePlan | un
   if (!order) return null;
   if (!offer) return 'Gói đã chọn không còn được công bố. Hãy chọn lại cấu hình.';
   if (order.planId !== offer.id) return 'Gói đã chọn đã thay đổi so với lúc bắt đầu. Hãy xác nhận lại cấu hình.';
-  if (order.priceVndSnapshot !== offer.priceVnd) return 'Giá của gói đã thay đổi so với lựa chọn trước đó. Hãy xác nhận lại cấu hình.';
+  if ((order.purchaseSnapshot?.basePriceVnd ?? order.priceVndSnapshot) !== offer.priceVnd) return 'Giá của gói đã thay đổi so với lựa chọn trước đó. Hãy xác nhận lại cấu hình.';
   return null;
 }
 
@@ -97,10 +97,14 @@ export function PurchaseFlowModal({
   const mutations = useOrderMutations();
   const [stage, setStage] = useState<Stage>('configuration');
   const stageTitleRef = useRef<HTMLHeadingElement>(null);
+  const consentRef = useRef<HTMLDivElement>(null);
+  const actionInFlight = useRef(false);
   useEffect(() => {
     if (open) stageTitleRef.current?.focus();
   }, [open, stage]);
   const [selectedPlanId, setSelectedPlanId] = useState('');
+  const [deviceQuantity, setDeviceQuantity] = useState<number>();
+  const [durationMonths, setDurationMonths] = useState<number>();
   const [order, setOrder] = useState<OrderDetail>();
   const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -128,6 +132,9 @@ export function PurchaseFlowModal({
     [product.plans, selectedPlanId],
   );
   const conflict = snapshotConflict(order, selectedOffer);
+  const chosenDevices = deviceQuantity ?? selectedOffer?.devices ?? 1;
+  const chosenMonths = durationMonths ?? selectedOffer?.durationMonths ?? 1;
+  const validConfiguration = Number.isInteger(chosenDevices) && chosenDevices >= 1 && chosenDevices <= 2147483647 && [1, 2, 3, 6, 12].includes(chosenMonths);
   const orderStatus = order?.orderStatus;
   const needsConsent = orderStatus === 'WAITING_SERVICE_TERMS_ACCEPTANCE';
   const waitingPayment = orderStatus === 'WAITING_PAYMENT';
@@ -144,6 +151,8 @@ export function PurchaseFlowModal({
     setIntentOrderId(intentRef.current?.orderId ?? '');
     setIntentVersion((version) => version + 1);
     setStage('configuration');
+    setDeviceQuantity(undefined);
+    setDurationMonths(undefined);
     setSelectedPlanId(
       resolvePurchasableOffer(product.plans, initialPlanId ?? intentRef.current?.planId)?.id ?? '',
     );
@@ -164,6 +173,8 @@ export function PurchaseFlowModal({
     setOrder(resumedOrder.data);
     if (!order) {
       setSelectedPlanId(resumedOrder.data.planId);
+      setDeviceQuantity(resumedOrder.data.maxActiveDevicesSnapshot);
+      setDurationMonths(resumedOrder.data.durationMonthsSnapshot);
       setStage(resumedOrder.data.orderStatus === 'WAITING_SERVICE_TERMS_ACCEPTANCE' || resumedOrder.data.orderStatus === 'WAITING_PAYMENT' ? 'terms' : 'status');
     } else if (!['WAITING_SERVICE_TERMS_ACCEPTANCE', 'WAITING_PAYMENT'].includes(resumedOrder.data.orderStatus)) {
       setStage('status');
@@ -195,20 +206,27 @@ export function PurchaseFlowModal({
 
   function selectOffer(planId: string) {
     setSelectedPlanId(planId);
+    setDeviceQuantity(undefined);
+    setDurationMonths(undefined);
     setError(null);
   }
 
   async function continueToTerms() {
-    if (!selectedOffer || pending) return;
-    if (order?.planId === selectedOffer.id && !conflict) {
+    if (!selectedOffer || pending || actionInFlight.current || !validConfiguration) return;
+    const sameConfiguration = (!order?.maxActiveDevicesSnapshot || order.maxActiveDevicesSnapshot === chosenDevices) &&
+      (!order?.durationMonthsSnapshot || order.durationMonthsSnapshot === chosenMonths);
+    if (order?.planId === selectedOffer.id && !conflict && sameConfiguration) {
       setStage(order.orderStatus === 'WAITING_SERVICE_TERMS_ACCEPTANCE' || order.orderStatus === 'WAITING_PAYMENT' ? 'terms' : 'status');
       return;
     }
     setError(null);
+    actionInFlight.current = true;
     try {
       // PAY-04 / PAY-12: the order is created only from this explicit action,
       // with an idempotency key owned by the mutation layer.
-      const created = await mutations.create.mutateAsync({ planId: selectedOffer.id });
+      const customized = chosenDevices !== selectedOffer.devices || chosenMonths !== (selectedOffer.durationMonths ?? 1);
+      const created = await mutations.create.mutateAsync({ planId: selectedOffer.id,
+        ...(customized ? { deviceQuantity: chosenDevices, durationMonths: chosenMonths as 1 | 2 | 3 | 6 | 12 } : {}) });
       setIgnoredResumeOrderId(resumeOrderId);
       setOrder(created);
       setStage(created.orderStatus === 'WAITING_SERVICE_TERMS_ACCEPTANCE' || created.orderStatus === 'WAITING_PAYMENT' ? 'terms' : 'status');
@@ -222,16 +240,21 @@ export function PurchaseFlowModal({
       onOrderPrepared?.(created);
     } catch (cause) {
       setError(describeApiError(cause, 'Không thể chuẩn bị đơn hàng. Vui lòng thử lại.'));
+    } finally {
+      actionInFlight.current = false;
     }
   }
 
   async function payThroughSePay() {
-    if (!order || !terms.data || !termsReady || pending || (needsConsent && conflict)) return;
+    if (!order || !terms.data || !termsReady || pending || actionInFlight.current || (!needsConsent && !waitingPayment) || paymentBlocked || (needsConsent && conflict)) return;
     if (needsConsent && !accepted) {
       setError('Bạn cần đồng ý đúng phiên bản điều khoản của đơn hàng trước khi thanh toán.');
+      consentRef.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+      consentRef.current?.querySelector<HTMLInputElement>('input[type="checkbox"]')?.focus({ preventScroll: true });
       return;
     }
     setError(null);
+    actionInFlight.current = true;
     setPreparingPayment(true);
     try {
       let payable = order;
@@ -253,6 +276,7 @@ export function PurchaseFlowModal({
       void resumedOrder.refetch();
       void retryDecision.refetch();
     } finally {
+      actionInFlight.current = false;
       setPreparingPayment(false);
     }
   }
@@ -262,7 +286,7 @@ export function PurchaseFlowModal({
     <div className="purchase-flow-modal__footer">
       <Button disabled={pending} onClick={close}>Đóng</Button>
       <Button
-        disabled={!selectedOffer || pending || Boolean(resumableOrderId && (resumedOrder.isPending || resumedOrder.isError))}
+        disabled={!selectedOffer || !validConfiguration || pending || Boolean(resumableOrderId && (resumedOrder.isPending || resumedOrder.isError))}
         loading={mutations.create.isPending}
         onClick={() => void continueToTerms()}
         type="primary"
@@ -273,16 +297,16 @@ export function PurchaseFlowModal({
   );
   const termsFooter = (
     <div className="purchase-flow-modal__footer">
-      <Button disabled={pending} onClick={() => setStage('configuration')}>Quay lại</Button>
+      <Button disabled={pending} onClick={() => setStage('configuration')}>Chỉnh gói</Button>
       {waitingPayment && order ? <Button href={`/buyer/orders/${encodeURIComponent(order.id)}/payment`}>Mở trạng thái đơn hàng</Button> : null}
       <Button
-        disabled={!order || !termsReady || pending || paymentBlocked || (waitingPayment && retryDecision.isFetching) || (needsConsent && Boolean(conflict)) || (needsConsent && !accepted)}
-        aria-label={waitingPayment ? 'Tiếp tục thanh toán' : 'Thanh toán qua SePay'}
+        disabled={!order || (!needsConsent && !waitingPayment) || !termsReady || pending || paymentBlocked || (waitingPayment && retryDecision.isFetching) || (needsConsent && Boolean(conflict))}
+        aria-label="Tiếp tục thanh toán"
         loading={preparingPayment}
         onClick={() => void payThroughSePay()}
         type="primary"
       >
-        {waitingPayment ? 'Tiếp tục thanh toán' : 'Thanh toán qua SePay'}
+        Tiếp tục thanh toán
       </Button>
     </div>
   );
@@ -305,7 +329,7 @@ export function PurchaseFlowModal({
       afterOpenChange={(visible) => { if (visible) stageTitleRef.current?.focus(); }}
       modalRender={(node) => <ModalFocusBoundary>{node}</ModalFocusBoundary>}
       open={open}
-      title={<h2 className="purchase-flow-modal__title" ref={stageTitleRef} tabIndex={-1}>{stage === 'configuration' ? `Mua ${product.name}` : stage === 'terms' ? `Xác nhận ${product.name}` : 'Trạng thái đơn hàng'}</h2>}
+      title={<h2 className="purchase-flow-modal__title" ref={stageTitleRef} tabIndex={-1}>{stage === 'configuration' ? `Mua ${product.name}` : stage === 'terms' ? 'Xác nhận đơn hàng' : 'Trạng thái đơn hàng'}</h2>}
       width={720}
       zIndex={1200}
     >
@@ -352,6 +376,26 @@ export function PurchaseFlowModal({
 
             {selectedOffer?.entitlements ? <OfferEntitlements offer={selectedOffer} /> : null}
 
+            {selectedOffer ? (
+              <section className="purchase-flow-modal__customization" aria-label="Tùy chỉnh gói">
+                <h3>Tùy chỉnh gói của bạn</h3>
+                <div className="purchase-flow-modal__custom-fields">
+                  <label>Số lượng thiết bị
+                    <input type="number" min={1} max={2147483647} step={1} value={Number.isNaN(chosenDevices) ? '' : chosenDevices}
+                      disabled={pending} aria-invalid={!validConfiguration} aria-describedby="purchase-pricing-help"
+                      onChange={(event) => { setDeviceQuantity(event.target.value === '' ? NaN : Number(event.target.value)); setError(null); }} />
+                  </label>
+                  <label>Thời hạn sử dụng
+                    <select value={chosenMonths} disabled={pending} onChange={(event) => { setDurationMonths(Number(event.target.value)); setError(null); }}>
+                      {[1, 2, 3, 6, 12].map((months) => <option key={months} value={months}>{months} tháng</option>)}
+                    </select>
+                  </label>
+                </div>
+                <p id="purchase-pricing-help" className="muted-copy">Giá được quy đổi từ {formatVnd(selectedOffer.priceVnd)} / {selectedOffer.devices} thiết bị / {selectedOffer.durationMonths ?? 1} tháng. Tổng tiền được làm tròn lên đến đồng và xác nhận ở bước tiếp theo.</p>
+                {!validConfiguration ? <p role="alert">Nhập số thiết bị nguyên dương hợp lệ.</p> : null}
+              </section>
+            ) : null}
+
             {resumedOrder.isPending && resumableOrderId ? <Spin aria-label="Đang khôi phục đơn hàng" /> : null}
             {resumedOrder.isError && resumableOrderId ? (
               <Alert
@@ -377,7 +421,7 @@ export function PurchaseFlowModal({
                 type="warning"
               />
             ) : null}
-            {orderSummaryOf(order) ? <OrderSummary order={orderSummaryOf(order)!} /> : null}
+            {orderSummaryOf(order, user) ? <OrderSummary order={orderSummaryOf(order, user)!} /> : null}
             {terms.isPending ? <Spin aria-label="Đang tải điều khoản" /> : null}
             {terms.isError ? (
               <Alert
@@ -391,18 +435,19 @@ export function PurchaseFlowModal({
               <section aria-label="Điều khoản dịch vụ" className="purchase-flow-modal__terms">
                 <header>
                   <h3>Điều khoản dịch vụ</h3>
-                  <p className="muted-copy">Phiên bản {terms.data.version} · Hash {terms.data.hash}</p>
                 </header>
                 <div className="purchase-flow-modal__terms-scroll" tabIndex={0}>
                   <pre>{terms.data.content}</pre>
                 </div>
                 {needsConsent ? (
+                  <div ref={consentRef}>
                   <Checkbox
                     checked={accepted}
                     onChange={(event) => { setAccepted(event.target.checked); setError(null); }}
                   >
                     Tôi đã đọc và đồng ý với đúng phiên bản điều khoản của đơn hàng này
                   </Checkbox>
+                  </div>
                 ) : (
                   <p className="muted-copy">Điều khoản của đơn hàng này đã được chấp thuận.</p>
                 )}
@@ -428,7 +473,7 @@ export function PurchaseFlowModal({
             ) : (
               <Alert showIcon type="info" message="Trạng thái đơn hàng chưa hỗ trợ tiếp tục trong quy trình mua." description="Mở trang trạng thái để xem hướng xử lý an toàn." />
             )}
-            {orderSummaryOf(order) ? <OrderSummary order={orderSummaryOf(order)!} /> : null}
+            {orderSummaryOf(order, user) ? <OrderSummary order={orderSummaryOf(order, user)!} /> : null}
           </>
         ) : null}
 
@@ -439,22 +484,21 @@ export function PurchaseFlowModal({
 }
 
 function OfferEntitlements({ offer }: { readonly offer: DevicePlan }) {
-  const entries = Object.entries(offer.entitlements ?? {})
-    .filter(([, value]) => Boolean(value))
-    .map(([key, value]) => `${key === 'desktop' ? 'Ứng dụng máy tính' : key}${value === true ? '' : `: ${String(value)}`}`);
-  if (entries.length === 0) return null;
-  return (
-    <section aria-label="Quyền lợi của gói" className="purchase-flow-modal__entitlements">
-      <h3>Quyền lợi</h3>
-      <ul>{entries.map((entry) => <li key={entry}>{entry}</li>)}</ul>
-    </section>
-  );
+  return <OrderEntitlements entitlements={offer.entitlements} />;
 }
 
-function orderSummaryOf(order: OrderDetail | undefined) {
+function orderSummaryOf(order: OrderDetail | undefined, buyer: { displayName: string; email: string } | null) {
   if (!order) return null;
   return {
     total: order.priceVndSnapshot,
+    orderStatus: order.orderStatus,
+    orderType: order.orderType,
+    providerName: order.providerNameSnapshot,
+    buyerName: order.purchaseSnapshot?.buyerName ?? buyer?.displayName ?? '—',
+    buyerEmail: order.purchaseSnapshot?.buyerEmail ?? buyer?.email ?? '—',
+    createdAt: order.createdAt,
+    paymentDueAt: order.paymentDueAt,
+    pricing: order.purchaseSnapshot ?? null,
     productName: order.productNameSnapshot,
     planName: order.planNameSnapshot,
     billingCycle: order.billingCycleSnapshot,

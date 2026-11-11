@@ -16,6 +16,19 @@ describe('create order plan identifier validation', () => {
     await expect(validate(input)).resolves.toMatchObject(input);
   });
 
+  it.each([1, 2, 3, 6, 12])('accepts a custom %s month purchase', async (durationMonths) => {
+    const input = { planId: '00000000-0000-4000-8000-000000000001', deviceQuantity: 7, durationMonths };
+    await expect(validate(input)).resolves.toMatchObject(input);
+  });
+
+  it.each([
+    { deviceQuantity: 0 }, { deviceQuantity: -1 }, { deviceQuantity: 1.5 },
+    { deviceQuantity: '2' }, { deviceQuantity: null }, { deviceQuantity: 2147483648 },
+    { durationMonths: 0 }, { durationMonths: 4 }, { durationMonths: 24 }, { durationMonths: null },
+  ])('rejects invalid custom configuration %j', async (configuration) => {
+    await expect(validate({ planId: '00000000-0000-4000-8000-000000000001', ...configuration })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it.each([undefined, null, '', 'plan-1', 'fee2902f81581a7acb11b53fd910f27f', 'fee2902f-8158-1a7a-cb11-b53fd910f27g', 42])('rejects malformed plan identifier %s', async (planId) => {
     await expect(validate({ planId })).rejects.toBeInstanceOf(BadRequestException);
   });

@@ -206,14 +206,42 @@ import {
     {
       provide: LicenseQueryService,
       inject: [LicenseProjectionRepository, ACTIVATION_ENVELOPE, Redis, ConfigService, ActivationDeliveryRepository, ProviderHandoffService],
-      useFactory: (
+      useFactory: async (
         repository: LicenseProjectionRepository,
         envelopes: ActivationEnvelopePort,
         redis: Redis,
         config: ConfigService,
         deliveries: ActivationDeliveryRepository,
         handoff: ProviderHandoffService,
-      ) => new LicenseQueryService(repository, envelopes, redis, config.getOrThrow<number>('PUBLIC_VERIFY_RATE_LIMIT_PER_MINUTE'), deliveries, handoff),
+      ) => {
+        const adapter = config.get<string>('EVM_ADAPTER');
+        const rpcUrl = config.get<string>('EVM_RPC_HTTP_URL');
+        const fallbackRpcUrl = config.get<string>('EVM_RPC_FALLBACK_HTTP_URL');
+        const contractAddress = config.get<string>('EVM_CONTRACT_ADDRESS');
+        const chainId = config.get<number>('EVM_CHAIN_ID');
+        const network = config.get<string>('EVM_NETWORK');
+        let chainRpc;
+        if (adapter === 'viem' && rpcUrl && contractAddress && chainId && network) {
+          const { ViemChainEventSource } = await import('./infrastructure/viem-chain-event-source.js');
+          chainRpc = new ViemChainEventSource({
+            chainId,
+            contractAddress: contractAddress as `0x${string}`,
+            ...(fallbackRpcUrl ? { fallbackRpcUrl } : {}),
+            network,
+            rpcUrl,
+          });
+        }
+        return new LicenseQueryService(
+          repository,
+          envelopes,
+          redis,
+          config.getOrThrow<number>('PUBLIC_VERIFY_RATE_LIMIT_PER_MINUTE'),
+          deliveries,
+          handoff,
+          config.get<number>('PUBLIC_VERIFY_ID_MIN_LENGTH') ?? 20,
+          chainRpc,
+        );
+      },
     },
     {
       provide: BlockchainReconciliationService,

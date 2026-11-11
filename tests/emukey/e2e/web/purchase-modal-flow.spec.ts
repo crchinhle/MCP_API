@@ -41,8 +41,13 @@ const order = {
   serviceTermsHashSnapshot: `0x${'cd'.repeat(32)}`,
 };
 
+const customOrder = { ...order, priceVndSnapshot: 240000, maxActiveDevicesSnapshot: 4, durationMonthsSnapshot: 3,
+  purchaseSnapshot: { buyerName: 'Buyer', buyerEmail: 'buyer@example.test', basePriceVnd: 1200000, baseDeviceQuantity: 5, baseDurationMonths: 12,
+    requestedDeviceQuantity: 4, requestedDurationMonths: 3 } };
+
 for (const width of [320, 390, 768, 1024, 1440]) {
   test(`purchase modal keeps selection and actions usable at ${width}px`, async ({ page }) => {
+    const order = { ...customOrder };
     let creates = 0;
     let termsAcceptances = 0;
     let checkoutPreparations = 0;
@@ -56,7 +61,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
       if (path === '/products/securedesk') return route.fulfill({ json: product });
       if (path === '/orders' && request.method() === 'POST') {
         creates++;
-        expect(request.postDataJSON()).toEqual({ planId: 'plan-yearly' });
+        expect(request.postDataJSON()).toEqual({ planId: 'plan-yearly', deviceQuantity: 4, durationMonths: 3 });
         return route.fulfill({ status: 201, json: order });
       }
       if (path === '/orders/purchase-order') return route.fulfill({ json: { ...order, ...(termsAcceptances ? { orderStatus: 'WAITING_PAYMENT', serviceTermsAcceptedAt: '2026-10-10T00:01:00Z' } : {}) } });
@@ -76,7 +81,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
         return route.fulfill({ json: {
         amountVnd: order.priceVndSnapshot,
         attemptId: 'attempt-purchase-test',
-        checkoutFields: { merchant: 'EM-TEST', order_amount: '1200000', signature: 'signed-test-fields' },
+        checkoutFields: { merchant: 'EM-TEST', order_amount: '240000', signature: 'signed-test-fields' },
         checkoutMethod: 'POST',
         checkoutReference: 'EMU-CHECKOUT-TEST',
         checkoutUrl: 'https://pay-sandbox.sepay.vn/v1/checkout/init',
@@ -105,11 +110,17 @@ for (const width of [320, 390, 768, 1024, 1440]) {
     expect(initialDialogBounds!.x).toBeGreaterThanOrEqual(0);
 
     await dialog.getByRole('radio', { name: /Gói năm/ }).check();
+    await dialog.getByRole('spinbutton', { name: 'Số lượng thiết bị' }).fill('4');
+    await dialog.getByRole('combobox', { name: 'Thời hạn sử dụng' }).selectOption('3');
     await dialog.getByRole('button', { name: 'Tiếp tục' }).click();
     await expect(dialog.getByRole('region', { name: 'Điều khoản dịch vụ' })).toBeVisible();
     await expect(dialog.getByRole('heading', { name: `Xác nhận ${product.name}`, exact: true })).toBeFocused();
     expect(creates).toBe(1);
-    await expect(dialog.getByText('1.200.000 ₫')).toBeVisible();
+    await expect(dialog.getByRole('table', { name: 'Chi tiết đơn hàng' }).locator('tfoot')).toContainText('240.000');
+    await expect(dialog.getByText('buyer@example.test', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('EmuKey Provider', { exact: true })).toBeVisible();
+    await expect(dialog.getByRole('cell', { name: '4 thiết bị' })).toBeVisible();
+    await expect(dialog.getByRole('cell', { name: '3 tháng' })).toBeVisible();
     const payment = dialog.getByRole('button', { name: 'Thanh toán qua SePay' });
     await expect(payment).toBeDisabled();
     const termsScroll = dialog.locator('.purchase-flow-modal__terms-scroll');
@@ -134,7 +145,7 @@ for (const width of [320, 390, 768, 1024, 1440]) {
     await page.waitForURL(/pay-sandbox\.sepay\.vn/);
     expect(capturedCheckout?.method).toBe('POST');
     expect(capturedCheckout?.body).toContain('signature=signed-test-fields');
-    expect(capturedCheckout?.body).toContain('order_amount=1200000');
+    expect(capturedCheckout?.body).toContain('order_amount=240000');
     expect(creates).toBe(1);
     expect(termsAcceptances).toBe(1);
     expect(checkoutPreparations).toBe(1);
@@ -199,7 +210,7 @@ for (const scenario of ['cancelled', 'cancelled-deeplink', 'switch-plan-deeplink
       await expect(page).toHaveURL(/orderId=replacement-order/);
       await page.reload();
       await expect(page.getByRole('dialog').getByRole('checkbox')).toBeVisible();
-      await expect(page.getByRole('dialog').getByText('120.000 ₫', { exact: true })).toBeVisible();
+      await expect(page.getByRole('dialog').getByRole('table', { name: 'Chi tiết đơn hàng' }).locator('tfoot')).toContainText('120.000 ₫');
       expect(creates).toBe(1);
     } else if (scenario === 'checkout-conflict') {
       await dialog.getByRole('button', { name: 'Tiếp tục thanh toán', exact: true }).click();

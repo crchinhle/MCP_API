@@ -551,17 +551,78 @@ export type AcknowledgeActivationKeyDto = {
   keyVersion: number;
 };
 
+export type PublicLicenseHistoryChangeDto = {
+  field: string;
+  label: string;
+  previousValue?: string | null;
+  currentValue?: string | null;
+};
+
+export type PublicLicenseHistoryEventDto = {
+  id: string;
+  eventType:
+    | 'LICENSE_ISSUED'
+    | 'LICENSE_RENEWED'
+    | 'LICENSE_SUSPENDED'
+    | 'LICENSE_RESUMED'
+    | 'LICENSE_REVOKED'
+    | 'KEY_ROTATED'
+    | 'DEVICE_ACTIVATED'
+    | 'DEVICE_REVOKED'
+    | 'ACTIVE_DEVICE_COUNT_SYNCED';
+  title: string;
+  description: string;
+  status: 'CONFIRMED' | 'PENDING' | 'REORGED';
+  occurredAt: string;
+  blockTimestamp?: string | null;
+  observedAt?: string | null;
+  finalizedAt?: string | null;
+  transactionHash?: string | null;
+  blockNumber?: number | null;
+  blockHash?: string | null;
+  logIndex?: number | null;
+  transactionIndex?: number | null;
+  confirmationCount?: number;
+  commandId?: string | null;
+  commandSequence?: number | null;
+  network?: string | null;
+  chainId?: number | null;
+  contractAddress?: string | null;
+  explorerTxUrl?: string | null;
+  changes?: Array<PublicLicenseHistoryChangeDto>;
+};
+
 export type PublicLicenseVerificationDto = {
   fulfillmentMode?: 'LEGACY_DEVICE' | 'PROVIDER_HANDOFF';
   providerDeliveryStatus?: string;
   blockNumber?: number | null;
   confirmationCount?: number;
+  periodStart?: string;
   expiresAt?: string;
+  maxActiveDevices?: number;
+  activeDeviceCount?: number;
+  keyVersion?: number;
+  matchedBy?:
+    | 'PUBLIC_ID'
+    | 'CURRENT_KEY'
+    | 'HISTORICAL_ROTATED_KEY'
+    | 'PENDING_ROTATED_KEY';
+  matchedKeyVersion?: number | null;
   finality?: string;
   licenseId?: string;
   plan?: LicensePlanDto;
   productName?: string;
   provider?: LicenseProviderDto;
+  network?: string | null;
+  chainId?: number | null;
+  contractAddress?: string | null;
+  explorerUrl?: string | null;
+  historySource?:
+    'ONCHAIN_VERIFIED' | 'INDEXED_ONCHAIN_LOGS' | 'UNVERIFIED_PENDING';
+  historyComplete?: boolean;
+  historyNote?: string | null;
+  rpcStatus?: 'VERIFIED' | 'INDEXED_FALLBACK' | 'UNAVAILABLE';
+  history?: Array<PublicLicenseHistoryEventDto>;
   state:
     | 'CHAIN_CONFIRMED'
     | 'PENDING_ONCHAIN'
@@ -608,11 +669,24 @@ export type RetryProviderDeliveryDto = {
 };
 
 export type CreateOrderDto = {
+  deviceQuantity?: number;
+  durationMonths?: 1 | 2 | 3 | 6 | 12;
   planId: string;
   targetLicenseId?: string;
 };
 
+export type PurchaseSnapshotDto = {
+  buyerName: string;
+  buyerEmail: string;
+  basePriceVnd: number;
+  baseDeviceQuantity: number;
+  baseDurationMonths: number;
+  requestedDeviceQuantity: number | null;
+  requestedDurationMonths: number | null;
+};
+
 export type OrderDto = {
+  purchaseSnapshot?: PurchaseSnapshotDto | null;
   /**
    * Latest RENEW_LICENSE command status for this exact order, not the original issuance.
    */

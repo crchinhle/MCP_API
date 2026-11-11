@@ -43,7 +43,7 @@ Không bổ sung chữ ký số cho license. Chữ ký transaction blockchain v�
 
 ## 4. Lưu trữ và trạng thái
 
-Schema duy nhất `EmuKey/backend/database/schema.sql`: 24 bảng, gồm provider_integrations, license_key_materials và provider_license_deliveries mới. Schema_versions kiểm soát upgrade có fingerprint. License_key_deliveries là receipt nhận key của người mua.
+Schema duy nhất `EmuKey/backend/database/schema.sql`: 23 bảng, gồm provider_integrations, license_key_materials và provider_license_deliveries. Khi đổi cấu trúc, khởi tạo lại từ đầu và xóa dữ liệu cũ; không dùng bảng ghi phiên bản. License_key_deliveries là receipt nhận key của người mua.
 
 Delivery dùng lease token, revision và receipt. Có thể gửi nhiều lần ở transport, nhưng upsert/receipt phía nhận phải idempotent. ACK phiên bản cũ không làm phiên bản mới thành công. Người mua chỉ nhận key sau chain trust và provider ACK hiện hành.
 

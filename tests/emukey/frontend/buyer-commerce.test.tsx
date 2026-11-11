@@ -417,7 +417,7 @@ try {
     );
 
     const create = await screen.findByRole('button', { name: 'Tạo đơn gia hạn' });
-    expect(screen.getByText('2.500.000 ₫')).toBeTruthy();
+    expect(screen.getByRole('table', { name: 'Chi tiết đơn hàng' }).querySelector('tfoot')?.textContent).toContain('2.500.000 ₫');
     fireEvent.click(create);
 
     expect(
@@ -447,7 +447,7 @@ try {
       render(<App initialEntries={['/buyer/licenses/00000000-0000-4000-8000-000000000401/renew']} />);
       expect(await screen.findByRole('button', { name: orderStatus === 'WAITING_PAYMENT' ? 'Tiếp tục thanh toán' : 'Theo dõi gia hạn' })).toBeTruthy();
       expect(screen.queryByRole('button', { name: 'Tạo đơn gia hạn' })).toBeNull();
-      expect(screen.getByText('2.082.500 ₫')).toBeTruthy();
+      expect(screen.getByRole('table', { name: 'Chi tiết đơn hàng' }).querySelector('tfoot')?.textContent).toContain('2.082.500 ₫');
       expect(creates).toBe(0);
     } finally { vi.mocked(fetch).mockImplementation(original); }
   });

@@ -34,6 +34,29 @@ import { providerNamespaceDigest } from '../../../../../EmuKey/backend/src/platf
 import { randomUUID } from 'node:crypto';
 
 describe('customer commerce and payment flow', () => {
+  it('snapshots custom quantity, term and buyer; preserves them through payment and renewal', async () => {
+    const key = randomUUID();
+    const selection = { planId, deviceQuantity: 4, durationMonths: 3 };
+    const order = await service.createOrder(customer, key, undefined, selection);
+    expect(order).toMatchObject({ priceVndSnapshot: 3600000, maxActiveDevicesSnapshot: 4, durationMonthsSnapshot: 3,
+      purchaseSnapshot: { buyerName: 'Emukey Demo Customer', buyerEmail: 'customer@example.test', basePriceVnd: 300000 } });
+    expect((await service.createOrder(customer, key, undefined, selection)).id).toBe(order.id);
+    await expect(service.createOrder(customer, key, undefined, { ...selection, deviceQuantity: 5 })).rejects.toMatchObject({ response: { code: 'IDEMPOTENCY_CONFLICT' } });
+    await expect(service.createOrder(customer, key, undefined, { planId })).rejects.toMatchObject({ response: { code: 'IDEMPOTENCY_CONFLICT' } });
+    const base = (await pool.query('SELECT plan_commitment FROM plans WHERE id=$1', [planId])).rows[0];
+    expect(order.planCommitmentSnapshot).not.toBe(`0x${base.plan_commitment.toString('hex')}`);
+    await expect(pool.query("UPDATE orders SET purchase_snapshot='{}' WHERE id=$1", [order.id])).rejects.toThrow();
+    await acceptTerms(order.id);
+    const checkout = await service.checkout(customer, order.id);
+    const paid = await service.ingestIpn({ amountVnd: 3600000, eventId: randomUUID(), occurredAt: new Date().toISOString(), providerReference: checkout.checkoutReference }, webhookSecret);
+    expect(paid.classification).toBe('MATCHED');
+    const license = (await pool.query('SELECT * FROM licenses WHERE origin_order_id=$1', [order.id])).rows[0];
+    expect(license.max_active_devices).toBe(4);
+    expect(`0x${license.plan_commitment.toString('hex')}`).toBe(order.planCommitmentSnapshot);
+    const preview = await service.renewalPreview(customer, license.id);
+    expect(preview).toMatchObject({ durationMonths: 3, priceVnd: 3600000 });
+  });
+
   it('records refund evidence explicitly and never accepts an amount mismatch by an ambiguous status', async () => {
     const order = await service.createOrder(customer, randomUUID(), undefined, { planId });
     const terms = await service.getServiceTerms(customer, order.id);
@@ -134,6 +157,13 @@ describe('customer commerce and payment flow', () => {
     app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }));
     app.useGlobalFilters(new ApiExceptionFilter()); await app.init();
     const http = request(app.getHttpServer() as Server);
+    await http.post('/orders').auth('customer', { type: 'bearer' }).set('Idempotency-Key', randomUUID())
+      .send({ planId, deviceQuantity: 2, durationMonths: 4 }).expect(400);
+    await http.post('/orders').auth('customer', { type: 'bearer' }).set('Idempotency-Key', randomUUID())
+      .send({ planId, deviceQuantity: 2, durationMonths: 3, priceVnd: 1 }).expect(400);
+    const customized = await http.post('/orders').auth('customer', { type: 'bearer' }).set('Idempotency-Key', randomUUID())
+      .send({ planId, deviceQuantity: 2, durationMonths: 2 }).expect(201);
+    expect(customized.body).toMatchObject({ maxActiveDevicesSnapshot: 2, durationMonthsSnapshot: 2, priceVndSnapshot: 1200000 });
     const create = async () => (await http.post('/orders').auth('customer', { type: 'bearer' }).set('Idempotency-Key', randomUUID()).send({ planId }).expect(201)).body;
     const checkout = async (id: string) => {
       const terms = (await http.get(`/orders/${id}/service-terms`).auth('customer', { type: 'bearer' }).expect(200)).body;

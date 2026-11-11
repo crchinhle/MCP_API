@@ -26,8 +26,6 @@ import type {ChainEventType} from '../../../../../EmuKey/backend/src/modules/blo
 import { LicenseQueryService } from '../../../../../EmuKey/backend/src/modules/blockchain/application/license-query.service.js';
 import { LicenseProjectionRepository } from '../../../../../EmuKey/backend/src/modules/blockchain/infrastructure/license-projection.repository.js';
 import { ActivationDeliveryRepository } from '../../../../../EmuKey/backend/src/modules/blockchain/infrastructure/activation-delivery.repository.js';
-import { applyUpgrade, schemaFingerprint, schemaDefinitions } from '../../../../../EmuKey/backend/src/platform/database/database-cli.js';
-import { createHash } from 'node:crypto';
 import { Test } from '@nestjs/testing';
 import { ValidationPipe, UnauthorizedException } from '@nestjs/common';
 import request from 'supertest';
@@ -85,24 +83,6 @@ describe.skipIf(Boolean(childFixture))('durable provider handoff storage', () =>
     expect(codec.decrypt(encrypted, 'license:1')).toBe('secret-license');
     expect(() => codec.decrypt(encrypted, 'other-license:1')).toThrow();
     expect(() => new LicenseSecretCodec('b'.repeat(64)).decrypt(encrypted, 'license:1')).toThrow();
-  });
-
-  it('upgrades the continuity schema without losing users and matches a fresh handoff schema', async () => {
-    const sql=await readFile(resolve(import.meta.dirname,'../../../../../EmuKey/backend/database/schema.sql'),'utf8');
-    const fresh=await schemaDefinitions(pool as never);
-    await pool.query(sql.replace(/-- emukey:handoff-ddl:begin[\s\S]*?-- emukey:handoff-ddl:end/,''));
-    const retained=(await pool.query("INSERT INTO users(email,password_hash,display_name,role,status) VALUES ('retained@migration.test','hash','Retained','SYSTEM_ADMIN','ACTIVE') RETURNING id")).rows[0].id;
-    const fingerprint=await schemaFingerprint(pool as never);
-    const delta=sql.split('/* emukey:upgrade:cf17043:continuity_20261101:begin')[1]!.split('emukey:upgrade:end */')[0]!.trim().replaceAll('\r\n','\n');
-    await pool.query('INSERT INTO schema_versions(version,checksum,schema_fingerprint) VALUES ($1,$2,$3)',[
-      'continuity_20261101',createHash('sha256').update(delta).digest('hex'),fingerprint]);
-    const client=await pool.connect();
-    try {
-      await expect(applyUpgrade(client as never,sql,'continuity_20261101','provider_handoff_20261104')).resolves.toBe('APPLIED');
-      await expect(applyUpgrade(client as never,sql,'continuity_20261101','provider_handoff_20261104')).resolves.toBe('CURRENT');
-      expect(await schemaDefinitions(client as never)).toEqual(fresh);
-      expect((await client.query('SELECT display_name FROM users WHERE id=$1',[retained])).rows[0].display_name).toBe('Retained');
-    } finally {client.release();}
   });
 
   it('hands the same paid key to the independent provider after a lost response and rejects fabricated keys', async () => {

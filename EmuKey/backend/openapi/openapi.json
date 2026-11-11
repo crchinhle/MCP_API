@@ -5952,6 +5952,141 @@
           "keyVersion"
         ]
       },
+      "PublicLicenseHistoryChangeDto": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "previousValue": {
+            "type": "string",
+            "nullable": true
+          },
+          "currentValue": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "field",
+          "label"
+        ]
+      },
+      "PublicLicenseHistoryEventDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "eventType": {
+            "type": "string",
+            "enum": [
+              "LICENSE_ISSUED",
+              "LICENSE_RENEWED",
+              "LICENSE_SUSPENDED",
+              "LICENSE_RESUMED",
+              "LICENSE_REVOKED",
+              "KEY_ROTATED",
+              "DEVICE_ACTIVATED",
+              "DEVICE_REVOKED",
+              "ACTIVE_DEVICE_COUNT_SYNCED"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "CONFIRMED",
+              "PENDING",
+              "REORGED"
+            ]
+          },
+          "occurredAt": {
+            "type": "string"
+          },
+          "blockTimestamp": {
+            "type": "string",
+            "nullable": true
+          },
+          "observedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "finalizedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "transactionHash": {
+            "type": "string",
+            "nullable": true
+          },
+          "blockNumber": {
+            "type": "number",
+            "nullable": true
+          },
+          "blockHash": {
+            "type": "string",
+            "nullable": true
+          },
+          "logIndex": {
+            "type": "number",
+            "nullable": true
+          },
+          "transactionIndex": {
+            "type": "number",
+            "nullable": true
+          },
+          "confirmationCount": {
+            "type": "number"
+          },
+          "commandId": {
+            "type": "string",
+            "nullable": true
+          },
+          "commandSequence": {
+            "type": "number",
+            "nullable": true
+          },
+          "network": {
+            "type": "string",
+            "nullable": true
+          },
+          "chainId": {
+            "type": "number",
+            "nullable": true
+          },
+          "contractAddress": {
+            "type": "string",
+            "nullable": true
+          },
+          "explorerTxUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicLicenseHistoryChangeDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "eventType",
+          "title",
+          "description",
+          "status",
+          "occurredAt"
+        ]
+      },
       "PublicLicenseVerificationDto": {
         "type": "object",
         "properties": {
@@ -5972,8 +6107,33 @@
           "confirmationCount": {
             "type": "number"
           },
+          "periodStart": {
+            "type": "string"
+          },
           "expiresAt": {
             "type": "string"
+          },
+          "maxActiveDevices": {
+            "type": "number"
+          },
+          "activeDeviceCount": {
+            "type": "number"
+          },
+          "keyVersion": {
+            "type": "number"
+          },
+          "matchedBy": {
+            "type": "string",
+            "enum": [
+              "PUBLIC_ID",
+              "CURRENT_KEY",
+              "HISTORICAL_ROTATED_KEY",
+              "PENDING_ROTATED_KEY"
+            ]
+          },
+          "matchedKeyVersion": {
+            "type": "number",
+            "nullable": true
           },
           "finality": {
             "type": "string"
@@ -5989,6 +6149,51 @@
           },
           "provider": {
             "$ref": "#/components/schemas/LicenseProviderDto"
+          },
+          "network": {
+            "type": "string",
+            "nullable": true
+          },
+          "chainId": {
+            "type": "number",
+            "nullable": true
+          },
+          "contractAddress": {
+            "type": "string",
+            "nullable": true
+          },
+          "explorerUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "historySource": {
+            "type": "string",
+            "enum": [
+              "ONCHAIN_VERIFIED",
+              "INDEXED_ONCHAIN_LOGS",
+              "UNVERIFIED_PENDING"
+            ]
+          },
+          "historyComplete": {
+            "type": "boolean"
+          },
+          "historyNote": {
+            "type": "string",
+            "nullable": true
+          },
+          "rpcStatus": {
+            "type": "string",
+            "enum": [
+              "VERIFIED",
+              "INDEXED_FALLBACK",
+              "UNAVAILABLE"
+            ]
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicLicenseHistoryEventDto"
+            }
           },
           "state": {
             "type": "string",
@@ -6142,6 +6347,21 @@
       "CreateOrderDto": {
         "type": "object",
         "properties": {
+          "deviceQuantity": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "durationMonths": {
+            "type": "number",
+            "enum": [
+              1,
+              2,
+              3,
+              6,
+              12
+            ]
+          },
           "planId": {
             "type": "string",
             "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
@@ -6155,9 +6375,55 @@
           "planId"
         ]
       },
+      "PurchaseSnapshotDto": {
+        "type": "object",
+        "properties": {
+          "buyerName": {
+            "type": "string"
+          },
+          "buyerEmail": {
+            "type": "string"
+          },
+          "basePriceVnd": {
+            "type": "number"
+          },
+          "baseDeviceQuantity": {
+            "type": "number"
+          },
+          "baseDurationMonths": {
+            "type": "number"
+          },
+          "requestedDeviceQuantity": {
+            "type": "number",
+            "nullable": true
+          },
+          "requestedDurationMonths": {
+            "type": "number",
+            "nullable": true
+          }
+        },
+        "required": [
+          "buyerName",
+          "buyerEmail",
+          "basePriceVnd",
+          "baseDeviceQuantity",
+          "baseDurationMonths",
+          "requestedDeviceQuantity",
+          "requestedDurationMonths"
+        ]
+      },
       "OrderDto": {
         "type": "object",
         "properties": {
+          "purchaseSnapshot": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PurchaseSnapshotDto"
+              }
+            ]
+          },
           "renewalStatus": {
             "type": "string",
             "nullable": true,

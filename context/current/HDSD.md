@@ -1,12 +1,12 @@
 # Import dữ liệu demo
 
+> Cập nhật 06/11/2026: chỉ khởi tạo mới từ SQL, gồm 23 bảng. Khi đổi cấu trúc, dừng API/worker, build backend, chạy `corepack pnpm --dir backend db:initialize --allow-destructive` từ `EmuKey/`, rồi chạy `corepack pnpm --dir backend db:verify`. Lệnh xóa dữ liệu trong schema public và tạo lại. Database rỗng không cần flag destructive. Production vẫn bị chặn. Xem `EmuKey/README.md`.
+
 > Giao diện hiện hành dùng mục **Bản quyền**. Với bản quyền mới, theo dõi lần lượt **Đang xác nhận blockchain → Đang bàn giao cho nhà cung cấp → Nhà cung cấp đã nhận bản quyền → Mã bản quyền đã được nhận**. Chỉ bấm **Tôi đã lưu mã** sau khi đã lưu an toàn. Sau xác nhận, trang đơn hàng và danh sách bản quyền cập nhật cùng trạng thái; tải lại không cấp key lần nữa. Quota thiết bị trong gói do nhà cung cấp quản lý; điều khiển thiết bị của EmuKey chỉ còn cho dữ liệu legacy.
 
 > Nghiệm thu 05/11/2026: luồng PROVIDER_HANDOFF đã chạy qua SePay sandbox và Sepolia thật, receiver kiểm thử với database riêng, buyer nhận/ACK qua API và quay về trang đơn hàng. Phép đo mới: 19,039 giây đến vào block, 32,782 giây đến CONFIRMED, 33,943 giây đến provider ACK. Đây là một mẫu sandbox; xem bằng chứng và giới hạn trong `docs/emukey/traceability/canonical-e2e-golden-flow.json`.
 
-> Cập nhật 04/11/2026: `EmuKey/backend/database/schema.sql` là SQL authority duy nhất, hiện có 24 bảng. Database ở `cf17043` cần nâng lên `continuity_20261101` trước, sau đó chạy `db:upgrade --from=continuity_20261101 --to=provider_handoff_20261104`; xem hướng dẫn backup/restore trong `EmuKey/README.md`. `db:initialize` (alias `db:reset`) dành cho database mới; raw fresh SQL xóa schema `public` cùng các đối tượng phụ thuộc rồi tạo lại, không DROP DATABASE. CLI từ chối production và database không rỗng thiếu flag destructive. Không có `db:migrate` hay auto-sync.
 
-> Database development Neon PostgreSQL 18 đã nâng trực tiếp từ `9ed5729` lên `provider_handoff_20261104` sau khi backup/restore và đối chiếu hash dữ liệu. Với database khác còn ở đúng baseline này, dùng `db:upgrade --from=9ed5729 --to=provider_handoff_20261104`; không chạy initializer. Đường này giữ token estimate và lịch sử thông báo, chặn dữ liệu cũ chưa có ánh xạ an toàn. Chi tiết giới hạn và trạng thái sandbox xem kế hoạch handoff.
 
 > Seed demo cũng nằm ở cuối `schema.sql`: từ thư mục `EmuKey`, chạy `corepack pnpm --dir backend db:seed:demo` sau khi build backend, với `NODE_ENV=development`. Database mới có thể dùng `corepack pnpm --dir backend db:initialize --demo` để tạo cấu trúc và seed trong cùng transaction. Dữ liệu gồm 50 sản phẩm, 30 gói và 30 tài khoản demo; seed không tự chạy khi khởi động API.
 

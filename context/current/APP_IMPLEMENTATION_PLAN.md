@@ -1,5 +1,7 @@
 # APP IMPLEMENTATION PLAN — baseline v5.1-r5
 
+> Cập nhật 06/11/2026: khi đổi cấu trúc, dựng lại database từ SQL hiện hành; không còn nâng cấp tại chỗ. Xem HDSD.md. Các kết quả nâng cấp trước đây chỉ là bằng chứng lịch sử.
+
 > Phạm vi hiện hành 04/11/2026: phát hành và bàn giao key theo ủy quyền nhà cung cấp. Kế hoạch chi tiết và trạng thái kiểm thử: `docs/emukey/plans/2026-11-04-provider-key-handoff-plan.md`. Các báo cáo continuity trước đây là bằng chứng lịch sử, không chứng minh luồng mới đã nghiệm thu toàn bộ.
 
 ## 1. Authority
@@ -21,20 +23,20 @@ Sản phẩm nhà cung cấp kiểm tra whitelist bên ngoài EmuKey. EmuKey kh�
 | Gói | Owner | Gate |
 |---|---|---|
 | Policy/contract | Licensing application/domain | Payment, issuance, provider ACK và buyer receipt là các bước riêng |
-| Schema/key storage | SQL/pg, schema upgrade | 24 bảng; upgrade không mất dữ liệu; Redis mất không đổi key |
+| Schema/key storage | SQL/pg, khởi tạo mới | 23 bảng; dựng lại sẽ xóa dữ liệu; Redis mất không đổi key đã lưu |
 | Provider configuration | Licensing | Ownership, probe version, authorization, encrypted credential, SSRF |
 | Durable delivery | Licensing worker | Lease/fencing, idempotency, bounded retry, matching receipt |
 | Lifecycle | Licensing/Blockchain/Commerce | Renewal không cộng hạn hai lần, rotate thay key, suspend/revoke/trust gửi snapshot |
 | UI/API | Web/mobile quản lý | Trạng thái tách biệt, nhận key có gate, không CTA tiêu thụ quyền ở EmuKey |
 | Integration verification | Workspace tests/fixture | Receiver DB độc lập, không đọc DB EmuKey để giả kiểm tra key |
 | Documentation/diagrams | Context/draw.io | Cùng boundary, giữ phong cách vẽ hiện có |
-| Rollout | Guarded database CLI/operator | Cutover mode, giữ đơn đang thanh toán, không reset DB |
+| Rollout | Guarded database CLI/operator | Dừng API/worker, dựng lại schema và kiểm tra trước khi chạy; không giữ dữ liệu qua lần dựng lại |
 
-## 4. Migration và giao dịch
+## 4. Khởi tạo database và giao dịch
 
-Fresh schema có đầy đủ bảng/cột. Database continuity dùng `db:upgrade --from=continuity_20261101 --to=provider_handoff_20261104`, kiểm tra fingerprint trước DDL. Database cf17043 đi qua upgrade continuity trước. Không sửa checksum của upgrade continuity đã phát hành.
+Schema mới được tạo trực tiếp từ `schema.sql`, sau đó chạy kiểm tra cấu trúc. Quy trình dựng lại không giữ dữ liệu của database trước đó.
 
-Database development Neon PostgreSQL 18 thực tế ở `9ed5729` đã backup, phục hồi/nâng clone và cutover bằng đường trực tiếp `db:upgrade --from=9ed5729 --to=provider_handoff_20261104` trong một transaction. Đường này có preflight dữ liệu legacy và giữ token estimate/lịch sử thông báo. Ngày 05/11/2026 đã nghiệm thu IPN SePay sandbox thật, Sepolia thật, provider fixture độc lập lưu whitelist/ACK, buyer retrieve/ACK qua HTTP và điều hướng về đơn hàng. Phép đo mới sau sửa lỗi: 19,039 giây từ tạo license đến vào block, 32,782 giây đến CONFIRMED; chỉ là một mẫu sandbox. Bằng chứng mới nằm trong canonical golden flow, không suy từ sandbox legacy.
+Bằng chứng lịch sử: ngày 05/11/2026 đã nghiệm thu IPN SePay sandbox thật, Sepolia thật, provider fixture độc lập lưu whitelist/ACK, buyer retrieve/ACK qua HTTP và điều hướng về đơn hàng. Phép đo: 19,039 giây từ tạo license đến vào block, 32,782 giây đến CONFIRMED; chỉ là một mẫu sandbox. Bằng chứng nằm trong canonical golden flow.
 
 Mode trên order/license bất biến; đơn mua mới dùng PROVIDER_HANDOFF, đơn chờ thanh toán cũ giữ LEGACY_DEVICE và renewal kế thừa target. Provider chưa tích hợp không được tiếp tục bán bằng legacy để né gate. Key cũ không thể tái tạo từ hash; không tự rotate/backfill dữ liệu cũ.
 

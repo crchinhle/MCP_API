@@ -5,13 +5,15 @@ import type { ProviderHandoffService } from '../../licensing/application/provide
 import { Pool, type PoolClient } from 'pg';
 import { keccak256, stringToHex, type Hex } from 'viem';
 import type { NotificationWriter } from '../../operations/application/notification-writer.js';
-import { canonicalizeEntitlements, providerNamespaceDigest } from '../../../platform/crypto/license-crypto.js';
+import { canonicalizeEntitlements, planCommitment, planCommitmentForProvider, providerNamespaceDigest } from '../../../platform/crypto/license-crypto.js';
+import { calculatePurchase, type PurchaseSelection, type PurchaseSnapshot } from '../domain/purchase-pricing.js';
 import type { AuthPrincipal } from '../../identity-access/identity.types.js';
 import type { VerifiedPaymentEvent } from '../application/ports/payment-gateway.port.js';
 import { renewalExpiry } from '../domain/renewal-policy.js';
 import { evaluatePaymentRetry, type PaymentRetryDecision } from '../domain/payment-retry-policy.js';
 
 export interface OrderRecord {
+  purchaseSnapshot: PurchaseSnapshot | null;
   billingCycleSnapshot: string;
   createdAt: Date;
   currency: string;
@@ -148,6 +150,7 @@ function optionalDate(value: unknown): Date | null {
 
 function mapOrder(row: Record<string, unknown>): OrderRecord {
   return {
+    purchaseSnapshot: row.purchase_snapshot && Object.keys(row.purchase_snapshot).length ? row.purchase_snapshot as PurchaseSnapshot : null,
     renewalStatus: typeof row.renewal_status === 'string' ? row.renewal_status : null,
     renewalExpiresAt: optionalDate(row.renewal_expires_at),
     billingCycleSnapshot: Number(row.duration_months_snapshot) === 12 ? 'YEARLY' : 'MONTHLY',
@@ -245,6 +248,7 @@ export class CommerceRepository {
     targetLicenseId: string | undefined,
     terms: ServiceTermsSnapshot,
     chain?: ChainConfiguration,
+    selection: PurchaseSelection = {},
   ): Promise<OrderRecord> {
     return this.withTransaction(async (client) => {
       await client.query(
@@ -261,7 +265,9 @@ export class CommerceRepository {
         const order = mapOrder(previous.rows[0]);
         if (
           order.planId !== planId ||
-          order.targetLicenseId !== (targetLicenseId ?? null)
+          order.targetLicenseId !== (targetLicenseId ?? null) ||
+          (order.purchaseSnapshot?.requestedDeviceQuantity ?? null) !== (selection.deviceQuantity ?? null) ||
+          (order.purchaseSnapshot?.requestedDurationMonths ?? null) !== (selection.durationMonths ?? null)
         ) {
           throw new Error('IDEMPOTENCY_CONFLICT');
         }
@@ -283,7 +289,7 @@ export class CommerceRepository {
 
       const selected = await client.query<Record<string, unknown>>(
         `SELECT pl.*, p.provider_user_id, p.name AS product_name,
-                u.organization_name AS provider_name, u.provider_chain_address
+                COALESCE(u.organization_name, u.display_name) AS provider_name, u.provider_chain_address, u.provider_chain_namespace
          FROM plans pl
          JOIN products p
            ON p.id = pl.product_id
@@ -297,14 +303,16 @@ export class CommerceRepository {
       const plan = selected.rows[0];
       if (!plan) throw new Error('PLAN_NOT_FOUND');
       if (plan.provider_chain_address === null && !chain?.namespaceContractAddress) throw new Error('PROVIDER_NAMESPACE_CAPABILITY_NOT_CONFIGURED');
+      let renewalConfiguration: { deviceQuantity: number; durationMonths: number; commitment: Hex } | undefined;
       if (targetLicenseId) {
-        const target = await client.query(
-          `SELECT id FROM licenses
-           WHERE id = $1 AND plan_id = $2
-             AND provider_user_id = $3 AND product_id = $4
-             AND customer_user_id = $5
-             AND status IN ('ACTIVE', 'SUSPENDED', 'EXPIRED')
-           FOR SHARE`,
+        const target = await client.query<Record<string, unknown>>(
+          `SELECT l.id, l.max_active_devices, l.plan_commitment, o.duration_months_snapshot
+           FROM licenses l JOIN orders o ON o.id=l.origin_order_id
+           WHERE l.id = $1 AND l.plan_id = $2
+             AND l.provider_user_id = $3 AND l.product_id = $4
+             AND l.customer_user_id = $5
+             AND l.status IN ('ACTIVE', 'SUSPENDED', 'EXPIRED')
+           FOR SHARE OF l`,
           [
             targetLicenseId,
             planId,
@@ -314,8 +322,23 @@ export class CommerceRepository {
           ],
         );
         if (!target.rows[0]) throw new Error('RENEWAL_LICENSE_NOT_FOUND');
+        renewalConfiguration = { deviceQuantity: Number(target.rows[0].max_active_devices), durationMonths: Number(target.rows[0].duration_months_snapshot), commitment: hex(target.rows[0].plan_commitment) };
       }
 
+      const base = { priceVnd: Number(plan.price_vnd), deviceQuantity: Number(plan.max_active_devices), durationMonths: Number(plan.duration_months) };
+      const purchase = calculatePurchase(base, renewalConfiguration ?? selection);
+      const customer = (await client.query<{display_name: string; email: string}>('SELECT display_name,email FROM users WHERE id=$1 FOR SHARE', [customerUserId])).rows[0]!;
+      const purchaseSnapshot: PurchaseSnapshot = { buyerName: customer.display_name, buyerEmail: customer.email,
+        basePriceVnd: base.priceVnd, baseDeviceQuantity: base.deviceQuantity, baseDurationMonths: base.durationMonths,
+        requestedDeviceQuantity: selection.deviceQuantity ?? null, requestedDurationMonths: selection.durationMonths ?? null };
+      const commitmentInput = { planId: String(plan.id), productId: String(plan.product_id), planVersion: Number(plan.version),
+        durationMonths: purchase.durationMonths, maxActiveDevices: purchase.deviceQuantity, entitlements: plan.entitlements };
+      // Preserve old commitments for an unchanged published offer; customized orders bind their effective rights.
+      const commitment = renewalConfiguration?.commitment ??
+        (purchase.deviceQuantity === base.deviceQuantity && purchase.durationMonths === base.durationMonths ? hex(plan.plan_commitment) :
+          typeof plan.provider_chain_address === 'string'
+            ? planCommitment({ ...commitmentInput, providerChainAddress: plan.provider_chain_address as Hex })
+            : planCommitmentForProvider({ ...commitmentInput, providerNamespace: providerNamespaceDigest(String(plan.provider_chain_namespace)) }));
       const id = randomUUID();
       const fulfillmentMode = targetLicenseId
         ? (await client.query<{fulfillment_mode:string}>('SELECT fulfillment_mode FROM licenses WHERE id=$1',[targetLicenseId])).rows[0]!.fulfillment_mode
@@ -332,14 +355,14 @@ export class CommerceRepository {
             max_active_devices_snapshot, entitlements_snapshot,
             plan_commitment_snapshot, payment_due_at, ipn_accept_until,
             service_terms_version_snapshot, service_terms_hash_snapshot,
-            service_terms_content_snapshot, fulfillment_mode)
+            service_terms_content_snapshot, fulfillment_mode, purchase_snapshot)
          VALUES
           ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
             $13, $14, $15, $16, $17, decode($18, 'hex'),
             statement_timestamp() + interval '30 minutes',
             statement_timestamp() + interval '30 minutes' +
               ($19::integer * interval '1 second'),
-            $20, $21, $22, $23)
+            $20, $21, $22, $23, $24)
          RETURNING *`,
         [
           id,
@@ -355,16 +378,17 @@ export class CommerceRepository {
           plan.product_name,
           plan.name,
           plan.version,
-          plan.price_vnd,
-          plan.duration_months,
-          plan.max_active_devices,
+          purchase.priceVnd,
+          purchase.durationMonths,
+          purchase.deviceQuantity,
             JSON.stringify(plan.entitlements),
-            hex(plan.plan_commitment).slice(2),
+            commitment.slice(2),
           this.ipnDeliveryGraceSeconds,
           terms.version,
           terms.hash,
           terms.content,
           fulfillmentMode,
+          JSON.stringify(purchaseSnapshot),
         ],
       );
       const order = mapOrder(result.rows[0] ?? {});
@@ -380,16 +404,20 @@ export class CommerceRepository {
   async findRenewalOffer(customerUserId: string, licenseId: string) {
     const result = await this.pool.query<Record<string, unknown>>(`
       SELECT l.expires_at, l.status, l.plan_id, pl.name AS plan_name, pl.price_vnd,
-        pl.duration_months, pl.status IN ('PUBLISHED','ARCHIVED') AS plan_published,
+        pl.duration_months, pl.max_active_devices AS base_devices, l.max_active_devices,
+        origin.duration_months_snapshot, pl.status IN ('PUBLISHED','ARCHIVED') AS plan_published,
         (p.status IN ('PUBLISHED','ARCHIVED') AND provider.status='ACTIVE') AS product_published, p.name AS product_name
       FROM licenses l JOIN plans pl ON pl.id = l.plan_id
+      JOIN orders origin ON origin.id=l.origin_order_id
       JOIN products p ON p.id = l.product_id JOIN users provider ON provider.id=p.provider_user_id
       WHERE l.id = $1 AND l.customer_user_id = $2`, [licenseId, customerUserId]);
     const row = result.rows[0];
+    const purchase = row ? calculatePurchase({ priceVnd: Number(row.price_vnd), deviceQuantity: Number(row.base_devices), durationMonths: Number(row.duration_months) },
+      { deviceQuantity: Number(row.max_active_devices), durationMonths: Number(row.duration_months_snapshot) }) : null;
     return row ? {
       expiresAt: date(row.expires_at), status: String(row.status), planId: String(row.plan_id),
       planName: String(row.plan_name), productName: String(row.product_name),
-      priceVnd: Number(row.price_vnd), durationMonths: Number(row.duration_months),
+      priceVnd: purchase!.priceVnd, durationMonths: purchase!.durationMonths,
       planPublished: row.plan_published === true, productPublished: row.product_published === true,
     } : null;
   }

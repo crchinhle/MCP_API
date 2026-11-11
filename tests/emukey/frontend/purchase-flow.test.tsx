@@ -82,6 +82,46 @@ beforeEach(() => {
 });
 
 describe('PurchaseFlowModal offer configuration', () => {
+  it('accepts custom devices and supported months without creating an order until confirmation', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const response = await original(input, init);
+      const data = await response.json();
+      if (data?.id === testOrderId) return Response.json({ ...data, priceVndSnapshot: 3600000, maxActiveDevicesSnapshot: 4, durationMonthsSnapshot: 3,
+        providerNameSnapshot: 'Demo Provider', purchaseSnapshot: { buyerName: 'Test User', buyerEmail: 'test@example.com', basePriceVnd: 300000, baseDeviceQuantity: 1, baseDurationMonths: 1 } }, { status: response.status });
+      return Response.json(data, { status: response.status });
+    });
+    try {
+    renderModal({ product: singleOfferProduct });
+    const user = userEvent.setup();
+    const devices = screen.getByRole('spinbutton', { name: 'Số lượng thiết bị' });
+    await user.clear(devices);
+    await user.type(devices, '4');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Thời hạn sử dụng' }), '3');
+    expect(orderCreates()).toHaveLength(0);
+    await user.click(screen.getByRole('button', { name: 'Tiếp tục' }));
+    await waitFor(() => expect(orderCreates()).toHaveLength(1));
+    expect(JSON.parse(orderCreates()[0]!.body!)).toEqual({ planId: 'plan-starter', deviceQuantity: 4, durationMonths: 3 });
+    expect(await screen.findByRole('table', { name: 'Chi tiết đơn hàng' })).toBeTruthy();
+    expect(screen.getByText('Người mua')).toBeTruthy();
+    expect(screen.getByText('Nhà cung cấp')).toBeTruthy();
+    expect(screen.getByText('Demo Provider')).toBeTruthy();
+    expect(screen.getByText('test@example.com')).toBeTruthy();
+    expect(screen.getAllByText(/3\.600\.000/).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Cấu hình của đơn không còn khớp với gói đã công bố')).toBeNull();
+    } finally { vi.mocked(fetch).mockImplementation(original); }
+  });
+
+  it('blocks confirmation with an empty or fractional device quantity', async () => {
+    renderModal({ product: singleOfferProduct });
+    const user = userEvent.setup();
+    const devices = screen.getByRole('spinbutton', { name: 'Số lượng thiết bị' });
+    await user.clear(devices);
+    expect((screen.getByRole('button', { name: 'Tiếp tục' }) as HTMLButtonElement).disabled).toBe(true);
+    await user.type(devices, '1.5');
+    expect((screen.getByRole('button', { name: 'Tiếp tục' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(orderCreates()).toHaveLength(0);
+  });
   it('shows a single published offer without a redundant choice control', () => {
     renderModal({ product: singleOfferProduct });
 
@@ -263,7 +303,7 @@ describe('PurchaseFlowModal order creation from Tiếp tục', () => {
     expect(JSON.parse(creates[0]!.body!)).toEqual({ planId: 'plan-business' });
   });
 
-  it('never sends a price, quota or duration chosen by the customer', async () => {
+  it('keeps the original request when the published configuration is unchanged and never sends a client price', async () => {
     const user = userEvent.setup();
     renderModal();
     await user.click(screen.getByRole('radio', { name: /Starter/ }));

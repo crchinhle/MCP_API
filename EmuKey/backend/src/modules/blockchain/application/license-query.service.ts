@@ -12,6 +12,7 @@ import type { AuthPrincipal } from '../../identity-access/identity.types.js';
 import type { LicenseProjectionRepository } from '../infrastructure/license-projection.repository.js';
 import type { ActivationEnvelopePort } from './ports/activation-envelope.port.js';
 import type { ActivationDeliveryRepository } from '../infrastructure/activation-delivery.repository.js';
+import type { ChainEventRpcPort } from '../infrastructure/viem-chain-event-source.js';
 
 type LicenseProjection = NonNullable<
   Awaited<ReturnType<LicenseProjectionRepository['findCustomer']>>
@@ -25,6 +26,8 @@ export class LicenseQueryService {
     private readonly publicVerifyRateLimit = 30,
     private readonly deliveries?: ActivationDeliveryRepository,
     private readonly handoff?: import('../../licensing/application/provider-handoff.service.js').ProviderHandoffService,
+    private readonly minPublicVerifyIdLength = 20,
+    private readonly chainRpc?: Pick<ChainEventRpcPort, 'blockHash' | 'blockTimestamp'>,
   ) {}
 
   async list(actor: AuthPrincipal) {
@@ -60,7 +63,9 @@ export class LicenseQueryService {
   }
 
   async verify(publicId: string, requester: string) {
-    if (publicId.trim().length < 20) {
+    const trimmed = publicId.trim();
+    const isHexKey = /^0x[0-9a-fA-F]{64}$/.test(trimmed);
+    if (!isHexKey && trimmed.length < this.minPublicVerifyIdLength) {
       throw new BadRequestException({
         code: 'PUBLIC_LICENSE_ID_INVALID',
         message: 'Public license identifier is invalid.',
@@ -74,8 +79,87 @@ export class LicenseQueryService {
         'Too many requests',
         HttpStatus.TOO_MANY_REQUESTS,
       );
-    const result = await this.repository.findPublic(publicId);
-    return result ?? { state: 'NOT_FOUND' };
+    const result = await this.repository.findPublic(trimmed);
+    if (!result) return { state: 'NOT_FOUND' as const };
+    return this.enrichOnChainVerification(result);
+  }
+
+  private async enrichOnChainVerification<
+    T extends NonNullable<Awaited<ReturnType<LicenseProjectionRepository['findPublic']>>>,
+  >(result: T): Promise<T> {
+    const history = result.history ?? [];
+    const minedEvents = history.filter(
+      (evt) => typeof evt.blockNumber === 'number' && evt.blockNumber > 0,
+    );
+    if (!this.chainRpc || minedEvents.length === 0) {
+      return {
+        ...result,
+        rpcStatus: minedEvents.length > 0 ? 'INDEXED_FALLBACK' : undefined,
+      };
+    }
+
+    try {
+      const uniqueBlocks = [
+        ...new Set(
+          minedEvents
+            .map((evt) => evt.blockNumber)
+            .filter((block): block is number => typeof block === 'number'),
+        ),
+      ].slice(-10);
+
+      const blockTimestamps = new Map<number, string>();
+      const blockHashes = new Map<number, string>();
+
+      await Promise.all(
+        uniqueBlocks.map(async (blockNum) => {
+          const [hash, timestamp] = await Promise.all([
+            this.chainRpc!.blockHash(blockNum),
+            this.chainRpc!.blockTimestamp(blockNum),
+          ]);
+          blockHashes.set(blockNum, hash.toLowerCase());
+          blockTimestamps.set(blockNum, timestamp.toISOString());
+        }),
+      );
+
+      let reorgDetected = false;
+      const enrichedHistory = history.map((evt) => {
+        if (typeof evt.blockNumber !== 'number') return evt;
+        const onChainHash = blockHashes.get(evt.blockNumber);
+        const onChainTs = blockTimestamps.get(evt.blockNumber) ?? evt.blockTimestamp ?? null;
+        if (
+          onChainHash &&
+          typeof evt.blockHash === 'string' &&
+          evt.blockHash.toLowerCase() !== onChainHash
+        ) {
+          reorgDetected = true;
+          return {
+            ...evt,
+            status: 'REORGED' as const,
+            blockTimestamp: onChainTs,
+          };
+        }
+        return {
+          ...evt,
+          blockTimestamp: onChainTs,
+        };
+      });
+
+      return {
+        ...result,
+        state: reorgDetected ? 'REORGED' : result.state,
+        rpcStatus: 'VERIFIED',
+        historySource: reorgDetected ? result.historySource : 'ONCHAIN_VERIFIED',
+        history: enrichedHistory,
+      };
+    } catch {
+      return {
+        ...result,
+        rpcStatus: 'INDEXED_FALLBACK',
+        historyNote:
+          result.historyNote ??
+          'Đang hiển thị bằng chứng sự kiện Blockchain đã đồng bộ; kết nối trực tiếp tới node RPC tạm thời gián đoạn.',
+      };
+    }
   }
 
   async retrieveActivation(actor: AuthPrincipal, id: string, deliveryId: string) {

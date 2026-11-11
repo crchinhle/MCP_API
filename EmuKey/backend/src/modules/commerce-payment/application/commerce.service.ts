@@ -48,6 +48,9 @@ export class CommerceService {
     dto: CreateOrderDto,
   ) {
     this.requireCustomer(actor);
+    if (dto.targetLicenseId && (dto.deviceQuantity !== undefined || dto.durationMonths !== undefined)) {
+      throw new BadRequestException({ code: 'RENEWAL_CONFIGURATION_FIXED', message: 'Gia hạn giữ nguyên cấu hình bản quyền đã mua.' });
+    }
     if (
       !idempotencyKey ||
       !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(idempotencyKey)
@@ -65,6 +68,7 @@ export class CommerceService {
         dto.targetLicenseId,
         await this.serviceTerms.loadServiceTermsArtifact(),
         this.chain,
+        { deviceQuantity: dto.deviceQuantity, durationMonths: dto.durationMonths },
       );
     } catch (error) {
       this.translate(error);
@@ -389,6 +393,7 @@ export class CommerceService {
 
   private translate(error: unknown): void {
     const code = error instanceof Error ? error.message : '';
+    if (code === 'INVALID_PURCHASE_CONFIGURATION' || code === 'PURCHASE_PRICE_OUT_OF_RANGE') throw new BadRequestException({ code, message: 'Số thiết bị, thời hạn hoặc tổng tiền không hợp lệ.' });
     if (code==='PROVIDER_INTEGRATION_NOT_READY') throw new ConflictException({code,message:'Nhà cung cấp chưa sẵn sàng tiếp nhận bản quyền. Vui lòng thử lại sau.'});
     if (code === 'PROVIDER_NAMESPACE_CAPABILITY_NOT_CONFIGURED') throw new ServiceUnavailableException({ code, message: 'Nhà cung cấp chưa được bật tính năng phát hành giấy phép. Vui lòng thử lại sau hoặc liên hệ quản trị hệ thống.' });
     if (
