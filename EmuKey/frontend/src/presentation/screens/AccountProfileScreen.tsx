@@ -1,7 +1,7 @@
 import { LoadingOverlay } from '../components/WorkspacePrimitives';
-import { Alert, Button, Form, Input, Modal } from 'antd';
+import { Alert, Breadcrumb, Button, Form, Input, Modal } from 'antd';
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 import {
   describeApiError,
@@ -9,6 +9,7 @@ import {
   type ProfileInput,
   useAuth,
 } from '../../application/auth/authContext';
+import { roleHomePath } from '../../domain/workspace';
 import { FactList, PageHeader, StatusChip } from '../components/WorkspacePrimitives';
 
 const roleLabels: Record<string, string> = {
@@ -104,15 +105,31 @@ export function AccountProfileScreen() {
   };
 
   return (
-    <>
+    <main className="profile-screen-container" id="main-content" tabIndex={-1}>
+      <div className="profile-breadcrumb">
+        <Breadcrumb
+          items={[
+            {
+              title: (
+                <Link to={roleHomePath(user.role)}>
+                  {user.role === 'CUSTOMER' ? 'Tài khoản' : 'Tổng quan'}
+                </Link>
+              ),
+            },
+            {
+              title: 'Hồ sơ cá nhân',
+            },
+          ]}
+        />
+      </div>
       <PageHeader
         title="Hồ sơ tài khoản"
         action={!isSystem ? <StatusChip tone={user.status === 'ACTIVE' ? 'success' : 'warning'}>{statusLabel}</StatusChip> : undefined}
       />
-      <div className="workspace-two-column profile-layout">
-        <section className="workspace-card section-card">
+      <div className="profile-layout">
+        <section className="workspace-card section-card profile-form-card">
           <h2>{isSystem ? 'Thông tin cá nhân' : 'Thông tin hồ sơ'}</h2>
-          <p className="muted-copy">{isSystem ? 'Cập nhật thông tin cá nhân và liên hệ.' : 'Cập nhật thông tin liên hệ và tổ chức.'}</p>
+          <p className="muted-copy">{isSystem ? 'Cập nhật thông tin cá nhân và liên hệ.' : 'Cập nhật thông tin liên hệ.'}</p>
           <Form
             form={form}
             initialValues={{
@@ -148,24 +165,47 @@ export function AccountProfileScreen() {
             ) : null}
             {saved ? <Alert showIcon type="success" message="Đã cập nhật hồ sơ." /> : null}
             {error ? <Alert showIcon role="alert" type="error" message={error} /> : null}
-            <><Button htmlType="submit" loading={saving} disabled={saving || (isSystem && !dirty)} type="primary">
-              Lưu thay đổi
-            </Button><LoadingOverlay active={saving} label="Đang xử lý yêu cầu: Lưu thay đổi" /></>
+            <div style={{ marginTop: 8 }}>
+              <Button htmlType="submit" loading={saving} disabled={saving || (isSystem && !dirty)} type="primary">
+                Lưu thay đổi
+              </Button>
+              <LoadingOverlay active={saving} label="Đang xử lý yêu cầu: Lưu thay đổi" />
+            </div>
           </Form>
         </section>
         <aside className={isSystem ? 'system-profile-aside' : 'workspace-card section-card profile-summary'}>
-          <section className={isSystem ? 'workspace-card section-card profile-summary' : undefined}>
-          <h2>Tài khoản</h2>
-          <FactList facts={[{ label: 'Email', value: user.email }, { label: 'Vai trò', value: roleLabels[user.role] ?? 'Chưa xác định' }, { label: 'Trạng thái', value: statusLabel }]} />
-          <small>
-            Email và vai trò được bảo vệ bởi hệ thống xác thực, không thay đổi tại màn hình này.
-          </small>
-          </section>
-          <section className={isSystem ? 'workspace-card section-card' : undefined}>
-          {isSystem ? <h2>Bảo mật</h2> : <h3>Bảo mật</h3>}
-          {isSystem ? <p className="muted-copy">Sau khi đổi mật khẩu, bạn cần đăng nhập lại.</p> : null}
-          <Button onClick={() => { setPasswordError(null); setPasswordOpen(true); }} type="default">Đổi mật khẩu</Button>
-          </section>
+          <div className={isSystem ? 'workspace-card section-card profile-summary-inner' : undefined}>
+            <h2>Tài khoản</h2>
+            <div className="profile-account-email-block">
+              <span className="profile-field-label">Email</span>
+              <span className="profile-field-value profile-field-email" title={user.email}>{user.email}</span>
+            </div>
+            <FactList
+              facts={[
+                { label: 'Vai trò', value: roleLabels[user.role] ?? 'Chưa xác định' },
+                {
+                  label: 'Trạng thái',
+                  value: (
+                    <StatusChip tone={user.status === 'ACTIVE' ? 'success' : 'warning'}>
+                      {user.status === 'ACTIVE' ? 'Hoạt động' : statusLabel}
+                    </StatusChip>
+                  ),
+                },
+              ]}
+            />
+            <small className="muted-copy profile-immutable-hint">
+              Email và vai trò được bảo vệ bởi hệ thống xác thực, không thay đổi tại màn hình này.
+            </small>
+          </div>
+
+          <div className={isSystem ? 'workspace-card section-card' : 'profile-security-section'}>
+            <h3>Bảo mật</h3>
+            {isSystem ? <p className="muted-copy">Sau khi đổi mật khẩu, bạn cần đăng nhập lại.</p> : null}
+            <Button onClick={() => { setPasswordError(null); setPasswordOpen(true); }} type="default">
+              Đổi mật khẩu
+            </Button>
+          </div>
+
           <Modal
             className="account-password-modal"
             destroyOnHidden
@@ -174,49 +214,52 @@ export function AccountProfileScreen() {
             open={passwordOpen}
             title="Đổi mật khẩu"
           >
-              <Form
-                form={passwordForm}
-                layout="vertical"
-                onFinish={(values) => void submitPassword(values)}
-                validateTrigger="onBlur"
+            <Form
+              form={passwordForm}
+              layout="vertical"
+              onFinish={(values) => void submitPassword(values)}
+              validateTrigger="onBlur"
+            >
+              <Form.Item
+                label="Mật khẩu hiện tại"
+                name="currentPassword"
+                rules={[{ required: true, message: 'Vui lòng nhập mật khẩu hiện tại.' }]}
               >
-                <Form.Item
-                  label="Mật khẩu hiện tại"
-                  name="currentPassword"
-                  rules={[{ required: true, message: 'Vui lòng nhập mật khẩu hiện tại.' }]}
-                >
-                  <Input.Password autoComplete="current-password" />
-                </Form.Item>
-                <Form.Item
-                  label="Mật khẩu mới"
-                  name="password"
-                  rules={[{ required: true, message: 'Vui lòng nhập mật khẩu mới.' }, ...strongPasswordRules]}
-                >
-                  <Input.Password autoComplete="new-password" />
-                </Form.Item>
-                <Form.Item
-                  dependencies={['password']}
-                  label="Xác nhận mật khẩu mới"
-                  name="confirm"
-                  rules={[
-                    { required: true, message: 'Vui lòng xác nhận mật khẩu mới.' },
-                    ({ getFieldValue }) => ({
-                      validator(_, value) {
-                        if (!value || getFieldValue('password') === value) return Promise.resolve();
-                        return Promise.reject(new Error('Mật khẩu xác nhận không khớp.'));
-                      },
-                    }),
-                  ]}
-                >
-                  <Input.Password autoComplete="new-password" />
-                </Form.Item>
-                {passwordSaved ? <Alert showIcon message="Đã đổi mật khẩu. Vui lòng đăng nhập lại." type="success" /> : null}
-                {passwordError ? <Alert message={passwordError} role="alert" showIcon type="error" /> : null}
-                <><Button htmlType="submit" disabled={passwordSaving} type="primary">Đổi mật khẩu</Button><LoadingOverlay active={passwordSaving} label="Đang xử lý yêu cầu: Đổi mật khẩu" /></>
-              </Form>
+                <Input.Password autoComplete="current-password" />
+              </Form.Item>
+              <Form.Item
+                label="Mật khẩu mới"
+                name="password"
+                rules={[{ required: true, message: 'Vui lòng nhập mật khẩu mới.' }, ...strongPasswordRules]}
+              >
+                <Input.Password autoComplete="new-password" />
+              </Form.Item>
+              <Form.Item
+                dependencies={['password']}
+                label="Xác nhận mật khẩu mới"
+                name="confirm"
+                rules={[
+                  { required: true, message: 'Vui lòng xác nhận mật khẩu mới.' },
+                  ({ getFieldValue }) => ({
+                    validator(_, value) {
+                      if (!value || getFieldValue('password') === value) return Promise.resolve();
+                      return Promise.reject(new Error('Mật khẩu xác nhận không khớp.'));
+                    },
+                  }),
+                ]}
+              >
+                <Input.Password autoComplete="new-password" />
+              </Form.Item>
+              {passwordSaved ? <Alert showIcon message="Đã đổi mật khẩu. Vui lòng đăng nhập lại." type="success" /> : null}
+              {passwordError ? <Alert message={passwordError} role="alert" showIcon type="error" /> : null}
+              <div style={{ marginTop: 8 }}>
+                <Button htmlType="submit" disabled={passwordSaving} type="primary">Đổi mật khẩu</Button>
+                <LoadingOverlay active={passwordSaving} label="Đang xử lý yêu cầu: Đổi mật khẩu" />
+              </div>
+            </Form>
           </Modal>
         </aside>
       </div>
-    </>
+    </main>
   );
 }

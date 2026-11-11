@@ -33,6 +33,7 @@ import { ProviderOperationsScreen } from '../screens/ProviderOperationsScreen';
 import { SupportConsoleScreen } from '../screens/SupportConsoleScreen';
 import { SystemConsoleScreen } from '../screens/SystemConsoleScreen';
 import { PublicHelpScreen } from '../screens/PublicHelpScreen';
+import { PublicHelpDetailScreen } from '../screens/PublicHelpDetailScreen';
 import { CustomerLayout } from '../components/CustomerLayout';
 import {
   providerShell,
@@ -122,6 +123,7 @@ function AppRoutes() {
       <Route element={<ProductDetailScreen />} path="/products/:slug" />
       <Route element={<PublicVerificationScreen />} path="/verify" />
       <Route element={<PublicHelpScreen />} path="/help" />
+      <Route element={<PublicHelpDetailScreen />} path="/help/:id" />
       <Route element={<ProtectedRoute roles={['CUSTOMER']}><CustomerLayout /></ProtectedRoute>} path="/buyer">
         <Route index element={<BuyerHomeScreen />} />
         <Route element={<CatalogScreen authenticated />} path="products" />

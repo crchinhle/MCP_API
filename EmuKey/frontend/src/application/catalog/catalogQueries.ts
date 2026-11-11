@@ -75,10 +75,14 @@ export function useAdminProducts(enabled = true) {
   });
 }
 
-export function useAdminPlans() {
+export function useAdminPlans(productId?: string, enabled = true) {
   return useQuery({
-    queryKey: ['plans', 'admin'],
-    queryFn: () => requestJson<AdminPlan[]>('/plans'),
+    enabled,
+    queryKey: ['plans', 'admin', productId ?? 'all'],
+    queryFn: () =>
+      requestJson<AdminPlan[]>(
+        productId ? `/plans?productId=${encodeURIComponent(productId)}` : '/plans',
+      ),
   });
 }
 

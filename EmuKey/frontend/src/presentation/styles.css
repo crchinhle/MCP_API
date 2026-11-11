@@ -214,6 +214,17 @@ a {
   font-size: 14px;
   cursor: pointer;
   max-width: 220px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.account-pill:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.account-pill:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .account-pill .account-name {
@@ -221,6 +232,93 @@ a {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.site-account-dropdown .ant-dropdown-menu {
+  min-width: 220px;
+  padding: 8px;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--border);
+}
+
+.account-dropdown-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 6px;
+  cursor: default;
+}
+
+.account-dropdown-identity-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.account-dropdown-name {
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 1.3;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account-dropdown-role {
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--primary);
+  font-weight: 500;
+}
+
+.account-dropdown-email {
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 170px;
+}
+
+.site-account-dropdown .ant-dropdown-menu-item {
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.site-account-dropdown .ant-dropdown-menu-item .ant-dropdown-menu-title-content {
+  font-size: 14px;
+}
+
+.account-dropdown-item {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 14px;
+  color: var(--text);
+  border-radius: 6px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.account-dropdown-item:hover,
+.account-dropdown-item:focus-visible {
+  color: var(--primary);
+  background: var(--surface-hover, #f3f4f6);
+  outline: none;
+}
+
+.account-dropdown-logout {
+  color: var(--error, #dc2626);
+}
+
+.account-dropdown-logout:hover,
+.account-dropdown-logout:focus-visible {
+  color: #b91c1c;
+  background: rgba(220, 38, 38, 0.08);
 }
 
 .overview-active {
@@ -1155,7 +1253,7 @@ a {
 .buyer-home-main {
   width: 1296px;
   max-width: calc(100% - 144px);
-  margin: 40px auto 0;
+  margin: 28px auto 0;
   padding-inline: 40px;
 }
 
@@ -1197,29 +1295,62 @@ a {
 .buyer-home-metrics {
   width: 1248px;
   max-width: 100%;
-  margin-top: 32px;
+  margin-top: 20px;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 24px;
+  gap: 20px;
 }
 
 .buyer-home-metric {
   position: relative;
-  height: 120px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  align-items: flex-start;
+  text-align: left;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface);
-  min-height: 124px;
-  padding: 24px;
+  min-height: 128px;
+  padding: 20px 24px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  font-family: inherit;
+}
+
+.buyer-home-metric:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.05);
+}
+
+.buyer-home-metric:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.buyer-home-metric-icon {
+  font-size: 18px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.buyer-home-metric-icon--primary {
+  color: #2563eb;
+}
+
+.buyer-home-metric-icon--neutral {
+  color: #4b5563;
+}
+
+.buyer-home-metric-icon--warning {
+  color: #d97706;
 }
 
 .buyer-home-metric strong {
   color: #111827;
   font-weight: 600;
-  font-size: 32px;
+  font-size: 28px;
   line-height: 1.2;
 }
 
@@ -1227,89 +1358,189 @@ a {
   color: #596375;
   font-size: 14px;
   line-height: 20px;
+  margin-top: 4px;
 }
 
 .buyer-home-attention-chip {
   position: absolute;
-  top: 20px;
-  right: 24px;
-  padding: 5px 10px;
-  color: var(--warning-text);
-  background: var(--warning-surface);
-  border: 1px solid var(--warning-border);
+  top: 18px;
+  right: 20px;
+  padding: 4px 10px;
+  color: #b45309;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
   border-radius: 999px;
   font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.buyer-home-attention-section {
+  width: 1248px;
+  max-width: 100%;
+  margin-top: 28px;
+}
+
+.buyer-home-attention-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.buyer-home-attention-header h2 {
+  margin: 0;
+  color: #111827;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 24px;
+}
+
+.buyer-home-attention-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #2563eb;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.buyer-home-attention-link:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+.buyer-home-attention-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.buyer-home-attention-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.05);
+}
+
+.buyer-home-attention-card:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.buyer-home-attention-icon-box {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: #fef3c7;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  color: #b45309;
+}
+
+.buyer-home-attention-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.buyer-home-attention-content h3 {
+  margin: 0 0 4px;
+  color: #111827;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 20px;
+}
+
+.buyer-home-attention-content p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 13px;
   line-height: 18px;
+}
+
+.buyer-home-attention-arrow {
+  flex-shrink: 0;
+  font-size: 14px;
+  color: #9ca3af;
+  margin-left: 8px;
 }
 
 .buyer-home-shortcuts {
   width: 1248px;
   max-width: 100%;
-  margin-top: 48px;
+  margin-top: 28px;
 }
 
 .buyer-home-shortcuts h2 {
-  margin: 0 0 26px;
+  margin: 0 0 12px;
   color: #111827;
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 600;
-  line-height: 30px;
+  line-height: 24px;
 }
 
 .buyer-home-shortcut-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 24px;
+  gap: 20px;
 }
 
 .buyer-home-shortcut {
-  height: 154px;
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  border: 1px solid #dadfe8;
+  text-align: left;
+  border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--surface);
-  min-height: 168px;
-  padding: 24px;
+  min-height: 110px;
+  padding: 20px 24px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  font-family: inherit;
 }
 
-.buyer-home-shortcut::before {
-  width: 4px;
-  height: 154px;
-  margin: -20px 0 -134px -24px;
-  display: block;
-  border-radius: 2px;
-  background: var(--primary);
-  content: '';
+.buyer-home-shortcut:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.05);
+}
+
+.buyer-home-shortcut:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.buyer-home-shortcut-icon {
+  font-size: 20px;
+  color: #2563eb;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .buyer-home-shortcut h3 {
-  margin: 0;
-  color: #1c1c1a;
+  margin: 0 0 4px;
+  color: #111827;
   font-weight: 600;
-  line-height: 24px;
-  font-size: 18px;
-}
-
-.buyer-home-shortcut p {
-  margin: 6px 0 14px;
-  color: #596375;
-  font-size: 14px;
-  line-height: 21px;
-}
-
-.buyer-home-shortcut .ant-btn {
-  height: 40px;
-  padding: 10px 16px;
-  border-radius: 6px;
-  background: var(--subtle);
-  border-color: var(--control);
-}
-
-.buyer-home-welcome p,
-.buyer-home-shortcut p {
+  line-height: 20px;
   font-size: 15px;
+}
+
+.buyer-home-shortcut p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 18px;
 }
 
 @media (max-width: 760px) {
@@ -1339,6 +1570,13 @@ a {
   .buyer-home-metrics,
   .buyer-home-shortcut-grid {
     grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .buyer-home-metric,
+  .buyer-home-shortcut {
+    min-height: auto;
+    padding: 16px 20px;
   }
 }
 
@@ -1352,52 +1590,581 @@ a {
   background: var(--sidebar);
 }
 
-.public-help-content {
+/* Modern SaaS Help Center Styles */
+.public-help-wrapper {
   min-height: calc(100vh - 72px);
-  padding: 32px 64px;
-  display: grid;
-  place-items: start center;
-  background: var(--canvas);
+  padding: 40px 24px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  background: var(--canvas, #f8fafc);
 }
 
-.public-help-card {
-  padding: 20px;
-  display: grid;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
-  width: min(900px, 100%);
+.public-help-card-container {
+  width: min(880px, 100%);
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  padding: 36px 40px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03);
+}
+
+.public-help-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 22px;
+}
+
+.public-help-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: -0.02em;
+}
+
+.public-help-demo-badge {
+  font-size: 12px;
+  font-weight: 500;
+  background: #f3f4f6;
+  color: #4b5563;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  border: 1px solid #e5e7eb;
+}
+
+.public-help-search-row {
+  margin-bottom: 20px;
+}
+
+.public-help-search-input {
+  border-radius: 12px !important;
+  background: #f9fafb !important;
+  border: 1px solid #e5e7eb !important;
+  padding: 8px 16px !important;
+  transition: all 0.2s ease;
+}
+
+.public-help-search-input:focus-within {
+  background: #ffffff !important;
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1) !important;
+}
+
+.public-help-tags-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.public-help-tag-pill {
+  font-size: 13.5px;
+  font-weight: 500;
+  padding: 6px 16px;
+  border-radius: 9999px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  outline: none;
+}
+
+.public-help-tag-pill:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.public-help-tag-pill--active {
+  background: #111827 !important;
+  color: #ffffff !important;
+  border-color: #111827 !important;
+  font-weight: 600;
+}
+
+.public-help-subheader-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.public-help-count-label {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.public-help-product-select {
+  min-width: 190px;
+}
+
+.public-help-product-select .ant-select-selector {
+  border-radius: 10px !important;
+  border-color: #e5e7eb !important;
+}
+
+.public-help-items-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.public-help-item-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 18px 22px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.public-help-item-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+  transform: translateY(-1px);
+}
+
+.public-help-item-card:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.public-help-item-left {
+  display: flex;
+  align-items: center;
   gap: 16px;
+  min-width: 0;
 }
 
-.public-help-card h1 {
-  margin: 0;
-  font-size: 30px;
-  line-height: 1.3;
+.public-help-item-icon-box {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: #eff6ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
-.public-help-card p {
-  margin: 0;
-  color: var(--text-secondary);
+.public-help-item-icon {
+  font-size: 20px;
+  color: #2563eb;
+}
+
+.public-help-item-content {
+  min-width: 0;
+}
+
+.public-help-item-product {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+  margin-bottom: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.public-help-item-title {
+  margin: 0 0 6px;
   font-size: 16px;
-  line-height: 1.7;
+  font-weight: 600;
+  color: #111827;
+  line-height: 1.35;
 }
 
-.public-help-card h2 {
-  margin: 16px 0 0;
-  font-size: 22px;
+.public-help-item-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.public-help-item-tag-badge {
+  font-size: 12px;
+  background: #f3f4f6;
+  color: #374151;
+  padding: 2px 10px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+.public-help-item-right {
+  margin-left: 16px;
+  flex-shrink: 0;
+}
+
+.public-help-item-chevron {
+  font-size: 13px;
+  color: #9ca3af;
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.public-help-item-card:hover .public-help-item-chevron {
+  color: #2563eb;
+  transform: translateX(2px);
+}
+
+.public-help-loading-box,
+.public-help-empty-box {
+  padding: 48px 20px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #6b7280;
+}
+
+.public-help-clear-btn {
+  margin-top: 12px;
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.public-help-clear-btn:hover {
+  background: #dbeafe;
+}
+
+.public-help-pagination-box {
+  margin-top: 28px;
+  display: flex;
+  justify-content: center;
+}
+
+/* Detail Screen Layout */
+.public-help-detail-container {
+  width: min(1120px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.public-help-nav-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.public-help-back-link {
+  font-size: 14px;
+  color: #4b5563;
+  padding: 4px 8px;
+}
+
+.public-help-detail-header {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  padding: 32px 36px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+
+.public-help-detail-meta-chips {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.public-help-product-badge {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1d4ed8;
+  background: #eff6ff;
+  padding: 3px 12px;
+  border-radius: 6px;
+  border: 1px solid #dbeafe;
+}
+
+.public-help-plan-badge {
+  font-size: 13px;
+  font-weight: 600;
+  color: #047857;
+  background: #ecfdf5;
+  padding: 3px 12px;
+  border-radius: 6px;
+  border: 1px solid #a7f3d0;
+}
+
+.public-help-date-label {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.public-help-detail-title {
+  margin: 8px 0 14px;
+  font-size: 28px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+}
+
+.public-help-detail-summary {
+  font-size: 16px;
+  color: #4b5563;
+  line-height: 1.65;
+  margin: 0 0 16px;
+}
+
+.public-help-detail-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.public-help-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 28px;
+  align-items: start;
+}
+
+.public-help-content-column {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  padding: 36px 40px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+}
+
+.public-help-chunk-section {
+  margin-bottom: 32px;
+}
+
+.public-help-chunk-section:last-child {
+  margin-bottom: 0;
+}
+
+.public-help-chunk-heading {
+  margin: 0 0 14px;
+  font-size: 20px;
+  font-weight: 700;
+  color: #111827;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f3f4f6;
+  scroll-margin-top: 90px;
+}
+
+.public-help-chunk-text p {
+  margin: 0 0 14px;
+  font-size: 15.5px;
+  line-height: 1.75;
+  color: #374151;
+}
+
+.public-help-chunk-text p:last-child {
+  margin-bottom: 0;
+}
+
+.public-help-bullet-list,
+.public-help-numbered-list {
+  margin: 0 0 16px;
+  padding-left: 24px;
+  color: #374151;
+  font-size: 15.5px;
+  line-height: 1.75;
+}
+
+.public-help-bullet-list li,
+.public-help-numbered-list li {
+  margin-bottom: 6px;
+}
+
+.public-help-sidebar-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  position: sticky;
+  top: 90px;
+}
+
+.public-help-sidebar-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  padding: 20px 22px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+}
+
+.public-help-sidebar-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+}
+
+.public-help-toc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.public-help-toc-item {
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 13.5px;
+  color: #4b5563;
+  cursor: pointer;
+  transition: all 0.15s ease;
   line-height: 1.4;
 }
 
-.public-help-close {
-  min-height: 44px;
-  padding: 10px 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  color: var(--primary);
-  text-decoration: none;
+.public-help-toc-item:hover {
+  background: #eff6ff;
+  color: #2563eb;
+  font-weight: 500;
+}
+
+.public-help-related-product-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.public-help-related-product-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.public-help-related-product-plan {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.public-help-product-btn {
+  margin-top: 8px;
+  border-radius: 8px !important;
+}
+
+.public-help-related-docs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.public-help-related-doc-item {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #f3f4f6;
+  background: #f9fafb;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.public-help-related-doc-item:hover {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.public-help-related-doc-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 4px;
+  line-height: 1.35;
+}
+
+.public-help-related-doc-tags {
+  display: flex;
+  gap: 4px;
+}
+
+.public-help-related-doc-tag {
+  font-size: 11px;
+  color: #6b7280;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+.public-help-sidebar-card--support {
+  background: #fffbeb;
+  border-color: #fef3c7;
+}
+
+/* Responsive Media Queries */
+@media (max-width: 900px) {
+  .public-help-card-container {
+    padding: 24px 20px;
+    border-radius: 14px;
+  }
+
+  .public-help-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .public-help-sidebar-column {
+    position: static;
+  }
+
+  .public-help-content-column {
+    padding: 24px 20px;
+  }
+
+  .public-help-detail-header {
+    padding: 24px 20px;
+  }
+
+  .public-help-detail-title {
+    font-size: 22px;
+  }
+}
+
+@media (max-width: 600px) {
+  .public-help-wrapper {
+    padding: 20px 12px;
+  }
+
+  .public-help-header-row {
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  .public-help-subheader-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .public-help-product-select {
+    width: 100%;
+  }
+
+  .public-help-item-card {
+    padding: 14px 16px;
+  }
+
+  .public-help-item-title {
+    font-size: 15px;
+  }
 }
 
 .system-tabs {
@@ -2588,21 +3355,123 @@ a {
   grid-template-columns: minmax(0, 1.65fr) minmax(270px, 0.8fr);
 }
 
+.profile-screen-container {
+  width: 100%;
+  max-width: 1240px;
+  margin-inline: auto;
+  padding: 24px 24px 64px;
+}
+
+.role-shell .profile-screen-container {
+  max-width: 100%;
+  padding: 0;
+}
+
+.profile-breadcrumb {
+  margin-bottom: 12px;
+}
+
+.profile-breadcrumb .ant-breadcrumb {
+  font-size: 14px;
+}
+
 .profile-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.85fr) minmax(300px, 1fr);
+  gap: 24px;
+  align-items: start;
   margin-top: 16px;
 }
 
+.profile-form-card {
+  padding: 28px;
+}
+
+.profile-form-card .ant-form {
+  max-width: 640px;
+}
+
 .profile-summary {
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
   align-self: start;
 }
 
 .profile-summary h2 {
-  margin: 16px 0 4px;
+  margin: 0 0 16px;
+  font-size: 20px;
+  font-weight: 600;
 }
 
-.profile-summary p,
-.profile-summary small {
-  color: var(--text-secondary);
+.profile-account-email-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.profile-field-label {
+  color: var(--text-secondary, #6b7280);
+  font-size: 14px;
+}
+
+.profile-field-value {
+  color: var(--text, #111827);
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.profile-field-email {
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.profile-summary .fact-list {
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.profile-immutable-hint {
+  display: block;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary, #6b7280);
+  margin-top: 8px;
+}
+
+.profile-security-section {
+  border-top: 1px solid var(--border, #e5e7eb);
+  padding-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.profile-security-section h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text, #111827);
+}
+
+@media (max-width: 1024px) {
+  .profile-layout {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
+
+@media (max-width: 760px) {
+  .profile-screen-container {
+    padding: 16px 16px 48px;
+  }
+  .profile-form-card,
+  .profile-summary {
+    padding: 20px 16px;
+  }
 }
 
 .workspace-two-column > div,

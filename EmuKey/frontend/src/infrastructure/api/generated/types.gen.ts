@@ -116,6 +116,7 @@ export type KnowledgeChunkDto = {
   documentVersion: number;
   chunkId: string;
   chunkIndex: number;
+  heading?: string;
   content: string;
 };
 
@@ -123,32 +124,58 @@ export type KnowledgeDocumentDto = {
   id: string;
   providerUserId?: string;
   productId?: string;
+  productName?: string;
+  planId?: string;
+  planName?: string;
   title: string;
+  summary?: string;
+  tags: Array<string>;
   logicalDocumentKey: string;
   version: number;
   status: string;
   isCurrent: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type CreateKnowledgeDocumentDto = {
   productId: string;
+  planId?: string;
   logicalDocumentKey: string;
   sourceType: 'FAQ' | 'PDF' | 'TXT';
   title: string;
+  summary?: string;
+  tags?: Array<string>;
   chunks?: Array<string>;
   version?: number;
+};
+
+export type KnowledgeChunkDetailDto = {
+  id: string;
+  chunkIndex: number;
+  heading?: string;
+  content: string;
 };
 
 export type KnowledgeDocumentDetailDto = {
   id: string;
   providerUserId?: string;
   productId?: string;
+  productName?: string;
+  planId?: string;
+  planName?: string;
   title: string;
+  summary?: string;
+  tags: Array<string>;
   logicalDocumentKey: string;
   version: number;
   status: string;
   isCurrent: boolean;
+  createdAt?: string;
+  updatedAt?: string;
   chunks: Array<string>;
+  chunkDetails?: Array<KnowledgeChunkDetailDto>;
+  content?: string;
 };
 
 export type PublishKnowledgeDocumentDto = {
@@ -165,6 +192,56 @@ export type KnowledgeQueryDto = {
 export type KnowledgeSourceDto = {
   id: string;
   content: string;
+};
+
+export type PublicKnowledgeItemDto = {
+  id: string;
+  productId: string;
+  productName: string;
+  planId?: string;
+  planName?: string;
+  title: string;
+  summary?: string;
+  tags: Array<string>;
+  sourceType: string;
+  updatedAt: string;
+};
+
+export type PublicKnowledgeProductFilterDto = {
+  id: string;
+  name: string;
+};
+
+export type PublicKnowledgeListResponseDto = {
+  items: Array<PublicKnowledgeItemDto>;
+  total: number;
+  page: number;
+  limit: number;
+  availableTags: Array<string>;
+  products: Array<PublicKnowledgeProductFilterDto>;
+};
+
+export type RelatedKnowledgeDocumentDto = {
+  id: string;
+  title: string;
+  productName: string;
+  tags: Array<string>;
+};
+
+export type PublicKnowledgeDetailDto = {
+  id: string;
+  productId: string;
+  productName: string;
+  planId?: string;
+  planName?: string;
+  title: string;
+  summary?: string;
+  tags: Array<string>;
+  sourceType: string;
+  updatedAt: string;
+  chunks: Array<KnowledgeChunkDetailDto>;
+  content: string;
+  relatedDocuments: Array<RelatedKnowledgeDocumentDto>;
 };
 
 export type InviteProviderDto = {
@@ -1385,6 +1462,42 @@ export type KnowledgeControllerQueryResponses = {
 
 export type KnowledgeControllerQueryResponse =
   KnowledgeControllerQueryResponses[keyof KnowledgeControllerQueryResponses];
+
+export type PublicKnowledgeControllerListData = {
+  body?: never;
+  path?: never;
+  query?: {
+    search?: string;
+    tag?: string;
+    productId?: string;
+    page?: number;
+    limit?: number;
+  };
+  url: '/api/v1/knowledge/public/documents';
+};
+
+export type PublicKnowledgeControllerListResponses = {
+  200: PublicKnowledgeListResponseDto;
+};
+
+export type PublicKnowledgeControllerListResponse =
+  PublicKnowledgeControllerListResponses[keyof PublicKnowledgeControllerListResponses];
+
+export type PublicKnowledgeControllerDetailData = {
+  body?: never;
+  path: {
+    id: string;
+  };
+  query?: never;
+  url: '/api/v1/knowledge/public/documents/{id}';
+};
+
+export type PublicKnowledgeControllerDetailResponses = {
+  200: PublicKnowledgeDetailDto;
+};
+
+export type PublicKnowledgeControllerDetailResponse =
+  PublicKnowledgeControllerDetailResponses[keyof PublicKnowledgeControllerDetailResponses];
 
 export type IdentityControllerListProviderInvitationsData = {
   body?: never;

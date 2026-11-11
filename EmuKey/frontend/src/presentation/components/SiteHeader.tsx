@@ -1,3 +1,4 @@
+import { AppstoreOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons';
 import { Button, Dropdown, type MenuProps } from 'antd';
 import { Link, NavLink, useLocation, useMatch, useNavigate } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
@@ -7,10 +8,17 @@ import { useOptionalAuth } from '../../application/auth/authContext';
 import { computeInitials, UserAvatar } from './Avatar';
 import { NotificationCenter } from './NotificationCenter';
 
+const roleLabels: Record<string, string> = {
+  CUSTOMER: 'Khách hàng',
+  PROVIDER_ADMIN: 'Nhà cung cấp',
+  SYSTEM_ADMIN: 'Quản trị viên',
+  SUPPORT_STAFF: 'Nhân viên hỗ trợ',
+};
+
 /**
- * Single, shared site header used on every public and Customer route.
- * Brand (wordmark) -> /, public navigation in the middle, and a fixed
- * account cluster (Tổng quan + notification + account dropdown) when logged in.
+ * Single, shared site header used for public navigation across the application.
+ * Brand (wordmark) -> /, public navigation (Trang chủ, Sản phẩm, Xác minh, Tài liệu),
+ * and a clean account cluster (notifications + personal account dropdown) when logged in.
  */
 export function SiteHeader({ skipTargetId = 'main-content' }: { readonly skipTargetId?: string }) {
   const location = useLocation();
@@ -55,15 +63,41 @@ export function SiteHeader({ skipTargetId = 'main-content' }: { readonly skipTar
 
   const accountMenu: MenuProps['items'] = user
     ? [
-        { key: 'overview', label: <button className="menu-link-button" onClick={() => void navigate(roleHomePath(user.role))} type="button">Tổng quan tài khoản</button> },
-        { key: 'profile', label: <button className="menu-link-button" onClick={() => void navigate(roleSettingsPath(user.role))} type="button">Hồ sơ</button> },
-        { key: 'shopping', label: <Link to="/catalog">Mua sắm</Link> },
-        ...(user.role === 'CUSTOMER' ? [
-          { key: 'orders', label: <Link to="/buyer/orders">Đơn hàng</Link> },
-          { key: 'licenses', label: <Link to="/buyer/licenses">Bản quyền</Link> },
-        ] : []),
+        {
+          key: 'identity',
+          disabled: true,
+          label: (
+            <div className="account-dropdown-identity">
+              <UserAvatar name={user.displayName} />
+              <div className="account-dropdown-identity-text">
+                <span className="account-dropdown-name">{user.displayName}</span>
+                <span className="account-dropdown-role">{roleLabels[user.role] ?? user.role}</span>
+                {user.email ? <span className="account-dropdown-email">{user.email}</span> : null}
+              </div>
+            </div>
+          ),
+        },
         { type: 'divider' },
-        { key: 'logout', label: <button className="menu-link-button" onClick={() => void auth?.logout()} type="button">Đăng xuất</button> },
+        {
+          key: 'overview',
+          icon: <AppstoreOutlined style={{ fontSize: 16 }} />,
+          label: 'Tổng quan tài khoản',
+          onClick: () => void navigate(roleHomePath(user.role)),
+        },
+        {
+          key: 'profile',
+          icon: <UserOutlined style={{ fontSize: 16 }} />,
+          label: 'Hồ sơ cá nhân',
+          onClick: () => void navigate(roleSettingsPath(user.role)),
+        },
+        { type: 'divider' },
+        {
+          key: 'logout',
+          danger: true,
+          icon: <LogoutOutlined style={{ fontSize: 16 }} />,
+          label: 'Đăng xuất',
+          onClick: () => void auth?.logout(),
+        },
       ]
     : [];
 
@@ -75,44 +109,56 @@ export function SiteHeader({ skipTargetId = 'main-content' }: { readonly skipTar
       </Link>
 
       <div className="site-header-right">
-      <nav aria-label="Điều hướng chính" className="public-nav">
-        <NavLink className={({ isActive }) => isActive ? 'active' : ''} end to="/">
-          Trang chủ
-        </NavLink>
-        <NavLink aria-current={publicCatalogMatch || customerCatalogMatch ? 'page' : undefined} className={({ isActive }) => (isActive || publicCatalogMatch || customerCatalogMatch ? 'active' : '')} to="/catalog">
-          Sản phẩm
-        </NavLink>
-        <NavLink className={({ isActive }) => (isActive ? 'active' : '')} to="/verify">
-          Xác minh
-        </NavLink>
-        <NavLink className={({ isActive }) => (isActive ? 'active' : '')} to="/help">
-          Tài liệu
-        </NavLink>
-        {user ? (
-          <NavLink className={({ isActive }) => (isActive ? 'active' : '')} end to={roleHomePath(user.role)}>
-            Tổng quan
+        <nav aria-label="Điều hướng chính" className="public-nav">
+          <NavLink className={({ isActive }) => (isActive ? 'active' : '')} end to="/">
+            Trang chủ
           </NavLink>
-        ) : null}
-      </nav>
+          <NavLink
+            aria-current={publicCatalogMatch || customerCatalogMatch ? 'page' : undefined}
+            className={({ isActive }) => (isActive || publicCatalogMatch || customerCatalogMatch ? 'active' : '')}
+            to="/catalog"
+          >
+            Sản phẩm
+          </NavLink>
+          <NavLink className={({ isActive }) => (isActive ? 'active' : '')} to="/verify">
+            Xác minh
+          </NavLink>
+          <NavLink className={({ isActive }) => (isActive ? 'active' : '')} to="/help">
+            Tài liệu
+          </NavLink>
+        </nav>
 
-      {user ? <NotificationCenter /> : null}
-      <div className="header-actions">
-        {user ? (
-          <div className="header-action-group">
-            <Dropdown menu={{ items: accountMenu }} placement="bottomRight" trigger={['click']}>
-              <button aria-label={`Mở menu tài khoản ${computeInitials(user.displayName)} ${user.displayName}`} className="account-pill" type="button">
-                <UserAvatar name={user.displayName} />{' '}
-                <span className="account-name">{user.displayName}</span>
-              </button>
-            </Dropdown>
-          </div>
-        ) : (
-          <div className="header-action-group">
-            <Button type="text" onClick={() => void navigate('/auth')}>Đăng nhập</Button>
-            <Button onClick={() => void navigate('/auth?mode=register')}>Đăng ký</Button>
-          </div>
-        )}
-      </div>
+        {user ? <NotificationCenter /> : null}
+        <div className="header-actions">
+          {user ? (
+            <div className="header-action-group">
+              <Dropdown
+                menu={{ items: accountMenu }}
+                rootClassName="site-account-dropdown"
+                placement="bottomRight"
+                trigger={['click']}
+              >
+                <button
+                  aria-label={`Mở menu tài khoản ${computeInitials(user.displayName)} ${user.displayName}`}
+                  className="account-pill"
+                  type="button"
+                >
+                  <UserAvatar name={user.displayName} />{' '}
+                  <span className="account-name">{user.displayName}</span>
+                </button>
+              </Dropdown>
+            </div>
+          ) : (
+            <div className="header-action-group">
+              <Button type="text" onClick={() => void navigate('/auth')}>
+                Đăng nhập
+              </Button>
+              <Button onClick={() => void navigate('/auth?mode=register')}>
+                Đăng ký
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
 
       <button
@@ -135,26 +181,44 @@ export function SiteHeader({ skipTargetId = 'main-content' }: { readonly skipTar
             onClick={() => setMenuOpen(false)}
             type="button"
           />
-          <div ref={mobileMenuRef} className="mobile-menu-panel" id="site-mobile-menu" role="dialog" aria-modal="true" aria-label="Menu chính">
-            <Button onClick={() => { setMenuOpen(false); menuButtonRef.current?.focus(); }}>Đóng menu</Button>
+          <div
+            ref={mobileMenuRef}
+            className="mobile-menu-panel"
+            id="site-mobile-menu"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Menu chính"
+          >
+            <Button onClick={() => { setMenuOpen(false); menuButtonRef.current?.focus(); }}>
+              Đóng menu
+            </Button>
             <nav aria-label="Điều hướng chính trên thiết bị di động">
               <Link to="/">Trang chủ</Link>
-              <Link to="/catalog">Mua sắm</Link>
+              <Link to="/catalog">Sản phẩm</Link>
               <Link to="/verify">Xác minh</Link>
               <Link to="/help">Tài liệu</Link>
-              {user ? <Link onClick={() => setMenuOpen(false)} to={roleHomePath(user.role)}>Tổng quan</Link> : null}
-              {user?.role === 'CUSTOMER' ? <><Link to="/buyer/orders">Đơn hàng</Link><Link to="/buyer/licenses">Bản quyền</Link></> : null}
             </nav>
             <div className="mobile-menu-actions">
               {user ? (
                 <div className="header-action-group">
-                  <Button onClick={() => { setMenuOpen(false); void navigate(roleSettingsPath(user.role)); }}>Hồ sơ</Button>
-                  <Button type="primary" onClick={() => void auth?.logout()}>Đăng xuất</Button>
+                  <Button onClick={() => { setMenuOpen(false); void navigate(roleHomePath(user.role)); }}>
+                    Tổng quan tài khoản
+                  </Button>
+                  <Button onClick={() => { setMenuOpen(false); void navigate(roleSettingsPath(user.role)); }}>
+                    Hồ sơ cá nhân
+                  </Button>
+                  <Button type="primary" danger onClick={() => void auth?.logout()}>
+                    Đăng xuất
+                  </Button>
                 </div>
               ) : (
                 <div className="header-action-group">
-                  <Button onClick={() => { setMenuOpen(false); void navigate('/auth'); }}>Đăng nhập</Button>
-                  <Button type="primary" onClick={() => { setMenuOpen(false); void navigate('/auth?mode=register'); }}>Đăng ký</Button>
+                  <Button onClick={() => { setMenuOpen(false); void navigate('/auth'); }}>
+                    Đăng nhập
+                  </Button>
+                  <Button type="primary" onClick={() => { setMenuOpen(false); void navigate('/auth?mode=register'); }}>
+                    Đăng ký
+                  </Button>
                 </div>
               )}
             </div>

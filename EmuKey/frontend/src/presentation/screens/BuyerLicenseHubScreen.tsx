@@ -17,6 +17,28 @@ import type { LicenseProjectionDto, LicenseDeviceDto } from '../../infrastructur
 
 type LicenseTab = 'overview' | 'key' | 'devices';
 
+const LICENSE_TABS: [string, string][] = [
+  ['all', 'Tất cả'],
+  ['ACTIVE', 'Đang hoạt động'],
+  ['expiring', 'Sắp hết hạn'],
+  ['PENDING_ONCHAIN', 'Đang cấp'],
+  ['EXPIRED', 'Đã hết hạn'],
+  ['SUSPENDED', 'Tạm ngưng'],
+  ['REVOKED', 'Đã thu hồi'],
+];
+
+function parseFilterParam(param: string | null): string {
+  if (!param) return 'all';
+  const lower = param.toLowerCase();
+  if (lower === 'active') return 'ACTIVE';
+  if (lower === 'expiring') return 'expiring';
+  if (lower === 'pending_onchain') return 'PENDING_ONCHAIN';
+  if (lower === 'expired') return 'EXPIRED';
+  if (lower === 'suspended') return 'SUSPENDED';
+  if (lower === 'revoked') return 'REVOKED';
+  return param;
+}
+
 function dateLabel(value: string) {
   return new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date(value));
 }
@@ -29,11 +51,36 @@ export function BuyerLicenseHubScreen() {
   const [searchParams, setSearchParams] = useSearchParams();
   const rows = licenses.data ?? [];
   const [selectedId, setSelectedId] = useState(searchParams.get('licenseId') ?? '');
-  const [filter, setFilter] = useState('all');
+  const urlFilter = parseFilterParam(searchParams.get('filter') ?? searchParams.get('status'));
+  const [filter, setFilter] = useState(urlFilter);
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebouncedValue(query);
   const [page, setPage] = useState(1);
   useEffect(() => setPage(1), [query, filter]);
+
+  useEffect(() => {
+    setFilter(urlFilter);
+  }, [urlFilter]);
+
+  const handleFilterChange = (nextFilter: string) => {
+    setFilter(nextFilter);
+    setPage(1);
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        if (nextFilter === 'all') {
+          next.delete('filter');
+          next.delete('status');
+        } else {
+          next.set('filter', nextFilter);
+          next.delete('status');
+        }
+        return next;
+      },
+      { replace: false },
+    );
+  };
+
   const [tab, setTab] = useState<LicenseTab>(searchParams.has('recover') || searchParams.has('activate') || searchParams.has('actionToken') ? 'key' : 'overview');
   const [activationKeys, setActivationKeys] = useState<Record<string, { value: string; keyVersion: number }>>({});
   const [copyStatus, setCopyStatus] = useState('');
@@ -47,8 +94,26 @@ export function BuyerLicenseHubScreen() {
   });
   const resolution = useResolveLicensingAction(actionToken);
   const invalidActionLink = resolution.error instanceof ApiRequestError && [400, 401, 403, 404].includes(resolution.error.status);
-  const visibleRows = rows.filter((license) => (filter === 'all' || license.status === filter) &&
-    `${license.productName} ${license.plan.name} ${license.publicLicenseId} ${license.activationKeyLast4 ?? ''}`.toLocaleLowerCase('vi').includes(debouncedQuery.trim().toLocaleLowerCase('vi')));
+
+  const nowMs = Date.now();
+  const in30DaysMs = nowMs + 30 * 24 * 60 * 60 * 1000;
+
+  const visibleRows = rows.filter((license) => {
+    if (filter === 'ACTIVE') {
+      if (license.status !== 'ACTIVE') return false;
+      const expiresAt = new Date(license.expiresAt).getTime();
+      if (Number.isFinite(expiresAt) && expiresAt <= nowMs) return false;
+    } else if (filter === 'expiring') {
+      if (license.status !== 'ACTIVE') return false;
+      const expiresAt = new Date(license.expiresAt).getTime();
+      if (!Number.isFinite(expiresAt) || expiresAt <= nowMs || expiresAt > in30DaysMs) return false;
+    } else if (filter !== 'all') {
+      if (license.status !== filter) return false;
+    }
+    return `${license.productName} ${license.plan.name} ${license.publicLicenseId} ${license.activationKeyLast4 ?? ''}`
+      .toLocaleLowerCase('vi')
+      .includes(debouncedQuery.trim().toLocaleLowerCase('vi'));
+  });
   const selected = rows.find((license) => license.id === selectedId);
   const providerManaged = selected?.fulfillmentMode==='PROVIDER_HANDOFF';
   const devices = useLicenseDevices(providerManaged ? undefined : selected?.id);
@@ -84,7 +149,19 @@ export function BuyerLicenseHubScreen() {
   return (
     <div className="buyer-licenses-screen">
       <main className="buyer-licenses-main">
-        <div className="buyer-licenses-tabs">{[['all', 'Tất cả'], ['ACTIVE', 'Đang hoạt động'], ['PENDING_ONCHAIN', 'Đang cấp'], ['EXPIRED', 'Đã hết hạn'], ['SUSPENDED', 'Tạm ngưng'], ['REVOKED', 'Đã thu hồi']].map(([value, label]) => <button key={value} className={filter === value ? 'active' : ''} aria-pressed={filter === value} onClick={() => { setFilter(value!); setPage(1); }} type="button">{label}</button>)}</div>
+        <div className="buyer-licenses-tabs">
+          {LICENSE_TABS.map(([value, label]) => (
+            <button
+              key={value}
+              className={filter === value ? 'active' : ''}
+              aria-pressed={filter === value}
+              onClick={() => handleFilterChange(value)}
+              type="button"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <section className="buyer-license-table" aria-label="Danh sách bản quyền">
           <Input.Search aria-label="Tìm bản quyền" placeholder="Tìm sản phẩm, gói, mã tra cứu hoặc 4 ký tự cuối" allowClear value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} />
           <Table<LicenseProjectionDto> rowKey="id" dataSource={visibleRows} scroll={{ x: 1100 }}

@@ -15,14 +15,14 @@ import { NotificationWriter } from '../operations/application/notification-write
 import { OperationsModule } from '../operations/operations.module.js';
 import { IdentityModule } from '../identity-access/identity.module.js';
 import { AiAssistanceService } from './ai-assistance.service.js';
-import { KnowledgeController } from './knowledge.controller.js';
+import { KnowledgeController, PublicKnowledgeController } from './knowledge.controller.js';
 import { KnowledgeRepository } from './infrastructure/knowledge.repository.js';
 import { KnowledgeService } from './knowledge.service.js';
 import { PRIVATE_STORAGE, type PrivateStoragePort } from '../../platform/storage/private-storage.port.js';
 
 @Module({
   imports: [IdentityModule, OperationsModule],
-  controllers: [AssistanceSupportController, KnowledgeController],
+  controllers: [AssistanceSupportController, KnowledgeController, PublicKnowledgeController],
   providers: [
     { provide: AssistanceSupportRepository, inject: [Pool, NotificationWriter], useFactory: (pool: Pool, notifications: NotificationWriter) => new AssistanceSupportRepository(pool, notifications) },
      { provide: KnowledgeRepository, inject: [Pool, PRIVATE_STORAGE, ConfigService], useFactory: (pool: Pool, storage: PrivateStoragePort, config: ConfigService) => new KnowledgeRepository(pool, storage, {

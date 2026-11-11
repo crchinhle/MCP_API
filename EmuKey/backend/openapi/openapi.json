@@ -815,6 +815,106 @@
         ]
       }
     },
+    "/api/v1/knowledge/public/documents": {
+      "get": {
+        "operationId": "PublicKnowledgeController_list",
+        "parameters": [
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tag",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "productId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 10,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicKnowledgeListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List public published knowledge documents with filters",
+        "tags": [
+          "public-knowledge"
+        ]
+      }
+    },
+    "/api/v1/knowledge/public/documents/{id}": {
+      "get": {
+        "operationId": "PublicKnowledgeController_detail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicKnowledgeDetailDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get a public published knowledge document by ID",
+        "tags": [
+          "public-knowledge"
+        ]
+      }
+    },
     "/api/v1/auth/provider-invitations": {
       "post": {
         "operationId": "IdentityController_inviteProvider",
@@ -4353,6 +4453,9 @@
           "chunkIndex": {
             "type": "number"
           },
+          "heading": {
+            "type": "string"
+          },
           "content": {
             "type": "string"
           }
@@ -4381,8 +4484,27 @@
             "type": "string",
             "format": "uuid"
           },
+          "productName": {
+            "type": "string"
+          },
+          "planId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "planName": {
+            "type": "string"
+          },
           "title": {
             "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "logicalDocumentKey": {
             "type": "string"
@@ -4395,11 +4517,18 @@
           },
           "isCurrent": {
             "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
           }
         },
         "required": [
           "id",
           "title",
+          "tags",
           "logicalDocumentKey",
           "version",
           "status",
@@ -4410,6 +4539,10 @@
         "type": "object",
         "properties": {
           "productId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "planId": {
             "type": "string",
             "format": "uuid"
           },
@@ -4430,6 +4563,16 @@
             "type": "string",
             "maxLength": 255
           },
+          "summary": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "chunks": {
             "type": "array",
             "items": {
@@ -4449,6 +4592,29 @@
           "title"
         ]
       },
+      "KnowledgeChunkDetailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "chunkIndex": {
+            "type": "number"
+          },
+          "heading": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "chunkIndex",
+          "content"
+        ]
+      },
       "KnowledgeDocumentDetailDto": {
         "type": "object",
         "properties": {
@@ -4464,8 +4630,27 @@
             "type": "string",
             "format": "uuid"
           },
+          "productName": {
+            "type": "string"
+          },
+          "planId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "planName": {
+            "type": "string"
+          },
           "title": {
             "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "logicalDocumentKey": {
             "type": "string"
@@ -4479,16 +4664,32 @@
           "isCurrent": {
             "type": "boolean"
           },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
           "chunks": {
             "type": "array",
             "items": {
               "type": "string"
             }
+          },
+          "chunkDetails": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeChunkDetailDto"
+            }
+          },
+          "content": {
+            "type": "string"
           }
         },
         "required": [
           "id",
           "title",
+          "tags",
           "logicalDocumentKey",
           "version",
           "status",
@@ -4532,6 +4733,207 @@
         "required": [
           "id",
           "content"
+        ]
+      },
+      "PublicKnowledgeItemDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "productId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "productName": {
+            "type": "string"
+          },
+          "planId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "planName": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sourceType": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "productId",
+          "productName",
+          "title",
+          "tags",
+          "sourceType",
+          "updatedAt"
+        ]
+      },
+      "PublicKnowledgeProductFilterDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ]
+      },
+      "PublicKnowledgeListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicKnowledgeItemDto"
+            }
+          },
+          "total": {
+            "type": "number"
+          },
+          "page": {
+            "type": "number"
+          },
+          "limit": {
+            "type": "number"
+          },
+          "availableTags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "products": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicKnowledgeProductFilterDto"
+            }
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "limit",
+          "availableTags",
+          "products"
+        ]
+      },
+      "RelatedKnowledgeDocumentDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "productName": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "productName",
+          "tags"
+        ]
+      },
+      "PublicKnowledgeDetailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "productId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "productName": {
+            "type": "string"
+          },
+          "planId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "planName": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sourceType": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "chunks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/KnowledgeChunkDetailDto"
+            }
+          },
+          "content": {
+            "type": "string"
+          },
+          "relatedDocuments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RelatedKnowledgeDocumentDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "productId",
+          "productName",
+          "title",
+          "tags",
+          "sourceType",
+          "updatedAt",
+          "chunks",
+          "content",
+          "relatedDocuments"
         ]
       },
       "InviteProviderDto": {

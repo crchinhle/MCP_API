@@ -1,4 +1,4 @@
-import { Link, Outlet, NavLink, useLocation } from 'react-router-dom';
+import { Link, Outlet, useLocation } from 'react-router-dom';
 import { SiteHeader } from './SiteHeader';
 
 function CustomerNavigation() {
@@ -11,20 +11,34 @@ function CustomerNavigation() {
     { label: 'Hỗ trợ', to: '/buyer/support' },
   ];
 
+  const isItemActive = (to: string, end?: boolean) => {
+    if (end) return location.pathname === to;
+    if (to === '/catalog') {
+      return (
+        location.pathname === '/catalog' ||
+        location.pathname === '/products' ||
+        location.pathname.startsWith('/buyer/products') ||
+        location.pathname === '/buyer/checkout'
+      );
+    }
+    return location.pathname.startsWith(to);
+  };
+
   return (
-    <nav aria-label="Điều hướng Customer" className="customer-navigation">
-      {items.map((item) => item.to === '/catalog' && location.pathname.startsWith('/buyer/products') ? (
-        <Link className="active" aria-current="page" key={item.to} to={item.to}>{item.label}</Link>
-      ) : (
-        <NavLink
-          className={({ isActive }) => isActive ? 'active' : ''}
-          {...(item.end ? { end: true } : {})}
-          key={item.to}
-          to={item.to}
-        >
-          {item.label}
-        </NavLink>
-      ))}
+    <nav aria-label="Điều hướng khách hàng" className="customer-navigation">
+      {items.map((item) => {
+        const active = isItemActive(item.to, item.end);
+        return (
+          <Link
+            className={active ? 'active' : ''}
+            aria-current={active ? 'page' : undefined}
+            key={item.to}
+            to={item.to}
+          >
+            {item.label}
+          </Link>
+        );
+      })}
     </nav>
   );
 }

@@ -2946,10 +2946,13 @@ EXECUTE FUNCTION enforce_key_confirmation_trust();
 CREATE TABLE knowledge_documents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     product_id UUID NOT NULL,
+    plan_id UUID,
     logical_document_key VARCHAR(180) NOT NULL,
     version INT NOT NULL,
     source_type VARCHAR(20) NOT NULL,
     title VARCHAR(255) NOT NULL,
+    summary TEXT,
+    tags TEXT[] NOT NULL DEFAULT '{}',
     storage_key TEXT,
     storage_mime_type VARCHAR(120),
     storage_size_bytes BIGINT,
@@ -2959,6 +2962,7 @@ CREATE TABLE knowledge_documents (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT fk_knowledge_documents_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT,
+    CONSTRAINT fk_knowledge_documents_plan_product FOREIGN KEY (plan_id, product_id) REFERENCES plans(id, product_id) ON DELETE SET NULL,
     CONSTRAINT uq_knowledge_documents_version UNIQUE (product_id, logical_document_key, version),
     CONSTRAINT ck_knowledge_documents_version CHECK (version > 0),
     CONSTRAINT ck_knowledge_documents_source CHECK (source_type IN ('FAQ', 'PDF', 'TXT')),
@@ -2973,11 +2977,14 @@ CREATE UNIQUE INDEX uq_knowledge_documents_one_current
     ON knowledge_documents (product_id, logical_document_key)
     WHERE is_current;
 
+CREATE INDEX idx_knowledge_documents_tags ON knowledge_documents USING GIN(tags);
+
 -- 13. Guide chunks for human-readable content and full-text AI retrieval.
 CREATE TABLE knowledge_chunks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     document_id UUID NOT NULL,
     chunk_index INT NOT NULL,
+    heading TEXT,
     content TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT fk_knowledge_chunks_document

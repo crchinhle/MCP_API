@@ -117,9 +117,8 @@ describe('Emukey public web screens', () => {
 
   it('provides public guides without requiring login to read them', () => {
     render(<App initialEntries={['/help']} />);
-    expect(screen.getByRole('heading', { name: 'Hướng dẫn sử dụng EmuKey' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: '3. Nhận mã và sử dụng sản phẩm' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: '5. Xác minh công khai' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Trung tâm hướng dẫn' })).toBeTruthy();
+    expect(screen.getByPlaceholderText('Tìm tài liệu hướng dẫn...')).toBeTruthy();
   });
 
   it('prefills the reset token and confirms successful password reset', async () => {

@@ -1,48 +1,108 @@
-import { BadRequestException, ConflictException, ForbiddenException, NotFoundException, PayloadTooLargeException, ServiceUnavailableException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+  PayloadTooLargeException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import type { AuthPrincipal } from '../identity-access/identity.types.js';
+import type { PublicKnowledgeQueryDto } from './knowledge.dto.js';
 
 export class KnowledgeService {
-  constructor(private readonly repository: {
-    capabilities():{maxFileBytes:number;allowedMimeTypes:string[]};
-    chunk(actor:AuthPrincipal,documentId:string,chunkId:string):Promise<unknown>;
-     create(actor: AuthPrincipal, input: { chunks?: string[]; file?: { originalname: string; mimetype: string; size: number; buffer: Buffer }; logicalDocumentKey: string; productId: string; sourceType: string; title: string; version?: number }): Promise<unknown>;
-    list(actor: AuthPrincipal): Promise<unknown[]>;
-     publish(actor: AuthPrincipal, id: string, expectedCurrentVersion?: number): Promise<unknown>;
-     detail(actor: AuthPrincipal, id: string): Promise<unknown>;
-    search(actor: AuthPrincipal, question: string): Promise<Array<{ content: string; id: string }>>;
-  }) {}
+  constructor(
+    private readonly repository: {
+      capabilities(): { maxFileBytes: number; allowedMimeTypes: string[] };
+      chunk(actor: AuthPrincipal, documentId: string, chunkId: string): Promise<unknown>;
+      create(
+        actor: AuthPrincipal,
+        input: {
+          chunks?: string[];
+          file?: { originalname: string; mimetype: string; size: number; buffer: Buffer };
+          logicalDocumentKey: string;
+          productId: string;
+          planId?: string;
+          sourceType: string;
+          title: string;
+          summary?: string;
+          tags?: string[];
+          version?: number;
+        },
+      ): Promise<unknown>;
+      list(actor: AuthPrincipal): Promise<unknown[]>;
+      publish(actor: AuthPrincipal, id: string, expectedCurrentVersion?: number): Promise<unknown>;
+      detail(actor: AuthPrincipal, id: string): Promise<unknown>;
+      search(actor: AuthPrincipal, question: string): Promise<Array<{ content: string; id: string }>>;
+      listPublic(query: PublicKnowledgeQueryDto): Promise<unknown>;
+      detailPublic(id: string): Promise<unknown>;
+    },
+  ) {}
 
-  capabilities(actor:AuthPrincipal) {this.requireProvider(actor);return this.repository.capabilities();}
-  async chunk(actor:AuthPrincipal,documentId:string,chunkId:string) {
+  capabilities(actor: AuthPrincipal) {
+    this.requireProvider(actor);
+    return this.repository.capabilities();
+  }
+
+  async chunk(actor: AuthPrincipal, documentId: string, chunkId: string) {
     this.requireReader(actor);
-    try {return await this.repository.chunk(actor,documentId,chunkId);} catch(error) {
-      if(error instanceof Error && error.message==='KNOWLEDGE_DOCUMENT_NOT_FOUND') throw new NotFoundException({code:error.message});
+    try {
+      return await this.repository.chunk(actor, documentId, chunkId);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'KNOWLEDGE_DOCUMENT_NOT_FOUND')
+        throw new NotFoundException({ code: error.message });
       throw error;
     }
   }
 
   async create(actor: AuthPrincipal, input: Parameters<KnowledgeService['repository']['create']>[1]) {
     this.requireProvider(actor);
-    try { return await this.repository.create(actor, input); }
-    catch (error) {
+    try {
+      return await this.repository.create(actor, input);
+    } catch (error) {
       if (!(error instanceof Error)) throw error;
-      if (error.message === 'KNOWLEDGE_FILE_TOO_LARGE') throw new PayloadTooLargeException({ code: error.message, message: 'Tệp vượt quá giới hạn dung lượng của máy chủ.' });
-      if (error.message === 'KNOWLEDGE_FILE_NOT_ALLOWED') throw new BadRequestException({ code: error.message, message: 'Định dạng hoặc nội dung tệp không hợp lệ. Chọn PDF hoặc TXT được hỗ trợ.' });
-      if (error.message === 'KNOWLEDGE_CHUNK_LIMIT') throw new BadRequestException({ code: error.message, message: 'Nội dung vượt giới hạn xử lý. Chia tài liệu thành các phần nhỏ hơn.' });
+      if (error.message === 'KNOWLEDGE_FILE_TOO_LARGE')
+        throw new PayloadTooLargeException({
+          code: error.message,
+          message: 'Tệp vượt quá giới hạn dung lượng của máy chủ.',
+        });
+      if (error.message === 'KNOWLEDGE_FILE_NOT_ALLOWED')
+        throw new BadRequestException({
+          code: error.message,
+          message: 'Định dạng hoặc nội dung tệp không hợp lệ. Chọn PDF hoặc TXT được hỗ trợ.',
+        });
+      if (error.message === 'KNOWLEDGE_CHUNK_LIMIT')
+        throw new BadRequestException({
+          code: error.message,
+          message: 'Nội dung vượt giới hạn xử lý. Chia tài liệu thành các phần nhỏ hơn.',
+        });
       if (error.message === 'KNOWLEDGE_PRODUCT_NOT_FOUND') throw new NotFoundException({ code: error.message });
+      if (error.message === 'KNOWLEDGE_PLAN_NOT_FOUND')
+        throw new BadRequestException({
+          code: error.message,
+          message: 'Gói bản quyền được chọn không hợp lệ hoặc không thuộc sản phẩm này.',
+        });
       if (error.message === 'KNOWLEDGE_VERSION_EXISTS') throw new ConflictException({ code: error.message });
-      if (error.message === 'KNOWLEDGE_STORAGE_UNAVAILABLE') throw new ServiceUnavailableException({ code: error.message });
+      if (error.message === 'KNOWLEDGE_STORAGE_UNAVAILABLE')
+        throw new ServiceUnavailableException({ code: error.message });
       throw error;
     }
   }
-  list(actor: AuthPrincipal) { this.requireReader(actor); return this.repository.list(actor); }
+
+  list(actor: AuthPrincipal) {
+    this.requireReader(actor);
+    return this.repository.list(actor);
+  }
+
   async publish(actor: AuthPrincipal, id: string, expectedCurrentVersion?: number) {
     if (actor.role !== 'SYSTEM_ADMIN') throw new ForbiddenException();
     try {
       return await this.repository.publish(actor, id, expectedCurrentVersion);
     } catch (error) {
       if (error instanceof Error && error.message === 'KNOWLEDGE_VERSION_CONFLICT') {
-        throw new ConflictException({ code: error.message, message: 'Phiên bản đã thay đổi. Vui lòng tải lại danh sách trước khi công bố.' });
+        throw new ConflictException({
+          code: error.message,
+          message: 'Phiên bản đã thay đổi. Vui lòng tải lại danh sách trước khi công bố.',
+        });
       }
       if (error instanceof Error && error.message === 'KNOWLEDGE_DOCUMENT_NOT_FOUND') {
         throw new NotFoundException({ code: error.message, message: 'Không tìm thấy tài liệu sẵn sàng công bố.' });
@@ -50,6 +110,7 @@ export class KnowledgeService {
       throw error;
     }
   }
+
   async detail(actor: AuthPrincipal, id: string) {
     this.requireReader(actor);
     try {
@@ -61,10 +122,33 @@ export class KnowledgeService {
       throw error;
     }
   }
+
   search(actor: AuthPrincipal, question: string) {
     if (!['CUSTOMER', 'PROVIDER_ADMIN', 'SYSTEM_ADMIN'].includes(actor.role)) throw new ForbiddenException();
     return this.repository.search(actor, question);
   }
-  private requireProvider(actor: AuthPrincipal) { if (actor.role !== 'PROVIDER_ADMIN' && actor.role !== 'SYSTEM_ADMIN') throw new ForbiddenException(); }
-  private requireReader(actor: AuthPrincipal) { if (!['CUSTOMER', 'PROVIDER_ADMIN', 'SYSTEM_ADMIN'].includes(actor.role)) throw new ForbiddenException(); }
+
+  // PUBLIC READ METHODS
+  listPublic(query: PublicKnowledgeQueryDto) {
+    return this.repository.listPublic(query);
+  }
+
+  async detailPublic(id: string) {
+    try {
+      return await this.repository.detailPublic(id);
+    } catch (error) {
+      if (error instanceof Error && error.message === 'KNOWLEDGE_DOCUMENT_NOT_FOUND') {
+        throw new NotFoundException({ code: error.message, message: 'Không tìm thấy tài liệu hoặc chưa được công bố.' });
+      }
+      throw error;
+    }
+  }
+
+  private requireProvider(actor: AuthPrincipal) {
+    if (actor.role !== 'PROVIDER_ADMIN' && actor.role !== 'SYSTEM_ADMIN') throw new ForbiddenException();
+  }
+
+  private requireReader(actor: AuthPrincipal) {
+    if (!['CUSTOMER', 'PROVIDER_ADMIN', 'SYSTEM_ADMIN'].includes(actor.role)) throw new ForbiddenException();
+  }
 }
