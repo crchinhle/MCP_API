@@ -915,6 +915,38 @@
         ]
       }
     },
+    "/api/v1/public/assistant/ask": {
+      "post": {
+        "operationId": "PublicAssistantController_ask",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublicAiAskDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicAiAnswerDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Ask about published Catalog and approved public Knowledge in an expiring guest session",
+        "tags": [
+          "public-assistant"
+        ]
+      }
+    },
     "/api/v1/auth/provider-invitations": {
       "post": {
         "operationId": "IdentityController_inviteProvider",
@@ -4243,6 +4275,74 @@
           "content"
         ]
       },
+      "CatalogSourceDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "CATALOG"
+            ]
+          },
+          "content": {
+            "type": "string"
+          },
+          "productId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "productCode": {
+            "type": "string"
+          },
+          "productName": {
+            "type": "string"
+          },
+          "planId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "planName": {
+            "type": "string"
+          },
+          "priceVnd": {
+            "type": "number"
+          },
+          "maxActiveDevices": {
+            "type": "number"
+          },
+          "durationMonths": {
+            "type": "number"
+          },
+          "entitlements": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "retrievalMethod": {
+            "type": "string",
+            "enum": [
+              "VECTOR",
+              "LEXICAL"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "content",
+          "productId",
+          "productCode",
+          "productName",
+          "planId",
+          "planName",
+          "priceVnd",
+          "maxActiveDevices",
+          "durationMonths",
+          "entitlements"
+        ]
+      },
       "CitationDetailDto": {
         "type": "object",
         "properties": {
@@ -4279,6 +4379,24 @@
       "MessageDto": {
         "type": "object",
         "properties": {
+          "intent": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "catalogSources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatalogSourceDto"
+            }
+          },
+          "recommendations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatalogSourceDto"
+            }
+          },
           "citationDetails": {
             "type": "array",
             "items": {
@@ -4354,6 +4472,40 @@
       "AiAnswerDto": {
         "type": "object",
         "properties": {
+          "intent": {
+            "type": "string",
+            "enum": [
+              "PRODUCT_QA",
+              "USAGE_GUIDANCE",
+              "PRODUCT_RECOMMENDATION",
+              "FOLLOW_UP",
+              "SUPPORT_REQUIRED",
+              "OUT_OF_SCOPE"
+            ]
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "ANSWERED",
+              "CLARIFICATION",
+              "NO_SOURCES",
+              "OUT_OF_SCOPE",
+              "SUPPORT_REQUIRED",
+              "PROVIDER_UNAVAILABLE"
+            ]
+          },
+          "catalogSources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatalogSourceDto"
+            }
+          },
+          "recommendations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatalogSourceDto"
+            }
+          },
           "citationDetails": {
             "type": "array",
             "items": {
@@ -4934,6 +5086,96 @@
           "chunks",
           "content",
           "relatedDocuments"
+        ]
+      },
+      "PublicAiAskDto": {
+        "type": "object",
+        "properties": {
+          "clientMessageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "question": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "clientMessageId",
+          "question"
+        ]
+      },
+      "PublicAiAnswerDto": {
+        "type": "object",
+        "properties": {
+          "intent": {
+            "type": "string",
+            "enum": [
+              "PRODUCT_QA",
+              "USAGE_GUIDANCE",
+              "PRODUCT_RECOMMENDATION",
+              "FOLLOW_UP",
+              "SUPPORT_REQUIRED",
+              "OUT_OF_SCOPE"
+            ]
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "ANSWERED",
+              "CLARIFICATION",
+              "NO_SOURCES",
+              "OUT_OF_SCOPE",
+              "SUPPORT_REQUIRED",
+              "PROVIDER_UNAVAILABLE"
+            ]
+          },
+          "catalogSources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatalogSourceDto"
+            }
+          },
+          "recommendations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatalogSourceDto"
+            }
+          },
+          "citationDetails": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CitationDetailDto"
+            }
+          },
+          "answer": {
+            "type": "string"
+          },
+          "citedSourceIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "grounded": {
+            "type": "boolean"
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "citationDetails",
+          "answer",
+          "citedSourceIds",
+          "grounded",
+          "sessionId"
         ]
       },
       "InviteProviderDto": {

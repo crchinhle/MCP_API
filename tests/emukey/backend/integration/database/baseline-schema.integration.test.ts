@@ -40,7 +40,7 @@ describe('account-linked Customer PostgreSQL baseline', () => {
       matchesBaseline: true,
       missingExtensions: [],
       missingTables: [],
-      tables: 23,
+      tables: 24,
     });
   });
 
@@ -60,7 +60,7 @@ describe('account-linked Customer PostgreSQL baseline', () => {
     const env = { ...process.env, NODE_ENV: 'development', DATABASE_URL: url.toString() };
     try {
       await run(process.execPath, [entrypoint], { env });
-      expect(await verifyBaselineDatabase(isolated)).toMatchObject({ matchesBaseline: true, tables: 23 });
+      expect(await verifyBaselineDatabase(isolated)).toMatchObject({ matchesBaseline: true, tables: 24 });
       expect((await isolated.query("SELECT to_regclass('public.schema_versions') AS name")).rows[0].name).toBeNull();
       await isolated.query('CREATE TABLE rebuild_sentinel (id integer); INSERT INTO rebuild_sentinel VALUES (1)');
       await expect(run(process.execPath, [entrypoint], { env })).rejects.toMatchObject({
@@ -69,7 +69,7 @@ describe('account-linked Customer PostgreSQL baseline', () => {
       expect((await isolated.query('SELECT * FROM rebuild_sentinel')).rows).toEqual([{ id: 1 }]);
       await run(process.execPath, [entrypoint, '--allow-destructive'], { env });
       expect((await isolated.query("SELECT to_regclass('public.rebuild_sentinel') AS name")).rows[0].name).toBeNull();
-      expect(await verifyBaselineDatabase(isolated)).toMatchObject({ matchesBaseline: true, tables: 23 });
+      expect(await verifyBaselineDatabase(isolated)).toMatchObject({ matchesBaseline: true, tables: 24 });
     } finally {
       await isolated.end();
       await database.query('DROP DATABASE emukey_rebuild_cli_test');
@@ -122,7 +122,7 @@ describe('account-linked Customer PostgreSQL baseline', () => {
     expect(counts).toEqual({ users: 30, products: 50, plans: 30, licenses: 30, confirmed_events: 0 });
     const account = (await database.query("SELECT password_hash FROM users WHERE email='admin01@demo.emukey.local'")).rows[0];
     expect(await verify(account.password_hash, 'Emu@1234')).toBe(true);
-    expect(await verifyBaselineDatabase(database)).toMatchObject({ matchesBaseline: true, tables: 23 });
+    expect(await verifyBaselineDatabase(database)).toMatchObject({ matchesBaseline: true, tables: 24 });
   });
 
   it('recreates the final schema by default and removes old public objects without seeding', async () => {
@@ -133,9 +133,9 @@ describe('account-linked Customer PostgreSQL baseline', () => {
       await database.query(transactionBody(sql, 'schema.sql'));
       expect((await database.query("SELECT to_regclass('public.obsolete_table') AS name")).rows[0].name).toBeNull();
       expect((await database.query('SELECT count(*)::int AS total FROM users')).rows[0].total).toBe(0);
-      expect(await verifyBaselineDatabase(database)).toMatchObject({ matchesBaseline: true, tables: 23 });
+      expect(await verifyBaselineDatabase(database)).toMatchObject({ matchesBaseline: true, tables: 24 });
       await database.query(transactionBody(sql, 'schema.sql'));
-      expect(await verifyBaselineDatabase(database)).toMatchObject({ matchesBaseline: true, tables: 23 });
+      expect(await verifyBaselineDatabase(database)).toMatchObject({ matchesBaseline: true, tables: 24 });
     } finally { await database.query('ROLLBACK'); }
   });
 
@@ -146,7 +146,7 @@ describe('account-linked Customer PostgreSQL baseline', () => {
       await database.query('SAVEPOINT before_reset');
       await database.query(transactionBody(await readDatabaseSql(), 'schema.sql'));
       expect((await database.query('SELECT count(*)::int AS total FROM users')).rows[0].total).toBe(0);
-      expect(await verifyBaselineDatabase(database)).toMatchObject({ matchesBaseline: true, tables: 23 });
+      expect(await verifyBaselineDatabase(database)).toMatchObject({ matchesBaseline: true, tables: 24 });
       await database.query('ROLLBACK TO SAVEPOINT before_reset');
       expect((await database.query("SELECT count(*)::int AS total FROM users WHERE email='reset-check@example.test'")).rows[0].total).toBe(1);
     } finally { await database.query('ROLLBACK'); }
@@ -182,7 +182,7 @@ describe('account-linked Customer PostgreSQL baseline', () => {
       await fresh.query('COMMIT');
       expect((await fresh.query("SELECT to_regclass('public.old_data') AS name")).rows[0].name).toBeNull();
       expect((await fresh.query('SELECT count(*)::int AS total FROM products')).rows[0].total).toBe(50);
-      expect(await verifyBaselineDatabase(fresh)).toMatchObject({ matchesBaseline: true, tables: 23 });
+      expect(await verifyBaselineDatabase(fresh)).toMatchObject({ matchesBaseline: true, tables: 24 });
     } finally { await fresh.query('ROLLBACK'); await fresh.end(); }
   });
 
@@ -237,7 +237,7 @@ describe('account-linked Customer PostgreSQL baseline', () => {
       .toEqual([{ content: 'User-added message survives reseeding' }]);
   });
 
-  it('initializes without unused profile, AI metadata, or vector storage', async () => {
+  it('keeps unused fields absent and provisions the required catalog vector extension', async () => {
     const removed = await database.query(
       `SELECT table_name, column_name FROM information_schema.columns
        WHERE table_schema = 'public' AND (
@@ -248,7 +248,8 @@ describe('account-linked Customer PostgreSQL baseline', () => {
        )`,
     );
     expect(removed.rows).toEqual([]);
-    expect((await database.query("SELECT 1 FROM pg_extension WHERE extname = 'vector'")).rows).toEqual([]);
+    expect((await database.query("SELECT 1 FROM pg_extension WHERE extname = 'vector'")).rows).toHaveLength(1);
+    expect((await database.query("SELECT to_regclass('public.catalog_ai_embeddings') IS NOT NULL AS present")).rows[0].present).toBe(true);
   });
 
   it('requires normalized EVM provider addresses and keeps them unique', async () => {

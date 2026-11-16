@@ -1,4 +1,5 @@
 import type { CitationDetail } from '../application/ports/ai-gateway.port.js';
+import type { AdvisorAnswer, AiTurn } from '../application/ai-advisor.service.js';
 import { createHash } from 'node:crypto';
 import { Pool, type PoolClient } from 'pg';
 
@@ -36,6 +37,7 @@ function mapConversation(row: Record<string, unknown>): ConversationRecord {
 
 function mapMessage(row: Record<string, unknown>): MessageRecord {
   return {
+    ...(row.ai_metadata && typeof row.ai_metadata === 'object' ? { aiMetadata: row.ai_metadata, ...row.ai_metadata } : {}),
     citationDetails:Array.isArray(row.citation_details)?row.citation_details as CitationDetail[]:[],
     clientMessageId: String(row.client_message_id),
     content: String(row.content),
@@ -56,6 +58,20 @@ export class AssistanceSupportRepository {
     private readonly pool: Pool,
     private readonly notifications: NotificationWriter,
   ) {}
+
+  async aiContext(input: { conversationId: string; customerUserId: string }) {
+    const conversation = await this.findConversationForActor({ sub: input.customerUserId, role: 'CUSTOMER' }, input.conversationId);
+    if (!conversation) throw new Error('CONVERSATION_NOT_FOUND');
+    if (conversation.status !== 'AI_ACTIVE') throw new Error('CONVERSATION_STATE_INVALID');
+    const result = await this.pool.query<Record<string, unknown>>(`SELECT content, sender_type, ai_metadata FROM messages WHERE conversation_id=$1 AND sender_type IN ('CUSTOMER','AI') ORDER BY server_sequence DESC LIMIT 16`, [input.conversationId]);
+    const history: AiTurn[] = result.rows.reverse().map(row => ({ role: row.sender_type === 'AI' ? 'assistant' : 'user', content: String(row.content), catalogSources: (row.ai_metadata as Partial<AdvisorAnswer> | null)?.catalogSources ?? [] }));
+    return { history, ...(conversation.contextType === 'PRODUCT' && conversation.contextId ? { productIds: [conversation.contextId] } : {}), ...(conversation.contextType === 'PLAN' && conversation.contextId ? { planIds: [conversation.contextId] } : {}) };
+  }
+
+  async findAiAnswer(conversationId: string, clientMessageId: string) {
+    const result = await this.pool.query<Record<string, unknown>>(`SELECT * FROM messages WHERE conversation_id=$1 AND client_message_id=$2 AND sender_type='AI'`, [conversationId, clientMessageId]);
+    return result.rows[0] ? mapMessage(result.rows[0]) : undefined;
+  }
 
   async createConversation(customerUserId: string, input: { contextId?: string; contextType?: ConversationContextType; title?: string }) {
     const contextType = input.contextType ?? 'GENERAL';
@@ -146,6 +162,12 @@ export class AssistanceSupportRepository {
 
   async requestSupport(customerUserId: string, conversationId: string, reason: string) {
     return this.transaction(async (client) => {
+      const locked = await client.query<Record<string, unknown>>('SELECT * FROM conversations WHERE id=$1 AND customer_user_id=$2 FOR UPDATE', [conversationId, customerUserId]);
+      if (!locked.rows[0]) throw new Error('CONVERSATION_NOT_FOUND');
+      const current = mapConversation(locked.rows[0]);
+      // A lost response or concurrent duplicate must not create another handoff event.
+      if (current.status === 'WAITING_SUPPORT' || current.status === 'SUPPORT_ACTIVE') return current;
+      if (current.status !== 'AI_ACTIVE') throw new Error('CONVERSATION_STATE_INVALID');
       const result = await client.query<Record<string, unknown>>(
         `UPDATE conversations
          SET status = 'WAITING_SUPPORT', version = version + 1, updated_at = now()
@@ -335,19 +357,19 @@ export class AssistanceSupportRepository {
     });
   }
 
-  async appendAiMessage(input: { clientMessageId: string; conversationId: string; content: string; citedSourceIds: string[]; grounded: boolean;citationDetails?:CitationDetail[] }) {
+  async appendAiMessage(input: { clientMessageId: string; conversationId: string; content: string; citedSourceIds: string[]; grounded: boolean;citationDetails?:CitationDetail[]; aiMetadata?: Partial<AdvisorAnswer> }) {
     return this.transaction(async (client) => {
       const locked = await client.query<{ status: string }>('SELECT status FROM conversations WHERE id = $1 FOR UPDATE', [input.conversationId]);
       if (!locked.rows[0]) throw new Error('CONVERSATION_NOT_FOUND');
       if (locked.rows[0].status === 'CLOSED') throw new Error('CONVERSATION_CLOSED');
       if (locked.rows[0].status !== 'AI_ACTIVE') throw new Error('CONVERSATION_STATE_INVALID');
       const result = await client.query<Record<string, unknown>>(
-        `INSERT INTO messages (conversation_id, sender_type, client_message_id, server_sequence, content, grounded, sources, citation_details)
-         SELECT $1, 'AI', $2, COALESCE(MAX(server_sequence), 0) + 1, $3, $4, $5::jsonb, $6::jsonb
+        `INSERT INTO messages (conversation_id, sender_type, client_message_id, server_sequence, content, grounded, sources, citation_details, ai_metadata)
+         SELECT $1, 'AI', $2, COALESCE(MAX(server_sequence), 0) + 1, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb
          FROM messages WHERE conversation_id = $1
          ON CONFLICT (conversation_id, client_message_id) DO UPDATE SET content = messages.content
          RETURNING *`,
-        [input.conversationId, input.clientMessageId, input.content, input.grounded, JSON.stringify(input.citedSourceIds),JSON.stringify(input.citationDetails??[])],
+        [input.conversationId, input.clientMessageId, input.content, input.grounded, JSON.stringify(input.citedSourceIds),JSON.stringify(input.citationDetails??[]), JSON.stringify(input.aiMetadata ?? {})],
       );
       return mapMessage(result.rows[0]!);
     });

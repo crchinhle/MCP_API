@@ -4,11 +4,13 @@ import type { AuthPrincipal } from '../identity-access/identity.types.js';
 import type { AppendMessageDto, CreateConversationDto } from './assistance-support.dto.js';
 import type { AssistanceSupportRepository } from './infrastructure/assistance-support.repository.js';
 import type { AiAssistanceService } from './ai-assistance.service.js';
+import type { PublicAssistantService } from './application/public-assistant.service.js';
 
 export class AssistanceSupportService {
   constructor(
     private readonly repository: AssistanceSupportRepository,
     private readonly ai?: AiAssistanceService,
+    private readonly aiRequests?: PublicAssistantService,
   ) {}
 
   async createConversation(actor: AuthPrincipal, dto: CreateConversationDto) {
@@ -113,8 +115,12 @@ export class AssistanceSupportService {
     const conversation = await this.repository.findConversationForActor(actor, conversationId);
     if (!conversation) throw new NotFoundException({ code: 'CONVERSATION_NOT_FOUND' });
     if (!this.ai) throw new ConflictException({ code: 'AI_ADAPTER_UNAVAILABLE' });
+    if (conversation.status !== 'AI_ACTIVE') throw new ConflictException({ code: 'CONVERSATION_STATE_INVALID' });
     try {
-      return await this.ai.answer({ conversationId, customerUserId: actor.sub, question, clientMessageId });
+      const answer = () => this.ai!.answer({ conversationId, customerUserId: actor.sub, question, clientMessageId });
+      if (!this.aiRequests) return await answer();
+      await this.aiRequests.limit(`user:${actor.sub}`);
+      return await this.aiRequests.exclusive(`conversation:${conversationId}`, answer);
     } catch (error) {
       this.translate(error);
     }

@@ -1,17 +1,22 @@
 import { createHash } from 'node:crypto';
+import { ConflictException, ServiceUnavailableException } from '@nestjs/common';
 
 import type { AiGatewayPort, GroundingSource, CitationDetail } from './application/ports/ai-gateway.port.js';
+import type { AiAdvisorService, AdvisorAnswer, AiTurn } from './application/ai-advisor.service.js';
 
 export interface KnowledgeSearchPort {
+  context?(input: { conversationId: string; customerUserId: string }): Promise<{ history: AiTurn[]; productIds?: string[]; planIds?: string[] }>;
+  findAnswer?(conversationId: string, clientMessageId: string): Promise<({ content: string; sources?: string[]; grounded?: boolean; citationDetails?: CitationDetail[]; aiMetadata?: Partial<AdvisorAnswer> }) | undefined>;
   searchSources(input: { conversationId: string; customerUserId: string; question: string }): Promise<GroundingSource[]>;
   appendCustomerMessage(input: { clientMessageId: string; conversationId: string; customerUserId: string; content: string }): Promise<unknown>;
-  appendAiMessage(input: { clientMessageId: string; conversationId: string; content: string; citedSourceIds: string[]; grounded: boolean; citationDetails?:CitationDetail[] }): Promise<{ content: string; sources?: string[]; grounded?: boolean;citationDetails?:CitationDetail[] }>;
+  appendAiMessage(input: { clientMessageId: string; conversationId: string; content: string; citedSourceIds: string[]; grounded: boolean; citationDetails?:CitationDetail[]; aiMetadata?: Partial<AdvisorAnswer> }): Promise<{ content: string; sources?: string[]; grounded?: boolean;citationDetails?:CitationDetail[]; aiMetadata?: Partial<AdvisorAnswer> }>;
 }
 
 export class AiAssistanceService {
   constructor(
     private readonly gateway: AiGatewayPort,
     private readonly knowledge: KnowledgeSearchPort,
+    private readonly advisor?: AiAdvisorService,
   ) {}
 
   async answer(input: { conversationId: string; customerUserId: string; question: string; clientMessageId: string }) {
@@ -21,8 +26,19 @@ export class AiAssistanceService {
       customerUserId: input.customerUserId,
       content: input.question,
     });
-    const sources = await this.knowledge.searchSources(input);
     const clientMessageId = stableEventUuid(`${input.conversationId}:${input.clientMessageId}:answer`);
+    if (this.advisor) {
+      const previous = await this.knowledge.findAnswer?.(input.conversationId, clientMessageId);
+      if (previous) {
+        if (!await this.advisor.isCurrent({ ...previous.aiMetadata, grounded: previous.grounded ?? false, citationDetails: previous.citationDetails ?? [] }, input.question)) throw new ConflictException({ code: 'AI_SOURCES_CHANGED', message: 'Thông tin nguồn đã thay đổi. Vui lòng gửi câu hỏi mới để tra cứu lại.' });
+        return { ...previous.aiMetadata, answer: previous.content, grounded: previous.grounded ?? false, citedSourceIds: previous.sources ?? [], citationDetails: previous.citationDetails ?? [] };
+      }
+      const context = await this.knowledge.context?.(input);
+      const result = await this.advisor.answer({ question: input.question, ...context });
+      if (result.outcome === 'PROVIDER_UNAVAILABLE') throw new ServiceUnavailableException({ code: 'AI_PROVIDER_UNAVAILABLE', message: result.answer });
+      return this.persistAnswer({ clientMessageId, conversationId: input.conversationId, content: result.answer, citedSourceIds: result.citedSourceIds, grounded: result.grounded, citationDetails: result.citationDetails, aiMetadata: result });
+    }
+    const sources = await this.knowledge.searchSources(input);
     if (sources.length === 0) return this.persistRefusal(clientMessageId, input.conversationId);
     let result;
     try {
@@ -55,9 +71,9 @@ export class AiAssistanceService {
     const answer = 'Không đủ nguồn chính thức để trả lời câu hỏi này.';
     return this.persistAnswer({ clientMessageId, conversationId, content: answer, citedSourceIds: [], grounded: false });
   }
-  private async persistAnswer(input: { clientMessageId: string; conversationId: string; content: string; citedSourceIds: string[]; grounded: boolean;citationDetails?:CitationDetail[] }) {
+  private async persistAnswer(input: { clientMessageId: string; conversationId: string; content: string; citedSourceIds: string[]; grounded: boolean;citationDetails?:CitationDetail[]; aiMetadata?: Partial<AdvisorAnswer> }) {
     const stored = await this.knowledge.appendAiMessage(input);
-    return { answer: stored.content, citedSourceIds: stored.sources ?? [], grounded: stored.grounded ?? false,citationDetails:stored.citationDetails??[] };
+    return { ...stored.aiMetadata, answer: stored.content, citedSourceIds: stored.sources ?? [], grounded: stored.grounded ?? false,citationDetails:stored.citationDetails??[] };
   }
 }
 

@@ -1,5 +1,6 @@
 import type { Role } from '../identity-access/identity.types.js';
 import type { CitationDetail } from './application/ports/ai-gateway.port.js';
+import type { AdvisorAnswer } from './application/ai-advisor.service.js';
 
 export type ConversationStatus = 'AI_ACTIVE' | 'WAITING_SUPPORT' | 'SUPPORT_ACTIVE' | 'CLOSED';
 export type ConversationContextType = 'GENERAL' | 'PRODUCT' | 'PLAN' | 'ORDER' | 'LICENSE';
@@ -19,6 +20,7 @@ export interface ConversationRecord {
 }
 
 export interface MessageRecord {
+  aiMetadata?: Partial<AdvisorAnswer>;
   citationDetails?: CitationDetail[];
   clientMessageId: string;
   content: string;

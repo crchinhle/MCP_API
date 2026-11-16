@@ -49,6 +49,10 @@ export class AiAskDto {
   question!: string;
 }
 
+export class PublicAiAskDto extends AiAskDto {
+  @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() sessionId?: string;
+}
+
 export class RequestSupportDto {
   @ApiProperty({ minLength: 1, maxLength: 1_000 })
   @IsString()
@@ -57,6 +61,10 @@ export class RequestSupportDto {
 }
 
 export class AiAnswerDto {
+  @ApiPropertyOptional({ enum: ['PRODUCT_QA', 'USAGE_GUIDANCE', 'PRODUCT_RECOMMENDATION', 'FOLLOW_UP', 'SUPPORT_REQUIRED', 'OUT_OF_SCOPE'] }) intent?: string;
+  @ApiPropertyOptional({ enum: ['ANSWERED', 'CLARIFICATION', 'NO_SOURCES', 'OUT_OF_SCOPE', 'SUPPORT_REQUIRED', 'PROVIDER_UNAVAILABLE'] }) outcome?: string;
+  @ApiPropertyOptional({ type: () => CatalogSourceDto, isArray: true }) catalogSources?: CatalogSourceDto[];
+  @ApiPropertyOptional({ type: () => CatalogSourceDto, isArray: true }) recommendations?: CatalogSourceDto[];
   @ApiProperty({type:()=>CitationDetailDto,isArray:true}) citationDetails!: CitationDetailDto[];
   @ApiProperty()
   answer!: string;
@@ -66,6 +74,26 @@ export class AiAnswerDto {
 
   @ApiProperty()
   grounded!: boolean;
+}
+
+export class PublicAiAnswerDto extends AiAnswerDto {
+  @ApiProperty({ format: 'uuid' }) sessionId!: string;
+}
+
+export class CatalogSourceDto {
+  @ApiProperty() id!: string;
+  @ApiProperty({ enum: ['CATALOG'] }) kind!: 'CATALOG';
+  @ApiProperty() content!: string;
+  @ApiProperty({ format: 'uuid' }) productId!: string;
+  @ApiProperty() productCode!: string;
+  @ApiProperty() productName!: string;
+  @ApiProperty({ format: 'uuid' }) planId!: string;
+  @ApiProperty() planName!: string;
+  @ApiProperty() priceVnd!: number;
+  @ApiProperty() maxActiveDevices!: number;
+  @ApiProperty() durationMonths!: number;
+  @ApiProperty({ type: 'object', additionalProperties: true }) entitlements!: Record<string, unknown>;
+  @ApiPropertyOptional({ enum: ['VECTOR', 'LEXICAL'] }) retrievalMethod?: string;
 }
 
 export class ConversationDto {
@@ -94,6 +122,10 @@ export class ConversationDto {
 }
 
 export class MessageDto {
+  @ApiPropertyOptional() intent?: string;
+  @ApiPropertyOptional() outcome?: string;
+  @ApiPropertyOptional({ type: () => CatalogSourceDto, isArray: true }) catalogSources?: CatalogSourceDto[];
+  @ApiPropertyOptional({ type: () => CatalogSourceDto, isArray: true }) recommendations?: CatalogSourceDto[];
   @ApiProperty({type:()=>CitationDetailDto,isArray:true}) citationDetails!: CitationDetailDto[];
   @ApiProperty({ format: 'uuid' })
   id!: string;

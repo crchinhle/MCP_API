@@ -4101,4 +4101,81 @@ END;
 $emukey_seed$;
 -- emukey:seed:end
 
+-- emukey:ai-retrieval:begin
+-- Additive AI retrieval DDL. The index CLI extracts ONLY this marked section for upgrades.
+-- Requires the pgvector extension to be installed on the PostgreSQL server.
+CREATE EXTENSION IF NOT EXISTS vector;
+
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS ai_metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+-- Public fields only. The content and its hash share one canonical representation.
+CREATE OR REPLACE VIEW ai_public_catalog WITH (security_barrier = true) AS
+SELECT source.*, md5(source.content) AS content_hash
+FROM (
+  SELECT p.id AS product_id, p.code::text AS product_code, p.name AS product_name,
+    pl.id AS plan_id, pl.name AS plan_name, pl.price_vnd, pl.max_active_devices,
+    pl.duration_months, pl.entitlements,
+    jsonb_build_object(
+      'productId', p.id, 'productCode', p.code, 'productName', p.name,
+      'description', p.description, 'providerName', COALESCE(u.organization_name, u.display_name),
+      'planId', pl.id, 'planCode', pl.code, 'planName', pl.name, 'planVersion', pl.version,
+      'priceVnd', pl.price_vnd, 'maxActiveDevices', pl.max_active_devices,
+      'durationMonths', pl.duration_months, 'entitlements', pl.entitlements
+    )::text AS content
+  FROM products p JOIN plans pl ON pl.product_id = p.id
+  JOIN users u ON u.id = p.provider_user_id
+  WHERE p.status = 'PUBLISHED' AND pl.status = 'PUBLISHED'
+) source;
+
+CREATE TABLE IF NOT EXISTS catalog_ai_embeddings (
+  plan_id UUID NOT NULL REFERENCES plans(id) ON DELETE CASCADE,
+  model TEXT NOT NULL CHECK (length(model) BETWEEN 1 AND 200),
+  dimensions INTEGER NOT NULL CHECK (dimensions BETWEEN 1 AND 3072),
+  content_hash TEXT NOT NULL CHECK (content_hash ~ '^[0-9a-f]{32}$'),
+  embedding vector NOT NULL,
+  indexed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (plan_id, model, dimensions),
+  CHECK (vector_dims(embedding) = dimensions),
+  CHECK (vector_norm(embedding) > 0)
+);
+-- Exact cosine ranking is deliberate for the MVP catalog. Variable dimensions allow
+-- configured embedding spaces without silently coercing old model/dimension vectors.
+CREATE OR REPLACE VIEW ai_public_catalog_embeddings WITH (security_barrier = true) AS
+SELECT e.plan_id, e.model, e.dimensions, e.content_hash, e.embedding
+FROM catalog_ai_embeddings e JOIN ai_public_catalog d
+  ON d.plan_id = e.plan_id AND d.content_hash = e.content_hash;
+
+CREATE OR REPLACE VIEW ai_public_knowledge WITH (security_barrier = true) AS
+SELECT kc.id, kc.document_id, kd.title AS document_title, kd.version AS document_version,
+  kd.product_id, kd.plan_id, kc.chunk_index, kc.heading, kc.content
+FROM knowledge_chunks kc JOIN knowledge_documents kd ON kd.id = kc.document_id
+JOIN products p ON p.id = kd.product_id
+LEFT JOIN plans pl ON pl.id = kd.plan_id AND pl.product_id = p.id
+WHERE kd.status = 'READY' AND kd.is_current AND p.status = 'PUBLISHED'
+  AND (kd.plan_id IS NULL OR pl.status = 'PUBLISHED');
+
+DO $ai_reader$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'emukey_ai_reader') THEN
+    CREATE ROLE emukey_ai_reader NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE
+      NOINHERIT NOREPLICATION NOBYPASSRLS;
+  END IF;
+  -- Do not silently reuse a privileged role or one that inherits other roles.
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'emukey_ai_reader'
+    AND (rolcanlogin OR rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls))
+    OR EXISTS (SELECT 1 FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.member
+      WHERE r.rolname = 'emukey_ai_reader') THEN
+    RAISE EXCEPTION 'emukey_ai_reader must be an unprivileged NOLOGIN role without role memberships';
+  END IF;
+END;
+$ai_reader$;
+REVOKE ALL PRIVILEGES ON ALL TABLES IN SCHEMA public FROM emukey_ai_reader;
+REVOKE CREATE ON SCHEMA public FROM emukey_ai_reader;
+GRANT USAGE ON SCHEMA public TO emukey_ai_reader;
+GRANT SELECT ON ai_public_catalog, ai_public_catalog_embeddings, ai_public_knowledge TO emukey_ai_reader;
+-- Deployment owner explicitly GRANTs emukey_ai_reader TO the inference login.
+-- Inference uses SET LOCAL ROLE emukey_ai_reader inside BEGIN READ ONLY.
+-- No users/secrets/conversations/messages/base embedding table privileges are granted.
+-- emukey:ai-retrieval:end
+
 COMMIT;

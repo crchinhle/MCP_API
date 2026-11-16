@@ -17,6 +17,7 @@ export class FakeAiGateway implements AiGatewayPort {
       answer: `Câu trả lời giả lập cho: ${input.question}`,
       citedSourceIds: input.sources.map((source) => source.id),
       grounded: true,
+      evidence: input.sources.map(source => ({ sourceId: source.id, quote: source.content.slice(0, 4000) })),
     });
   }
 }

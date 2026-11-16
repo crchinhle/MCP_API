@@ -8,11 +8,12 @@ import { ORDER_TIMEOUT_QUEUE, OrderTimeoutProcessor } from './modules/commerce-p
 import { PlatformCoreModule } from './platform/platform-core.module.js';
 import { BlockchainModule } from './modules/blockchain/blockchain.module.js';
 import { BlockchainWorkerModule } from './modules/blockchain/blockchain-worker.module.js';
+import { AssistanceWorkerModule } from './modules/assistance-support/assistance-worker.module.js';
 
 const workerImports =
   process.env.NODE_ENV === 'test'
     ? [BlockchainModule]
-    : [BlockchainWorkerModule, CommerceModule, OperationsWorkerModule, LicensingWorkerModule, BullModule.registerQueue({ name: ORDER_TIMEOUT_QUEUE })];
+    : [BlockchainWorkerModule, CommerceModule, OperationsWorkerModule, LicensingWorkerModule, AssistanceWorkerModule, BullModule.registerQueue({ name: ORDER_TIMEOUT_QUEUE })];
 
 @Module({
   imports: [PlatformCoreModule, ...workerImports],

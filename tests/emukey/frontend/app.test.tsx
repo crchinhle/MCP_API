@@ -132,10 +132,10 @@ describe('Emukey public web screens', () => {
   });
   it('keeps the AI assistant launcher available across routes', async () => {
     render(<App initialEntries={['/verify']} />);
-    const launcher = screen.getByRole('button', { name: 'Mở chat chăm sóc khách hàng' });
+    const launcher = screen.getByRole('button', { name: 'Mở trợ lý AI' });
     expect(launcher.getAttribute('aria-expanded')).toBe('false');
     fireEvent.click(launcher);
-    expect(await screen.findByRole('region', { name: 'Trợ lý AI Emukey' })).toBeTruthy();
+    expect(await screen.findByRole('dialog', { name: 'Trợ lý AI EmuKey' })).toBeTruthy();
   });
 
   it('offers customer registration and navigates to the catalog', async () => {

@@ -107,3 +107,28 @@ Token kết nối là credential máy chủ nhà cung cấp chấp nhận; EmuKe
 Nhà cung cấp phải lưu receipt idempotent trước ACK. Thời hạn/quyền lợi được gửi bằng snapshot đầy đủ có revision tăng dần; ứng dụng của bên bán kiểm tra whitelist tại máy chủ của họ. EmuKey không cung cấp activation/entitlement cho license mới. Buyer nhận key sau ACK hiện hành và xác nhận đã lưu như trước.
 
 Đổi cấu hình đưa công việc đang chờ về lỗi cấu hình để xử lý; probe/bật cấu hình mới rồi gửi lại có lý do. Khi rollback, dừng checkout mới/worker và giữ dữ liệu outbox/ciphertext; không xóa dữ liệu hoặc coi key đã giao là chưa tồn tại.
+# AI Assistant: nâng cấp và vận hành
+
+Luồng Gemini hiểu câu hỏi theo ngữ nghĩa trước khi truy xuất: chuyển cách gọi tự nhiên, viết tắt/không dấu/lỗi gõ và câu tiếp nối thành intent, truy vấn tìm kiếm, điều kiện và tham chiếu có cấu trúc. Backend lấy ứng viên Catalog bằng tên đã đối chiếu hoặc embedding, rồi Gemini chọn nguồn liên quan trong danh sách ID được phép. Không buộc khách gõ đúng tên đầy đủ hoặc một mẫu câu. Khi cách gọi vẫn mơ hồ, trợ lý hỏi lại; lỗi provider được báo riêng. Giá/thiết bị/thời hạn/nhà cung cấp luôn dựng từ dữ liệu công bố, không lấy giá trị do mô hình tự tạo.
+
+AI dùng Catalog công khai và tài liệu Knowledge `READY`/hiện hành. Khách có phiên Redis hết hạn sau 30 phút; Customer dùng Conversation/Message hiện có. Việc chuyển nhân viên chỉ thực hiện khi người dùng bấm xác nhận. AI dừng khi hội thoại đã vào hàng đợi Support.
+
+Tại thư mục `backend`, dùng tài khoản bảo trì được phép cài extension `vector`, tạo view/table và role để chạy nâng cấp bổ sung, giữ nguyên dữ liệu hiện có:
+
+```powershell
+corepack pnpm build
+corepack pnpm ai:catalog:index --upgrade-only
+```
+
+SQL nâng cấp được lấy từ vùng `emukey:ai-retrieval` trong `database/schema.sql`; không chạy lại trình khởi tạo database cho mục đích nâng cấp AI. Cấp membership `emukey_ai_reader` cho login của `AI_RETRIEVAL_DATABASE_URL` (hoặc `DATABASE_URL` nếu dùng mặc định), ví dụ `GRANT emukey_ai_reader TO your_inference_login;`. Reader chỉ có quyền SELECT trên ba view công khai; adapter luôn mở transaction `READ ONLY` và `SET LOCAL ROLE`, tương thích transaction pooler. Một login riêng cho `AI_RETRIEVAL_DATABASE_URL` giúp tách credentials khỏi trusted conversation/indexing services.
+
+```powershell
+corepack pnpm ai:catalog:index
+corepack pnpm ai:catalog:index --status
+```
+
+Đặt `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_EMBEDDING_MODEL` (mặc định `gemini-embedding-001`) và `GEMINI_EMBEDDING_DIMENSIONS` (mặc định `768`) trong cấu hình runtime. Worker kiểm tra thay đổi mỗi phút; chỉ embed lại nội dung có hash thay đổi và thử lại ở lần kiểm tra tiếp theo khi provider lỗi. Truy vấn luôn đối chiếu publication/hash/model/dimensions hiện tại, có fallback lexical được ghi log rõ ràng. Sau khi đổi model hoặc dimensions, chạy backfill và kiểm tra `--status` trước khi dựa vào tìm kiếm ngữ nghĩa.
+
+API mới: `POST /api/v1/public/assistant/ask` nhận `question`, UUID `clientMessageId`, và `sessionId` do server cấp ở lượt trước. Endpoint Customer hiện có được mở rộng metadata `intent`, `outcome`, `catalogSources`, `recommendations`. Giá và card được dựng từ dữ liệu backend; hướng dẫn kỹ thuật chỉ trả đoạn trích đã xác minh, không tự thêm bước. Retry giữ nguyên intent nhưng sẽ trả `AI_SOURCES_CHANGED` nếu nguồn cũ không còn hợp lệ.
+
+Kiểm thử Gemini thật là opt-in qua `EMUKEY_TEST_REAL_EMBEDDINGS=1` và `EMUKEY_TEST_REAL_AI=1`; chỉ dùng dữ liệu kiểm thử trong container biệt lập. Kiểm thử giao diện dùng API mô phỏng được ghi nhãn riêng.

@@ -1,0 +1,211 @@
+﻿.emu-ai-panel {
+  position: fixed;
+  right: 24px;
+  bottom: 88px;
+  z-index: 1050;
+  width: min(400px, calc(100vw - 32px));
+  height: min(560px, calc(100dvh - 112px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--text, #162133);
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #dbe1e8);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgb(16 24 40 / 16%);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.emu-ai-panel * {
+  box-sizing: border-box;
+}
+.emu-ai-panel :is(button, a, textarea):focus-visible {
+  outline: 2px solid var(--primary, #176b5b);
+  outline-offset: 2px;
+}
+.emu-ai-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 12px;
+  border-bottom: 1px solid var(--border, #dbe1e8);
+  flex-shrink: 0;
+}
+.emu-ai-header > div {
+  flex: 1;
+  min-width: 0;
+}
+.emu-ai-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+}
+.emu-ai-header p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary, #525f70);
+}
+.emu-ai-header .ant-btn {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+}
+.emu-ai-messages {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px;
+  scroll-padding-block: 16px;
+}
+.emu-ai-welcome {
+  padding: 32px 8px;
+  text-align: center;
+  color: var(--text-secondary, #525f70);
+}
+.emu-ai-welcome > .anticon {
+  font-size: 28px;
+  color: var(--primary, #176b5b);
+}
+.emu-ai-welcome h3 {
+  font-size: 16px;
+  color: var(--text, #162133);
+}
+.emu-ai-message {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  overflow-wrap: anywhere;
+}
+.emu-ai-message-user {
+  align-items: flex-end;
+}
+.emu-ai-speaker {
+  font-size: 12px;
+  color: var(--text-secondary, #525f70);
+  margin-bottom: 4px;
+}
+.emu-ai-bubble {
+  padding: 12px;
+  max-width: 94%;
+  min-width: 0;
+  border-radius: 10px 10px 10px 2px;
+  background: var(--surface-hover, #f1f4f7);
+}
+.emu-ai-bubble > p {
+  white-space: pre-wrap;
+  margin: 0;
+}
+.emu-ai-message-user .emu-ai-bubble {
+  background: var(--primary, #176b5b);
+  color: var(--sidebar-text, #fff);
+  border-radius: 10px 10px 2px 10px;
+}
+.emu-ai-sources,
+.emu-ai-panel .knowledge-citations {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 12px;
+}
+.emu-ai-sources .ant-btn,
+.knowledge-citations .ant-btn {
+  max-width: 100%;
+  min-height: 44px;
+  height: auto;
+  padding-block: 8px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.emu-ai-working {
+  color: var(--text-secondary, #525f70);
+  font-size: 13px;
+}
+.emu-ai-footer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border, #dbe1e8);
+  padding: 12px;
+  max-height: 55%;
+  overflow-y: auto;
+}
+.emu-ai-composer label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.emu-ai-composer > div {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.emu-ai-composer textarea {
+  display: block;
+  min-width: 0;
+  flex: 1;
+  resize: none;
+  max-height: 120px;
+  padding: 10px;
+  border: 1px solid var(--border, #dbe1e8);
+  border-radius: 8px;
+  color: inherit;
+  background: var(--surface, #fff);
+  font: inherit;
+  font-size: 16px;
+}
+.emu-ai-composer textarea:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+.emu-ai-composer .ant-btn {
+  min-width: 44px;
+  height: 44px;
+}
+.emu-ai-composer small {
+  display: block;
+  margin-top: 8px;
+  color: var(--text-secondary, #525f70);
+  font-size: 12px;
+}
+.emu-ai-error,
+.emu-ai-handoff,
+.emu-ai-support {
+  margin-bottom: 12px;
+}
+.emu-ai-error {
+  color: var(--error, #b42318);
+}
+.emu-ai-error p,
+.emu-ai-handoff p {
+  margin: 0 0 8px;
+}
+.emu-ai-support > a,
+.emu-ai-handoff > a {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+}
+@media (max-width: 600px) {
+  .emu-ai-panel {
+    top: calc(var(--emu-ai-top, 0px) + 8px);
+    right: 8px;
+    bottom: auto;
+    width: calc(100vw - 16px);
+    height: calc(var(--emu-ai-viewport, 100dvh) - 16px);
+    max-height: calc(100dvh - 16px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .emu-ai-messages {
+    padding: 12px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .emu-ai-panel,
+  .emu-ai-panel * {
+    scroll-behavior: auto;
+    transition: none;
+  }
+}

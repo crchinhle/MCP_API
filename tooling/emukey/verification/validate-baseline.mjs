@@ -217,7 +217,7 @@ async function validate() {
 
   const schema = (await readFile(schemaPath, 'utf8')).replace(/\/\*[\s\S]*?\*\//g, '');
   const tables = [
-    ...schema.matchAll(/^\s*CREATE TABLE\s+([a-z_][a-z0-9_]*)/gim),
+    ...schema.matchAll(/^\s*CREATE TABLE\s+(?:IF NOT EXISTS\s+)?([a-z_][a-z0-9_]*)/gim),
   ].map((match) => match[1]);
   sameMembers(tables, matrix.currentTables ?? [], 'SQL table inventory');
   if (!matrix.cryptoVectorOwner) fail('crypto vector owner is missing');

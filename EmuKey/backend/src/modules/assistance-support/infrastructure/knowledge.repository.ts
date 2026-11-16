@@ -384,7 +384,7 @@ export class KnowledgeRepository {
     const limit = Math.min(50, Math.max(1, query.limit ?? 10));
     const offset = (page - 1) * limit;
 
-    const conditions: string[] = ["kd.status = 'READY'", 'kd.is_current = TRUE', "p.status = 'PUBLISHED'"];
+    const conditions: string[] = ["kd.status = 'READY'", 'kd.is_current = TRUE', "p.status = 'PUBLISHED'", "(kd.plan_id IS NULL OR EXISTS (SELECT 1 FROM plans visible_plan WHERE visible_plan.id=kd.plan_id AND visible_plan.product_id=kd.product_id AND visible_plan.status='PUBLISHED'))"];
     const values: unknown[] = [];
     let pIdx = 1;
 
@@ -429,7 +429,7 @@ export class KnowledgeRepository {
        LEFT JOIN plans pl ON pl.id = kd.plan_id
        WHERE ${whereClause}
        ORDER BY kd.updated_at DESC, kd.title ASC
-       LIMIT $${pIdx++} OFFSET $${pIdx++}`,
+       LIMIT $${pIdx} OFFSET $${pIdx + 1}`,
       [...values, limit, offset],
     );
 
@@ -437,10 +437,10 @@ export class KnowledgeRepository {
       id: String(row.id),
       productId: String(row.product_id),
       productName: String(row.product_name),
-      planId: row.plan_id ? String(row.plan_id) : undefined,
-      planName: row.plan_name ? String(row.plan_name) : undefined,
+      planId: typeof row.plan_id === 'string' ? row.plan_id : undefined,
+      planName: typeof row.plan_name === 'string' ? row.plan_name : undefined,
       title: String(row.title),
-      summary: row.summary ? String(row.summary) : undefined,
+      summary: typeof row.summary === 'string' ? row.summary : undefined,
       tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
       sourceType: String(row.source_type),
       updatedAt: row.updated_at ? new Date(row.updated_at as string).toISOString() : new Date().toISOString(),
@@ -452,6 +452,7 @@ export class KnowledgeRepository {
        FROM knowledge_documents kd
        JOIN products p ON p.id = kd.product_id
        WHERE kd.status = 'READY' AND kd.is_current = TRUE AND p.status = 'PUBLISHED'
+         AND (kd.plan_id IS NULL OR EXISTS (SELECT 1 FROM plans visible_plan WHERE visible_plan.id=kd.plan_id AND visible_plan.product_id=kd.product_id AND visible_plan.status='PUBLISHED'))
        ORDER BY tag ASC`,
     );
     const availableTags = tagsRes.rows.map((r) => r.tag).filter(Boolean);
@@ -462,6 +463,7 @@ export class KnowledgeRepository {
        FROM products p
        JOIN knowledge_documents kd ON kd.product_id = p.id
        WHERE kd.status = 'READY' AND kd.is_current = TRUE AND p.status = 'PUBLISHED'
+         AND (kd.plan_id IS NULL OR EXISTS (SELECT 1 FROM plans visible_plan WHERE visible_plan.id=kd.plan_id AND visible_plan.product_id=kd.product_id AND visible_plan.status='PUBLISHED'))
        ORDER BY p.name ASC`,
     );
     const products = productsRes.rows.map((r) => ({ id: String(r.id), name: String(r.name) }));
@@ -484,7 +486,8 @@ export class KnowledgeRepository {
        FROM knowledge_documents kd
        JOIN products p ON p.id = kd.product_id
        LEFT JOIN plans pl ON pl.id = kd.plan_id
-       WHERE kd.id = $1 AND kd.status = 'READY' AND kd.is_current = TRUE AND p.status = 'PUBLISHED'`,
+       WHERE kd.id = $1 AND kd.status = 'READY' AND kd.is_current = TRUE AND p.status = 'PUBLISHED'
+         AND (kd.plan_id IS NULL OR (pl.status='PUBLISHED' AND pl.product_id=kd.product_id))`,
       [id],
     );
 
@@ -519,6 +522,7 @@ export class KnowledgeRepository {
        FROM knowledge_documents kd
        JOIN products p ON p.id = kd.product_id
        WHERE kd.status = 'READY' AND kd.is_current = TRUE AND p.status = 'PUBLISHED'
+         AND (kd.plan_id IS NULL OR EXISTS (SELECT 1 FROM plans visible_plan WHERE visible_plan.id=kd.plan_id AND visible_plan.product_id=kd.product_id AND visible_plan.status='PUBLISHED'))
          AND kd.id <> $1
          AND (kd.product_id = $2 OR (cardinality(kd.tags) > 0 AND kd.tags && $3))
        ORDER BY (kd.product_id = $2) DESC, kd.updated_at DESC
@@ -537,10 +541,10 @@ export class KnowledgeRepository {
       id: String(row.id),
       productId: String(row.product_id),
       productName: String(row.product_name),
-      planId: row.plan_id ? String(row.plan_id) : undefined,
-      planName: row.plan_name ? String(row.plan_name) : undefined,
+      planId: typeof row.plan_id === 'string' ? row.plan_id : undefined,
+      planName: typeof row.plan_name === 'string' ? row.plan_name : undefined,
       title: String(row.title),
-      summary: row.summary ? String(row.summary) : undefined,
+      summary: typeof row.summary === 'string' ? row.summary : undefined,
       tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
       sourceType: String(row.source_type),
       updatedAt: row.updated_at ? new Date(row.updated_at as string).toISOString() : new Date().toISOString(),

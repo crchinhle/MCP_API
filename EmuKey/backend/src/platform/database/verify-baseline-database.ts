@@ -2,6 +2,7 @@ import type { Client, QueryResultRow } from 'pg';
 import { canonicalCatalogSql } from './database-cli.js';
 
 const EXPECTED_TABLES = [
+  'catalog_ai_embeddings',
   'chain_commands',
   'chain_events',
   'chain_indexer_checkpoints',
@@ -27,7 +28,7 @@ const EXPECTED_TABLES = [
   'users',
 ] as const;
 
-const EXPECTED_EXTENSIONS = ['citext', 'pgcrypto'] as const;
+const EXPECTED_EXTENSIONS = ['citext', 'pgcrypto', 'vector'] as const;
 
 const EXPECTED_CRITICAL_CONSTRAINTS = {
   ck_license_devices_ref:
@@ -93,6 +94,7 @@ const EXPECTED_CRITICAL_COLUMNS = {
   'license_key_deliveries.retry_until': { dataType: 'timestamp with time zone', expression: null, isGenerated: 'NEVER', isNullable: 'NO' },
   'payment_transactions.review_evidence': { dataType: 'jsonb', expression: null, isGenerated: 'NEVER', isNullable: 'NO' },
   'messages.citation_details': { dataType: 'jsonb', expression: null, isGenerated: 'NEVER', isNullable: 'NO' },
+  'messages.ai_metadata': { dataType: 'jsonb', expression: null, isGenerated: 'NEVER', isNullable: 'NO' },
   'conversations.claim_expires_at': { dataType: 'timestamp with time zone', expression: null, isGenerated: 'NEVER', isNullable: 'YES' },
   'conversations.claim_version': { dataType: 'bigint', expression: null, isGenerated: 'NEVER', isNullable: 'NO' },
   'license_devices.display_name': { dataType: 'character varying', expression: null, isGenerated: 'NEVER', isNullable: 'YES' },

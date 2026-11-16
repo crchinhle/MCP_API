@@ -58,6 +58,24 @@ export type AppendMessageDto = {
   content: string;
 };
 
+export type CatalogSourceDto = {
+  id: string;
+  kind: 'CATALOG';
+  content: string;
+  productId: string;
+  productCode: string;
+  productName: string;
+  planId: string;
+  planName: string;
+  priceVnd: number;
+  maxActiveDevices: number;
+  durationMonths: number;
+  entitlements: {
+    [key: string]: unknown;
+  };
+  retrievalMethod?: 'VECTOR' | 'LEXICAL';
+};
+
 export type CitationDetailDto = {
   chunkId: string;
   documentId: string;
@@ -68,6 +86,10 @@ export type CitationDetailDto = {
 };
 
 export type MessageDto = {
+  intent?: string;
+  outcome?: string;
+  catalogSources?: Array<CatalogSourceDto>;
+  recommendations?: Array<CatalogSourceDto>;
   citationDetails: Array<CitationDetailDto>;
   id: string;
   conversationId: string;
@@ -87,6 +109,22 @@ export type AiAskDto = {
 };
 
 export type AiAnswerDto = {
+  intent?:
+    | 'PRODUCT_QA'
+    | 'USAGE_GUIDANCE'
+    | 'PRODUCT_RECOMMENDATION'
+    | 'FOLLOW_UP'
+    | 'SUPPORT_REQUIRED'
+    | 'OUT_OF_SCOPE';
+  outcome?:
+    | 'ANSWERED'
+    | 'CLARIFICATION'
+    | 'NO_SOURCES'
+    | 'OUT_OF_SCOPE'
+    | 'SUPPORT_REQUIRED'
+    | 'PROVIDER_UNAVAILABLE';
+  catalogSources?: Array<CatalogSourceDto>;
+  recommendations?: Array<CatalogSourceDto>;
   citationDetails: Array<CitationDetailDto>;
   answer: string;
   citedSourceIds: Array<string>;
@@ -242,6 +280,36 @@ export type PublicKnowledgeDetailDto = {
   chunks: Array<KnowledgeChunkDetailDto>;
   content: string;
   relatedDocuments: Array<RelatedKnowledgeDocumentDto>;
+};
+
+export type PublicAiAskDto = {
+  clientMessageId: string;
+  question: string;
+  sessionId?: string;
+};
+
+export type PublicAiAnswerDto = {
+  intent?:
+    | 'PRODUCT_QA'
+    | 'USAGE_GUIDANCE'
+    | 'PRODUCT_RECOMMENDATION'
+    | 'FOLLOW_UP'
+    | 'SUPPORT_REQUIRED'
+    | 'OUT_OF_SCOPE';
+  outcome?:
+    | 'ANSWERED'
+    | 'CLARIFICATION'
+    | 'NO_SOURCES'
+    | 'OUT_OF_SCOPE'
+    | 'SUPPORT_REQUIRED'
+    | 'PROVIDER_UNAVAILABLE';
+  catalogSources?: Array<CatalogSourceDto>;
+  recommendations?: Array<CatalogSourceDto>;
+  citationDetails: Array<CitationDetailDto>;
+  answer: string;
+  citedSourceIds: Array<string>;
+  grounded: boolean;
+  sessionId: string;
 };
 
 export type InviteProviderDto = {
@@ -1498,6 +1566,20 @@ export type PublicKnowledgeControllerDetailResponses = {
 
 export type PublicKnowledgeControllerDetailResponse =
   PublicKnowledgeControllerDetailResponses[keyof PublicKnowledgeControllerDetailResponses];
+
+export type PublicAssistantControllerAskData = {
+  body: PublicAiAskDto;
+  path?: never;
+  query?: never;
+  url: '/api/v1/public/assistant/ask';
+};
+
+export type PublicAssistantControllerAskResponses = {
+  200: PublicAiAnswerDto;
+};
+
+export type PublicAssistantControllerAskResponse =
+  PublicAssistantControllerAskResponses[keyof PublicAssistantControllerAskResponses];
 
 export type IdentityControllerListProviderInvitationsData = {
   body?: never;

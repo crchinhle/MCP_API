@@ -37,6 +37,9 @@ export interface PlatformEnvironment {
   NODE_ENV: NodeEnvironment;
   PORT: number;
   DATABASE_URL: string;
+  AI_RETRIEVAL_DATABASE_URL?: string;
+  GEMINI_EMBEDDING_MODEL?: string;
+  GEMINI_EMBEDDING_DIMENSIONS?: number;
   REDIS_URL: string;
   CORS_ORIGINS: string[];
   LOG_LEVEL: LogLevel;
@@ -292,9 +295,13 @@ export function validateEnvironment(
       'BREVO_SENDER_NAME',
     );
   }
+  if (typeof environment.AI_RETRIEVAL_DATABASE_URL === 'string' && environment.AI_RETRIEVAL_DATABASE_URL.trim()) result.AI_RETRIEVAL_DATABASE_URL = environment.AI_RETRIEVAL_DATABASE_URL.trim();
   if (result.AI_ADAPTER === 'gemini') {
     result.GEMINI_API_KEY = requiredString(environment, 'GEMINI_API_KEY');
     result.GEMINI_MODEL = requiredString(environment, 'GEMINI_MODEL');
+    result.GEMINI_EMBEDDING_MODEL = typeof environment.GEMINI_EMBEDDING_MODEL === 'string' && environment.GEMINI_EMBEDDING_MODEL.trim() ? environment.GEMINI_EMBEDDING_MODEL.trim() : 'gemini-embedding-001';
+    result.GEMINI_EMBEDDING_DIMENSIONS = parsePositiveInteger(typeof environment.GEMINI_EMBEDDING_DIMENSIONS === 'string' ? environment.GEMINI_EMBEDDING_DIMENSIONS : '768', 'GEMINI_EMBEDDING_DIMENSIONS');
+    if (result.GEMINI_EMBEDDING_DIMENSIONS > 3072) throw new Error('GEMINI_EMBEDDING_DIMENSIONS must be at most 3072');
   }
   if (result.PUSH_ADAPTER === 'fcm') {
     result.FCM_PROJECT_ID = requiredString(environment, 'FCM_PROJECT_ID');

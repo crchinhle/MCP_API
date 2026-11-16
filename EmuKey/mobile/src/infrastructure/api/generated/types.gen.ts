@@ -58,6 +58,24 @@ export type AppendMessageDto = {
   content: string;
 };
 
+export type CatalogSourceDto = {
+  id: string;
+  kind: 'CATALOG';
+  content: string;
+  productId: string;
+  productCode: string;
+  productName: string;
+  planId: string;
+  planName: string;
+  priceVnd: number;
+  maxActiveDevices: number;
+  durationMonths: number;
+  entitlements: {
+    [key: string]: unknown;
+  };
+  retrievalMethod?: 'VECTOR' | 'LEXICAL';
+};
+
 export type CitationDetailDto = {
   chunkId: string;
   documentId: string;
@@ -68,6 +86,10 @@ export type CitationDetailDto = {
 };
 
 export type MessageDto = {
+  intent?: string;
+  outcome?: string;
+  catalogSources?: Array<CatalogSourceDto>;
+  recommendations?: Array<CatalogSourceDto>;
   citationDetails: Array<CitationDetailDto>;
   id: string;
   conversationId: string;
@@ -87,6 +109,22 @@ export type AiAskDto = {
 };
 
 export type AiAnswerDto = {
+  intent?:
+    | 'PRODUCT_QA'
+    | 'USAGE_GUIDANCE'
+    | 'PRODUCT_RECOMMENDATION'
+    | 'FOLLOW_UP'
+    | 'SUPPORT_REQUIRED'
+    | 'OUT_OF_SCOPE';
+  outcome?:
+    | 'ANSWERED'
+    | 'CLARIFICATION'
+    | 'NO_SOURCES'
+    | 'OUT_OF_SCOPE'
+    | 'SUPPORT_REQUIRED'
+    | 'PROVIDER_UNAVAILABLE';
+  catalogSources?: Array<CatalogSourceDto>;
+  recommendations?: Array<CatalogSourceDto>;
   citationDetails: Array<CitationDetailDto>;
   answer: string;
   citedSourceIds: Array<string>;
@@ -116,6 +154,7 @@ export type KnowledgeChunkDto = {
   documentVersion: number;
   chunkId: string;
   chunkIndex: number;
+  heading?: string;
   content: string;
 };
 
@@ -123,32 +162,58 @@ export type KnowledgeDocumentDto = {
   id: string;
   providerUserId?: string;
   productId?: string;
+  productName?: string;
+  planId?: string;
+  planName?: string;
   title: string;
+  summary?: string;
+  tags: Array<string>;
   logicalDocumentKey: string;
   version: number;
   status: string;
   isCurrent: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type CreateKnowledgeDocumentDto = {
   productId: string;
+  planId?: string;
   logicalDocumentKey: string;
   sourceType: 'FAQ' | 'PDF' | 'TXT';
   title: string;
+  summary?: string;
+  tags?: Array<string>;
   chunks?: Array<string>;
   version?: number;
+};
+
+export type KnowledgeChunkDetailDto = {
+  id: string;
+  chunkIndex: number;
+  heading?: string;
+  content: string;
 };
 
 export type KnowledgeDocumentDetailDto = {
   id: string;
   providerUserId?: string;
   productId?: string;
+  productName?: string;
+  planId?: string;
+  planName?: string;
   title: string;
+  summary?: string;
+  tags: Array<string>;
   logicalDocumentKey: string;
   version: number;
   status: string;
   isCurrent: boolean;
+  createdAt?: string;
+  updatedAt?: string;
   chunks: Array<string>;
+  chunkDetails?: Array<KnowledgeChunkDetailDto>;
+  content?: string;
 };
 
 export type PublishKnowledgeDocumentDto = {
@@ -165,6 +230,86 @@ export type KnowledgeQueryDto = {
 export type KnowledgeSourceDto = {
   id: string;
   content: string;
+};
+
+export type PublicKnowledgeItemDto = {
+  id: string;
+  productId: string;
+  productName: string;
+  planId?: string;
+  planName?: string;
+  title: string;
+  summary?: string;
+  tags: Array<string>;
+  sourceType: string;
+  updatedAt: string;
+};
+
+export type PublicKnowledgeProductFilterDto = {
+  id: string;
+  name: string;
+};
+
+export type PublicKnowledgeListResponseDto = {
+  items: Array<PublicKnowledgeItemDto>;
+  total: number;
+  page: number;
+  limit: number;
+  availableTags: Array<string>;
+  products: Array<PublicKnowledgeProductFilterDto>;
+};
+
+export type RelatedKnowledgeDocumentDto = {
+  id: string;
+  title: string;
+  productName: string;
+  tags: Array<string>;
+};
+
+export type PublicKnowledgeDetailDto = {
+  id: string;
+  productId: string;
+  productName: string;
+  planId?: string;
+  planName?: string;
+  title: string;
+  summary?: string;
+  tags: Array<string>;
+  sourceType: string;
+  updatedAt: string;
+  chunks: Array<KnowledgeChunkDetailDto>;
+  content: string;
+  relatedDocuments: Array<RelatedKnowledgeDocumentDto>;
+};
+
+export type PublicAiAskDto = {
+  clientMessageId: string;
+  question: string;
+  sessionId?: string;
+};
+
+export type PublicAiAnswerDto = {
+  intent?:
+    | 'PRODUCT_QA'
+    | 'USAGE_GUIDANCE'
+    | 'PRODUCT_RECOMMENDATION'
+    | 'FOLLOW_UP'
+    | 'SUPPORT_REQUIRED'
+    | 'OUT_OF_SCOPE';
+  outcome?:
+    | 'ANSWERED'
+    | 'CLARIFICATION'
+    | 'NO_SOURCES'
+    | 'OUT_OF_SCOPE'
+    | 'SUPPORT_REQUIRED'
+    | 'PROVIDER_UNAVAILABLE';
+  catalogSources?: Array<CatalogSourceDto>;
+  recommendations?: Array<CatalogSourceDto>;
+  citationDetails: Array<CitationDetailDto>;
+  answer: string;
+  citedSourceIds: Array<string>;
+  grounded: boolean;
+  sessionId: string;
 };
 
 export type InviteProviderDto = {
@@ -1385,6 +1530,56 @@ export type KnowledgeControllerQueryResponses = {
 
 export type KnowledgeControllerQueryResponse =
   KnowledgeControllerQueryResponses[keyof KnowledgeControllerQueryResponses];
+
+export type PublicKnowledgeControllerListData = {
+  body?: never;
+  path?: never;
+  query?: {
+    search?: string;
+    tag?: string;
+    productId?: string;
+    page?: number;
+    limit?: number;
+  };
+  url: '/api/v1/knowledge/public/documents';
+};
+
+export type PublicKnowledgeControllerListResponses = {
+  200: PublicKnowledgeListResponseDto;
+};
+
+export type PublicKnowledgeControllerListResponse =
+  PublicKnowledgeControllerListResponses[keyof PublicKnowledgeControllerListResponses];
+
+export type PublicKnowledgeControllerDetailData = {
+  body?: never;
+  path: {
+    id: string;
+  };
+  query?: never;
+  url: '/api/v1/knowledge/public/documents/{id}';
+};
+
+export type PublicKnowledgeControllerDetailResponses = {
+  200: PublicKnowledgeDetailDto;
+};
+
+export type PublicKnowledgeControllerDetailResponse =
+  PublicKnowledgeControllerDetailResponses[keyof PublicKnowledgeControllerDetailResponses];
+
+export type PublicAssistantControllerAskData = {
+  body: PublicAiAskDto;
+  path?: never;
+  query?: never;
+  url: '/api/v1/public/assistant/ask';
+};
+
+export type PublicAssistantControllerAskResponses = {
+  200: PublicAiAnswerDto;
+};
+
+export type PublicAssistantControllerAskResponse =
+  PublicAssistantControllerAskResponses[keyof PublicAssistantControllerAskResponses];
 
 export type IdentityControllerListProviderInvitationsData = {
   body?: never;

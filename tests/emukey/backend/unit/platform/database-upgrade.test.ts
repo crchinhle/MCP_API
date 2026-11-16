@@ -14,7 +14,8 @@ describe('fresh database initialization', () => {
     const sql = await readDatabaseSql();
     expect(sql).not.toContain('schema_versions');
     expect(sql).not.toContain('emukey:upgrade:');
-    expect(sql.match(/CREATE TABLE /g)).toHaveLength(23);
+    expect(sql.match(/CREATE TABLE /g)).toHaveLength(24);
+    expect(sql).toContain('CREATE TABLE IF NOT EXISTS catalog_ai_embeddings');
     expect(sql).toContain('DROP SCHEMA IF EXISTS public CASCADE');
   });
 });
