@@ -209,3 +209,4 @@
     transition: none;
   }
 }
+.emu-ai-system { color: var(--text-secondary); text-align: center; font-size: 13px; padding: 8px; }

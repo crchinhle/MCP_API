@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { requestJson } from '../auth/authContext';
+import { requestJson, useOptionalAuth } from '../auth/authContext';
 
 export interface NotificationRecord {
   readonly id: string;
@@ -63,8 +63,9 @@ export function mapNotificationRecord(source: NotificationApiRecord): Notificati
 }
 
 export function useNotifications() {
+  const user = useOptionalAuth()?.user;
   return useInfiniteQuery({
-    queryKey: ['notifications'],
+    queryKey: ['notifications', user?.id],
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam }) => {
       const params = new URLSearchParams();
@@ -73,7 +74,7 @@ export function useNotifications() {
       return { items: page.items.map(mapNotificationRecord), nextCursor: page.nextCursor, unreadCount: page.unreadCount };
     },
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
-    refetchInterval: 15_000,
+    refetchInterval: user?.role === 'SUPPORT_STAFF' ? 5_000 : 15_000,
     refetchIntervalInBackground: false,
   });
 }

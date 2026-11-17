@@ -29,7 +29,7 @@ const panelId = 'emukey-ai-assistant-panel';
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 type ChatMessage = Pick<
   MessageDto,
-  'id' | 'clientMessageId' | 'senderType' | 'content' | 'citationDetails'
+  'id' | 'clientMessageId' | 'senderType' | 'content' | 'citationDetails' | 'createdAt'
 > &
   Partial<AssistantMetadata>;
 type GuestSession = { sessionId?: string | undefined; messages: ChatMessage[] };
@@ -116,6 +116,7 @@ function CatalogSources({ sources }: { sources: CatalogSource[] }) {
 
 function MessageBubble({ message }: { message: ChatMessage }) {
   const ai = message.senderType === 'AI';
+  if (message.senderType === 'SYSTEM') return <article className="emu-ai-system"><small>Thông báo hệ thống</small><p>{message.content}</p>{message.createdAt ? <time dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time> : null}</article>;
   return (
     <article
       className={`emu-ai-message ${message.senderType === 'CUSTOMER' ? 'emu-ai-message-user' : ''}`}
@@ -129,6 +130,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
       </span>
       <div className="emu-ai-bubble">
         <p>{message.content}</p>
+        {message.createdAt ? <time dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time> : null}
         {ai ? (
           <>
             <CatalogSources

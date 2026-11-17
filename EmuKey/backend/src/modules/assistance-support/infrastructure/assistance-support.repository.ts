@@ -1,6 +1,6 @@
 import type { CitationDetail } from '../application/ports/ai-gateway.port.js';
 import type { AdvisorAnswer, AiTurn } from '../application/ai-advisor.service.js';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { Pool, type PoolClient } from 'pg';
 
 function stableEventUuid(value: string): string {
@@ -12,13 +12,13 @@ function stableEventUuid(value: string): string {
 
 import type { ConversationActor } from '../assistance-support.types.js';
 import type {
-  ConversationContextType,
   ConversationRecord,
   ConversationStatus,
   MessageRecord,
   MessageSenderType,
 } from '../assistance-support.types.js';
 import type { NotificationWriter } from '../../operations/application/notification-writer.js';
+import type { CreateConversationDto } from '../assistance-support.dto.js';
 
 function mapConversation(row: Record<string, unknown>): ConversationRecord {
   return {
@@ -73,28 +73,53 @@ export class AssistanceSupportRepository {
     return result.rows[0] ? mapMessage(result.rows[0]) : undefined;
   }
 
-  async createConversation(customerUserId: string, input: { contextId?: string; contextType?: ConversationContextType; title?: string }) {
+  async createConversation(customerUserId: string, input: CreateConversationDto) {
+    return this.transaction(async (client) => {
     const contextType = input.contextType ?? 'GENERAL';
+    const id = input.clientRequestId ? stableEventUuid(`conversation:create:${customerUserId}:${input.clientRequestId.toLowerCase()}`) : randomUUID();
+    // Serialize creation retries before the row exists. The primary key is the
+    // durable uniqueness boundary; the lock covers payload comparison as well.
+    // https://www.postgresql.org/docs/15/explicit-locking.html#ADVISORY-LOCKS
+    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [id]);
+    const previous = await client.query<Record<string, unknown>>('SELECT * FROM conversations WHERE id=$1', [id]);
+    const initialId = stableEventUuid(`${id}:initial-message`);
+    if (previous.rows[0]) {
+      const conversation = mapConversation(previous.rows[0]);
+      const initial = await client.query<{ content: string }>('SELECT content FROM messages WHERE conversation_id=$1 AND client_message_id=$2', [id, initialId]);
+      if (conversation.customerUserId !== customerUserId || conversation.title !== (input.title ?? null) ||
+          conversation.contextType !== contextType || conversation.contextId !== (input.contextId?.toLowerCase() ?? null) ||
+          (initial.rows[0]?.content ?? null) !== (input.mode === 'SUPPORT' ? input.initialMessage!.trim() : null)) {
+        throw new Error('CONVERSATION_CREATE_CONFLICT');
+      }
+      return conversation;
+    }
     if (contextType === 'ORDER') {
-      const owned = await this.pool.query('SELECT 1 FROM orders WHERE id = $1 AND customer_user_id = $2', [input.contextId, customerUserId]);
+      const owned = await client.query('SELECT 1 FROM orders WHERE id = $1 AND customer_user_id = $2', [input.contextId, customerUserId]);
       if (!owned.rows[0]) throw new Error('CONVERSATION_CONTEXT_NOT_FOUND');
     } else if (contextType === 'LICENSE') {
-      const owned = await this.pool.query('SELECT 1 FROM licenses WHERE id = $1 AND customer_user_id = $2', [input.contextId, customerUserId]);
+      const owned = await client.query('SELECT 1 FROM licenses WHERE id = $1 AND customer_user_id = $2', [input.contextId, customerUserId]);
       if (!owned.rows[0]) throw new Error('CONVERSATION_CONTEXT_NOT_FOUND');
     } else if (contextType === 'PLAN') {
-      const visible = await this.pool.query("SELECT 1 FROM plans p JOIN products pr ON pr.id = p.product_id WHERE p.id = $1 AND p.status = 'PUBLISHED' AND pr.status = 'PUBLISHED'", [input.contextId]);
+      const visible = await client.query("SELECT 1 FROM plans p JOIN products pr ON pr.id = p.product_id WHERE p.id = $1 AND p.status = 'PUBLISHED' AND pr.status = 'PUBLISHED'", [input.contextId]);
       if (!visible.rows[0]) throw new Error('CONVERSATION_CONTEXT_NOT_FOUND');
     } else if (contextType === 'PRODUCT') {
-      const visible = await this.pool.query("SELECT 1 FROM products WHERE id = $1 AND status = 'PUBLISHED'", [input.contextId]);
+      const visible = await client.query("SELECT 1 FROM products WHERE id = $1 AND status = 'PUBLISHED'", [input.contextId]);
       if (!visible.rows[0]) throw new Error('CONVERSATION_CONTEXT_NOT_FOUND');
     }
-    const result = await this.pool.query<Record<string, unknown>>(
-      `INSERT INTO conversations (customer_user_id, product_id, plan_id, order_id, license_id, title)
+    const result = await client.query<Record<string, unknown>>(
+      `INSERT INTO conversations (customer_user_id, product_id, plan_id, order_id, license_id, title, id, status)
        VALUES ($1, CASE WHEN $2='PRODUCT' THEN $3::uuid END, CASE WHEN $2='PLAN' THEN $3::uuid END,
-         CASE WHEN $2='ORDER' THEN $3::uuid END, CASE WHEN $2='LICENSE' THEN $3::uuid END, $4) RETURNING *`,
-      [customerUserId, contextType, input.contextId ?? null, input.title ?? null],
+         CASE WHEN $2='ORDER' THEN $3::uuid END, CASE WHEN $2='LICENSE' THEN $3::uuid END, $4, $5, $6) RETURNING *`,
+      [customerUserId, contextType, input.contextId ?? null, input.title ?? null, id, input.mode === 'SUPPORT' ? 'WAITING_SUPPORT' : 'AI_ACTIVE'],
     );
+    if (input.mode === 'SUPPORT') {
+      await client.query(`INSERT INTO messages (conversation_id,sender_user_id,sender_type,client_message_id,server_sequence,content)
+        VALUES ($1,$2,'CUSTOMER',$3,1,$4)`, [id, customerUserId, initialId, input.initialMessage!.trim()]);
+      await this.appendSystemMessageInTransaction(client, id, 'Yêu cầu đã được gửi. Đang chờ nhân viên hỗ trợ.', 'support-requested');
+      await this.notifyWaitingInTransaction(client, id, 1);
+    }
     return mapConversation(result.rows[0]!);
+    });
   }
 
   async listForActor(actor: ConversationActor) {
@@ -134,30 +159,36 @@ export class AssistanceSupportRepository {
   }
 
   async listMessages(actor: ConversationActor, conversationId: string) {
-    const conversation = await this.findConversationForActor(actor, conversationId);
-    if (!conversation) return null;
-    return this.listMessagesForConversation(conversationId);
+    return this.transaction(async client => {
+      const permitted = await client.query(`SELECT id FROM conversations WHERE id=$1 AND (
+        ($2='CUSTOMER' AND customer_user_id=$3) OR ($2='SUPPORT_STAFF' AND assigned_support_user_id=$3) OR $2='SYSTEM_ADMIN') FOR SHARE`, [conversationId, actor.role, actor.sub]);
+      if (!permitted.rows[0]) return null;
+      return this.listMessagesForConversation(client, conversationId);
+    });
   }
 
   async listQueuePreviewMessages(actor: ConversationActor, conversationId: string) {
     if (actor.role !== 'SUPPORT_STAFF' && actor.role !== 'SYSTEM_ADMIN') return null;
-    const result = await this.pool.query<Record<string, unknown>>(
+    return this.transaction(async client => {
+    const result = await client.query<Record<string, unknown>>(
       `SELECT * FROM conversations WHERE id = $1 AND (
          $2 = 'SYSTEM_ADMIN' OR
          (status = 'WAITING_SUPPORT' AND assigned_support_user_id IS NULL)
-       )`,
+       ) FOR SHARE`,
       [conversationId, actor.role],
     );
     if (!result.rows[0]) return null;
-    return this.listMessagesForConversation(conversationId);
+    return this.listMessagesForConversation(client, conversationId, true);
+    });
   }
 
-  private async listMessagesForConversation(conversationId: string) {
-    const result = await this.pool.query<Record<string, unknown>>(
-      `SELECT * FROM messages WHERE conversation_id = $1 ORDER BY server_sequence`,
+  private async listMessagesForConversation(client: PoolClient, conversationId: string, preview = false) {
+    const result = await client.query<Record<string, unknown>>(
+      preview ? `SELECT * FROM messages WHERE conversation_id=$1 ORDER BY server_sequence DESC LIMIT 20`
+        : `SELECT * FROM messages WHERE conversation_id = $1 ORDER BY server_sequence`,
       [conversationId],
     );
-    return result.rows.map(mapMessage);
+    return (preview ? result.rows.reverse() : result.rows).map(mapMessage);
   }
 
   async requestSupport(customerUserId: string, conversationId: string, reason: string) {
@@ -176,33 +207,18 @@ export class AssistanceSupportRepository {
         [conversationId, customerUserId],
       );
       if (!result.rows[0]) throw new Error('CONVERSATION_STATE_INVALID');
-      await this.appendSystemMessageInTransaction(client, conversationId, `Customer requested support: ${reason}`);
-      const supportUsers = await client.query<{ id: string }>(
-        `SELECT id FROM users WHERE role = 'SUPPORT_STAFF' AND status = 'ACTIVE'`,
-      );
-      for (const supportUser of supportUsers.rows) {
-        await this.notifications.enqueueInTransaction(client, {
-          channel: 'IN_APP',
-          content: 'Có một hội thoại mới đang chờ hỗ trợ.',
-          data: { conversationId },
-          eventKey: `conversation:${conversationId}:waiting-support`,
-          title: 'Hội thoại cần hỗ trợ',
-          type: 'SUPPORT_REQUESTED',
-          userId: supportUser.id,
-        });
-      }
+      await this.appendSystemMessageInTransaction(client, conversationId, `Yêu cầu nhân viên hỗ trợ: ${reason}`, 'support-requested');
+      await this.notifyWaitingInTransaction(client, conversationId, Number(result.rows[0].version));
       return mapConversation(result.rows[0]);
     });
   }
 
   async claimConversation(supportUserId: string, conversationId: string) {
     return this.transaction(async (client) => {
-      const locked = await client.query<Record<string, unknown>>(
-        'SELECT * FROM conversations WHERE id = $1 FOR UPDATE',
-        [conversationId],
-      );
+      const locked = await this.lockConversation(client, conversationId);
       const current = locked.rows[0] ? mapConversation(locked.rows[0]) : null;
       if (!current) throw new Error('CONVERSATION_NOT_FOUND');
+      if (current.status === 'SUPPORT_ACTIVE' && current.assignedSupportUserId === supportUserId && locked.rows[0]?.claim_valid === true) return current;
       if (current.status !== 'WAITING_SUPPORT') {
         throw new Error('CONVERSATION_ALREADY_CLAIMED');
       }
@@ -215,7 +231,7 @@ export class AssistanceSupportRepository {
         [conversationId, supportUserId],
       );
       const conversation = mapConversation(result.rows[0]!);
-      await this.appendSystemMessageInTransaction(client, conversationId, `Support agent ${supportUserId} claimed this conversation`, `claimed:${conversation.claimVersion}`);
+      await this.appendSystemMessageInTransaction(client, conversationId, 'Nhân viên hỗ trợ đã tiếp nhận hội thoại.', `claimed:${conversation.claimVersion}`);
       await this.notifications.enqueueInTransaction(client, {
         channel: 'IN_APP',
         content: 'Hội thoại của bạn đã được nhân viên hỗ trợ tiếp nhận.',
@@ -243,10 +259,13 @@ export class AssistanceSupportRepository {
 
   async requeueExpiredClaims(): Promise<number> {
     return this.transaction(async (client) => {
-      const result=await client.query<{id:string;claim_version:string}>(`UPDATE conversations SET assigned_support_user_id=NULL,
+      const result=await client.query<{id:string;claim_version:string;version:number}>(`UPDATE conversations SET assigned_support_user_id=NULL,
         claimed_at=NULL,claim_expires_at=NULL,status='WAITING_SUPPORT',version=version+1,updated_at=statement_timestamp()
-        WHERE status='SUPPORT_ACTIVE' AND (claim_expires_at IS NULL OR claim_expires_at<=statement_timestamp()) RETURNING id,claim_version`);
-      for (const row of result.rows) await this.appendSystemMessageInTransaction(client,row.id,'Support session expired; returned to the shared queue.',`expired:${row.claim_version}`);
+        WHERE status='SUPPORT_ACTIVE' AND (claim_expires_at IS NULL OR claim_expires_at<=statement_timestamp()) RETURNING id,claim_version,version`);
+      for (const row of result.rows) {
+        await this.appendSystemMessageInTransaction(client,row.id,'Phiên hỗ trợ đã hết hạn. Hội thoại được trả về hàng đợi.',`expired:${row.claim_version}`);
+        await this.notifyWaitingInTransaction(client, row.id, row.version);
+      }
       return result.rows.length;
     });
   }
@@ -274,20 +293,23 @@ export class AssistanceSupportRepository {
         [conversationId, supportUserId],
       );
       if (!result.rows[0]) throw new Error('CONVERSATION_STATE_INVALID');
-      await this.appendSystemMessageInTransaction(client, conversationId, `Support agent ${supportUserId} released this conversation back to the queue`, releaseEvent);
+      await this.appendSystemMessageInTransaction(client, conversationId, 'Hội thoại được trả về hàng đợi. Đang chờ nhân viên tiếp tục hỗ trợ.', releaseEvent);
+      await this.notifyWaitingInTransaction(client, conversationId, Number(result.rows[0].version));
       return mapConversation(result.rows[0]);
     });
   }
 
   async closeConversation(actor: ConversationActor, conversationId: string, claimVersion?: number) {
     return this.transaction(async (client) => {
-      const locked = await client.query<Record<string, unknown>>(`SELECT * FROM conversations
-        WHERE id=$1 AND (($2='CUSTOMER' AND customer_user_id=$3) OR $2='SYSTEM_ADMIN'
-          OR ($2='SUPPORT_STAFF' AND assigned_support_user_id=$3 AND claim_version=$4
-            AND (status='CLOSED' OR claim_expires_at>statement_timestamp()))) FOR UPDATE`,
-        [conversationId,actor.role,actor.sub,claimVersion ?? null]);
+      const locked = await this.lockConversation(client, conversationId);
       if (!locked.rows[0]) throw new Error('CONVERSATION_CLOSE_NOT_ALLOWED');
+      const current = mapConversation(locked.rows[0]);
+      if (!(actor.role === 'CUSTOMER' && current.customerUserId === actor.sub) && actor.role !== 'SYSTEM_ADMIN' &&
+          !(actor.role === 'SUPPORT_STAFF' && current.assignedSupportUserId === actor.sub && current.claimVersion === claimVersion)) {
+        throw new Error('CONVERSATION_CLOSE_NOT_ALLOWED');
+      }
       if (locked.rows[0].status === 'CLOSED') return mapConversation(locked.rows[0]);
+      if (actor.role === 'SUPPORT_STAFF' && locked.rows[0].claim_valid !== true) throw new Error('CONVERSATION_CLAIM_EXPIRED');
       const result = await client.query<Record<string, unknown>>(
         `UPDATE conversations SET status = 'CLOSED', closed_at = now(), version = version + 1, updated_at = now()
          WHERE id = $1 AND status <> 'CLOSED' AND (
@@ -298,6 +320,7 @@ export class AssistanceSupportRepository {
         [conversationId, actor.role, actor.sub, claimVersion ?? null],
       );
       if (!result.rows[0]) throw new Error('CONVERSATION_CLOSE_NOT_ALLOWED');
+      await this.appendSystemMessageInTransaction(client, conversationId, 'Hội thoại đã hoàn tất. Bạn có thể tạo yêu cầu hỗ trợ mới.', 'closed');
       return mapConversation(result.rows[0]);
     });
   }
@@ -318,9 +341,7 @@ export class AssistanceSupportRepository {
       if (input.senderType === 'CUSTOMER' && conversation.customerUserId !== input.actorUserId) throw new Error('CONVERSATION_ACCESS_DENIED');
       if (input.senderType === 'SUPPORT' && conversation.assignedSupportUserId !== input.actorUserId) throw new Error('CONVERSATION_ACCESS_DENIED');
       if (input.senderType==='SUPPORT' && (conversation.claimVersion!==input.claimVersion || locked.rows[0]?.claim_valid !== true)) throw new Error('CONVERSATION_CLAIM_EXPIRED');
-      if (input.senderType === 'CUSTOMER' && conversation.status === 'AI_ACTIVE') {
-        await this.appendSystemMessageInTransaction(client, input.conversationId, 'Customer sent a message in AI conversation — escalated to support queue');
-      }
+      if (conversation.status === 'AI_ACTIVE') throw new Error('CONVERSATION_STATE_INVALID');
 
       const existing = await client.query<Record<string, unknown>>(
         `SELECT * FROM messages WHERE conversation_id = $1 AND client_message_id = $2`,
@@ -346,13 +367,17 @@ export class AssistanceSupportRepository {
       );
       await client.query(
         `UPDATE conversations SET last_message_at = now(), updated_at = now(),
-          status = CASE WHEN $2 = 'CUSTOMER' AND status = 'AI_ACTIVE' THEN 'WAITING_SUPPORT' ELSE status END,
           version = version + 1 WHERE id = $1`,
-        [input.conversationId, input.senderType],
+        [input.conversationId],
       );
       if (input.senderType==='SUPPORT') await this.notifications.enqueueInTransaction(client,{channel:'IN_APP',
         type:'SUPPORT_REPLY',title:'Nhân viên hỗ trợ đã phản hồi',content:'Mở hội thoại để xem phản hồi.',
         userId:conversation.customerUserId,eventKey:`support-reply:${String(inserted.rows[0]!.id)}:${conversation.customerUserId}`,data:{conversationId:input.conversationId}});
+      if (input.senderType === 'CUSTOMER' && conversation.status === 'SUPPORT_ACTIVE' && conversation.assignedSupportUserId && locked.rows[0]?.claim_valid === true) {
+        await this.notifications.enqueueInTransaction(client, { channel: 'IN_APP', type: 'SUPPORT_MESSAGE', title: 'Khách hàng gửi tin nhắn mới',
+          content: 'Mở hội thoại để xem nội dung.', userId: conversation.assignedSupportUserId,
+          eventKey: `customer-message:${String(inserted.rows[0]!.id)}`, data: { conversationId: input.conversationId } });
+      }
       return mapMessage(inserted.rows[0]!);
     });
   }
@@ -424,6 +449,15 @@ export class AssistanceSupportRepository {
     // the locking SELECT can precede a long lock wait and revive an expired claim.
     return client.query<Record<string, unknown>>(
       'SELECT *, claim_expires_at>clock_timestamp() AS claim_valid FROM conversations WHERE id=$1', [conversationId]);
+  }
+
+  private async notifyWaitingInTransaction(client: PoolClient, conversationId: string, version: number) {
+    const users = await client.query<{ id: string }>("SELECT id FROM users WHERE role='SUPPORT_STAFF' AND status='ACTIVE'");
+    for (const user of users.rows) await this.notifications.enqueueInTransaction(client, {
+      channel: 'IN_APP', type: 'SUPPORT_REQUESTED', title: 'Hội thoại cần hỗ trợ',
+      content: 'Có một hội thoại đang chờ hỗ trợ.', data: { conversationId },
+      eventKey: `conversation:${conversationId}:waiting-support:${version}`, userId: user.id,
+    });
   }
 
   private async appendSystemMessageInTransaction(client: PoolClient, conversationId: string, content: string, eventKey = content): Promise<void> {

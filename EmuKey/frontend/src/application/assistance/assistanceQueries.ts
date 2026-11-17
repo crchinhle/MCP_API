@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { requestJson } from '../auth/authContext';
+import { requestJson, useOptionalAuth } from '../auth/authContext';
 import type {
   AiAnswerDto,
   CatalogSourceDto,
@@ -26,6 +26,7 @@ export interface ConversationDto {
 }
 
 export interface MessageDto extends Partial<AssistantMetadata> {
+  createdAt?: string;
   citationDetails?: CitationDetailDto[];
   id: string;
   conversationId: string;
@@ -57,18 +58,25 @@ export const conversationContextLabels: Record<
 };
 
 export function useConversations() {
+  const account = useOptionalAuth()?.user?.id;
   return useQuery({
-    queryKey: ['assistance', 'conversations'],
+    queryKey: ['assistance', 'conversations', account],
     queryFn: () => requestJson<ConversationDto[]>('/conversations'),
-    refetchInterval: 5_000,
+    refetchInterval: 2_000,
+    refetchOnWindowFocus: 'always',
+    refetchOnReconnect: 'always',
     refetchIntervalInBackground: false,
   });
 }
 
 export function useCreateConversation() {
+  const account = useOptionalAuth()?.user?.id;
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: {
+      mode?: 'AI' | 'SUPPORT';
+      initialMessage?: string;
+      clientRequestId?: string;
       title?: string;
       contextType?: ConversationDto['contextType'];
       contextId?: string;
@@ -79,7 +87,7 @@ export function useCreateConversation() {
       }),
     onSuccess: (created) => {
       queryClient.setQueryData<ConversationDto[]>(
-        ['assistance', 'conversations'],
+        ['assistance', 'conversations', account],
         (current = []) => [
           ...current.filter((item) => item.id !== created.id),
           created,
@@ -93,27 +101,33 @@ export function useCreateConversation() {
 }
 
 export function useConversation(conversationId: string | undefined) {
+  const account = useOptionalAuth()?.user?.id;
   return useQuery({
     enabled: Boolean(conversationId),
-    queryKey: ['assistance', 'conversation', conversationId],
+    queryKey: ['assistance', 'conversation', conversationId, account],
     queryFn: () =>
       requestJson<ConversationDto>(
         `/conversations/${encodeURIComponent(conversationId!)}`,
       ),
-    refetchInterval: 5_000,
+    refetchInterval: 2_000,
+    refetchOnWindowFocus: 'always',
+    refetchOnReconnect: 'always',
     refetchIntervalInBackground: false,
   });
 }
 
 export function useConversationMessages(conversationId: string | undefined) {
+  const account = useOptionalAuth()?.user?.id;
   return useQuery({
     enabled: Boolean(conversationId),
-    queryKey: ['assistance', 'messages', conversationId],
+    queryKey: ['assistance', 'messages', conversationId, account],
     queryFn: () =>
       requestJson<MessageDto[]>(
         `/conversations/${encodeURIComponent(conversationId!)}/messages`,
       ),
-    refetchInterval: 5_000,
+    refetchInterval: 2_000,
+    refetchOnWindowFocus: 'always',
+    refetchOnReconnect: 'always',
     refetchIntervalInBackground: false,
   });
 }

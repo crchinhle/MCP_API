@@ -89,9 +89,9 @@ describe('completed API-backed flows', () => {
 
   it('asks the conversation AI instead of displaying search chunks', async () => {
     render(<App initialEntries={['/buyer/licenses']} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Mở chat chăm sóc khách hàng' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Mở trợ lý AI' }));
     fireEvent.change(await screen.findByLabelText('Câu hỏi cho trợ lý AI'), { target: { value: 'Gói nào phù hợp?' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Hỏi' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi câu hỏi' }));
     expect(await screen.findByText('Không đủ nguồn chính thức để trả lời câu hỏi này.')).toBeTruthy();
   });
 

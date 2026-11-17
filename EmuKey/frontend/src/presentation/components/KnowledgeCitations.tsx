@@ -17,12 +17,15 @@ export function KnowledgeCitations({
             ) === index,
         )
         .map((citation) => (
-          <Button
-            key={citation.documentId}
-            href={`/help/${encodeURIComponent(citation.documentId)}`}
-          >
-            Xem nguồn: {citation.documentTitle}
-          </Button>
+          <div key={citation.documentId}>
+            <Button href={`/help/${encodeURIComponent(citation.documentId)}`}>
+              Xem nguồn: {citation.documentTitle}
+            </Button>
+            <details>
+              <summary>Trích dẫn · phiên bản {citation.documentVersion}</summary>
+              <p>{citation.excerpt}</p>
+            </details>
+          </div>
         ))}
     </section>
   );

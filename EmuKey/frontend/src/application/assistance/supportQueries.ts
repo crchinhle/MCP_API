@@ -1,12 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { requestJson } from '../auth/authContext';
+import { requestJson, useOptionalAuth } from '../auth/authContext';
 import type { ConversationDto, MessageDto } from './assistanceQueries';
 
 export function useSupportQueue(resolved = false) {
+  const account = useOptionalAuth()?.user?.id;
   return useQuery({
-    queryKey: ['assistance', 'support-queue', resolved],
+    queryKey: ['assistance', 'support-queue', resolved, account],
     queryFn: () => requestJson<ConversationDto[]>(resolved ? '/conversations' : '/conversations/queue'),
-    refetchInterval: 10_000,
+    refetchInterval: 3_000,
+    refetchOnWindowFocus: 'always',
+    refetchOnReconnect: 'always',
     refetchIntervalInBackground: false,
   });
 }
@@ -19,6 +22,7 @@ export function useRequestSupport() {
       void queryClient.invalidateQueries({ queryKey: ['assistance', 'conversations'] });
       void queryClient.invalidateQueries({ queryKey: ['assistance', 'support-queue'] });
       void queryClient.invalidateQueries({ queryKey: ['assistance', 'conversation', input.conversationId] });
+      void queryClient.invalidateQueries({ queryKey: ['assistance', 'messages', input.conversationId] });
     },
   });
 }
@@ -35,11 +39,14 @@ export function useClaimConversation() {
 }
 
 export function useSupportConversationMessages(conversationId: string | undefined, preview = false) {
+  const account = useOptionalAuth()?.user?.id;
   return useQuery({
     enabled: Boolean(conversationId),
-    queryKey: ['assistance', preview ? 'queue-preview' : 'messages', conversationId],
+    queryKey: ['assistance', preview ? 'queue-preview' : 'messages', conversationId, account],
     queryFn: () => requestJson<MessageDto[]>(`/conversations/${encodeURIComponent(conversationId!)}/messages${preview ? '/queue-preview' : ''}`),
-    refetchInterval: 5_000,
+    refetchInterval: 2_000,
+    refetchOnWindowFocus: 'always',
+    refetchOnReconnect: 'always',
     refetchIntervalInBackground: false,
   });
 }
@@ -51,6 +58,7 @@ export function useReleaseSupportConversation() {
       requestJson<ConversationDto>(`/conversations/${encodeURIComponent(conversationId)}/release`, { method: 'POST', body: JSON.stringify({ claimVersion }) }),
     onError: () => { void queryClient.invalidateQueries({ queryKey: ['assistance', 'support-queue'] }); },
     onSuccess: (_conversation, { conversationId }) => {
+      void queryClient.invalidateQueries({ queryKey: ['assistance', 'conversations'] });
       void queryClient.invalidateQueries({ queryKey: ['assistance', 'support-queue'] });
       void queryClient.invalidateQueries({ queryKey: ['assistance', 'messages', conversationId] });
       void queryClient.invalidateQueries({ queryKey: ['assistance', 'queue-preview', conversationId] });
@@ -81,6 +89,7 @@ export function useCloseSupportConversation() {
       requestJson<ConversationDto>(`/conversations/${conversationId}/close`, { method: 'POST', body: JSON.stringify({ claimVersion }) }),
     onError: () => { void queryClient.invalidateQueries({ queryKey: ['assistance', 'support-queue'] }); },
     onSuccess: (_conversation, { conversationId }) => {
+      void queryClient.invalidateQueries({ queryKey: ['assistance', 'conversations'] });
       void queryClient.invalidateQueries({ queryKey: ['assistance', 'support-queue'] });
       void queryClient.invalidateQueries({ queryKey: ['assistance', 'messages', conversationId] });
     },

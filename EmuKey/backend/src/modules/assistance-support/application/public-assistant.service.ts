@@ -114,15 +114,15 @@ export class PublicAssistantService {
     }
   }
 
-  async limit(scope: string, maximum = 15) {
+  async limit(scope: string, maximum = 15, code = 'AI_RATE_LIMITED') {
     const key = `ai:rate:${scope}:${Math.floor(Date.now() / 60000)}`;
     const count = await this.redis.incr(key);
     if (count === 1) await this.redis.expire(key, 120);
     if (count > maximum)
       throw new HttpException(
         {
-          code: 'AI_RATE_LIMITED',
-          message: 'Bạn gửi câu hỏi quá nhanh. Vui lòng thử lại sau ít phút.',
+          code,
+          message: code === 'AI_RATE_LIMITED' ? 'Bạn gửi câu hỏi quá nhanh. Vui lòng thử lại sau ít phút.' : 'Bạn gửi yêu cầu quá nhanh. Vui lòng thử lại sau ít phút.',
         },
         429,
       );

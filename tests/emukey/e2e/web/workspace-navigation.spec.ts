@@ -4,7 +4,6 @@ test('keeps the AI conversation and source snapshot across reload and human esca
   const id = '00000000-0000-4000-8000-000000000707';
   let created = 0;
   let asked = 0;
-  let sourceAvailable = true;
   let status = 'AI_ACTIVE';
   const history: Record<string, unknown>[] = [];
   const citation = { chunkId: 'original-chunk', documentId: 'original-document', documentTitle: 'Hướng dẫn thiết bị', documentVersion: 1, excerpt: 'Đoạn trích của phiên bản gốc.' };
@@ -16,52 +15,47 @@ test('keeps the AI conversation and source snapshot across reload and human esca
     if (path.endsWith('/notifications')) return route.fulfill({ json: { items: [], unreadCount: 0, nextCursor: null } });
     if (path.endsWith('/conversations') && method === 'POST') { created += 1; return route.fulfill({ status: 201, json: conversation() }); }
     if (path.endsWith('/conversations')) return route.fulfill({ json: created ? [conversation()] : [] });
+    if (path.endsWith(`/conversations/${id}`)) return route.fulfill({ json: conversation() });
     if (path.endsWith('/ai-ask')) {
       asked += 1;
       if (status !== 'AI_ACTIVE') return route.fulfill({ status: 409, json: { error: { code: 'CONVERSATION_AI_NOT_ACTIVE' } } });
       const input = route.request().postDataJSON();
       history.push({ id: 'question', conversationId: id, clientMessageId: input.clientMessageId, serverSequence: 1, senderType: 'CUSTOMER', content: input.question },
         { id: 'answer', conversationId: id, clientMessageId: 'answer-id', serverSequence: 2, senderType: 'AI', content: 'Câu trả lời dựa trên tài liệu gốc.', citationDetails: [citation] });
-      return route.fulfill({ json: { answer: 'Câu trả lời dựa trên tài liệu gốc.', citations: [citation.chunkId], citationDetails: [citation], confidence: 0.9 } });
+      return route.fulfill({ json: { answer: 'Câu trả lời dựa trên tài liệu gốc.', citedSourceIds: [citation.chunkId], citationDetails: [citation], grounded: true, intent: 'USAGE_GUIDANCE', outcome: 'ANSWERED', catalogSources: [], recommendations: [] } });
     }
     if (path.endsWith('/messages')) return route.fulfill({ json: history });
     if (path.endsWith('/request-support')) { status = 'WAITING_SUPPORT'; return route.fulfill({ json: conversation() }); }
-    if (path.endsWith('/knowledge/documents/original-document/chunks/original-chunk')) return route.fulfill(sourceAvailable
-      ? { json: { id: citation.chunkId, content: 'Toàn văn nguồn của phiên bản gốc.' } }
-      : { status: 404, json: { error: { code: 'KNOWLEDGE_DOCUMENT_NOT_FOUND' } } });
     return route.fulfill({ json: [] });
   });
   await page.goto('/buyer/support');
-  await page.getByRole('button', { name: 'Mở chat chăm sóc khách hàng' }).click();
+  await page.getByRole('button', { name: 'Mở trợ lý AI' }).click();
   await page.getByLabel('Câu hỏi cho trợ lý AI').fill('Quản lý thiết bị thế nào?');
-  await page.getByRole('button', { name: 'Hỏi', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'Câu trả lời dựa trên tài liệu gốc.' })).toBeVisible();
+  await page.getByRole('button', { name: 'Gửi câu hỏi', exact: true }).click();
+  await expect(page.locator('.emu-ai-message').filter({ hasText: 'Câu trả lời dựa trên tài liệu gốc.' })).toBeVisible();
   await page.reload();
-  await page.getByRole('button', { name: 'Mở chat chăm sóc khách hàng' }).click();
-  await page.getByRole('link', { name: 'Mở hội thoại hỗ trợ' }).click();
+  await page.getByRole('button', { name: 'Mở trợ lý AI' }).click();
+  await expect(page.locator('#emukey-ai-assistant-panel')).toContainText('Câu trả lời dựa trên tài liệu gốc.');
+  await page.getByRole('button', { name: 'Đóng trợ lý AI' }).click();
+  await page.goto(`/buyer/support?conversationId=${id}`);
   await expect(page).toHaveURL(new RegExp(`conversationId=${id}`));
   await page.getByRole('heading', { name: 'Hội thoại hỗ trợ', exact: true }).click();
   const answer = page.locator('.message--ai');
   await expect(answer).toContainText('Câu trả lời dựa trên tài liệu gốc.');
-  await answer.getByRole('button', { name: 'Hướng dẫn thiết bị · phiên bản 1' }).click();
-  const source = page.getByRole('dialog');
-  await expect(source).toContainText('Toàn văn nguồn của phiên bản gốc.');
-  await source.getByRole('button', { name: 'Đóng', exact: true }).click();
-  sourceAvailable = false;
-  await answer.getByRole('button', { name: 'Hướng dẫn thiết bị · phiên bản 1' }).click();
-  await expect(answer.getByText('Không thể mở nguồn. Tài liệu có thể đã được thay thế hoặc quyền đọc đã thay đổi.')).toBeVisible();
+  await expect(answer.getByRole('link', { name: 'Xem nguồn: Hướng dẫn thiết bị' })).toHaveAttribute('href', '/help/original-document');
+  await answer.locator('summary').click();
   await expect(answer).toContainText(citation.excerpt);
   await page.getByRole('button', { name: 'Chuyển cho nhân viên' }).click();
   await expect(page.getByText('Chờ nhân viên hỗ trợ', { exact: true }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: 'Hỏi AI có nguồn' })).toHaveCount(0);
   await page.reload();
+  await answer.locator('summary').click();
   await expect(answer).toContainText(citation.excerpt);
-  await page.getByRole('button', { name: 'Mở chat chăm sóc khách hàng' }).click();
-  await page.getByLabel('Câu hỏi cho trợ lý AI').fill('Câu hỏi sau khi chuyển hỗ trợ');
-  await page.getByRole('button', { name: 'Hỏi', exact: true }).click();
-  await expect(page.getByText('Hội thoại này đã kết thúc hoặc chuyển sang nhân viên. Mở hội thoại hỗ trợ để tiếp tục.')).toBeVisible();
+  await page.getByRole('button', { name: 'Mở trợ lý AI' }).click();
+  await expect(page.getByLabel('Câu hỏi cho trợ lý AI')).toBeDisabled();
+  await expect(page.getByRole('link', { name: 'Mở hội thoại hỗ trợ' })).toBeVisible();
   expect(created).toBe(1);
-  expect(asked).toBe(2);
+  expect(asked).toBe(1);
 });
 
 test('staff preserves a failed reply and resumes with the current claim generation', async ({ page }) => {

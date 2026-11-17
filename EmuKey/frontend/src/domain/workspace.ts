@@ -72,7 +72,8 @@ export interface LicenseRecord {
 
 export interface ConversationMessage {
   readonly id: string;
-  readonly author: 'Buyer' | 'Support' | 'AI';
+  readonly author: 'Buyer' | 'Support' | 'AI' | 'System';
+  readonly createdAt?: string;
   readonly body: string;
 }
 

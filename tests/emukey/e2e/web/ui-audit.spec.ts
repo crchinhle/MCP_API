@@ -68,13 +68,16 @@ test.describe('overlay regressions', () => {
     test(`AI citation wraps inside its popup at ${width}`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await fixture(page, 'CUSTOMER');
-      await page.route('**/api/v1/conversations', (route) => route.fulfill({ json: { id: 'audit-conversation' } }));
+      const conversation = { id: 'audit-conversation', status: 'AI_ACTIVE', customerUserId: 'customer', assignedSupportUserId: null, contextType: 'GENERAL', contextId: null, title: 'AI citation audit' };
+      await page.route('**/api/v1/conversations', (route) => route.fulfill({ json: conversation }));
+      await page.route('**/api/v1/conversations/audit-conversation', (route) => route.fulfill({ json: conversation }));
+      await page.route('**/api/v1/conversations/audit-conversation/messages', (route) => route.fulfill({ json: [] }));
       await page.route('**/api/v1/conversations/*/ai-ask', (route) => route.fulfill({ json: { answer: 'Câu trả lời kiểm thử.', citationDetails: [{ documentId: 'audit-doc', chunkId: 'chunk', documentTitle: 'Tài liệu hướng dẫn kiểm thử với tiêu đề dài ' + 'abcdefghij'.repeat(8), documentVersion: 1, excerpt: 'Trích dẫn minh họa.' }] } }));
       await page.goto('/buyer');
-      await page.getByRole('button', { name: 'Mở chat chăm sóc khách hàng' }).click();
-      const panel = page.getByRole('region', { name: 'Trợ lý AI Emukey' });
+      await page.getByRole('button', { name: 'Mở trợ lý AI' }).click();
+      const panel = page.getByRole('dialog', { name: 'Trợ lý AI EmuKey' });
       await panel.getByLabel('Câu hỏi cho trợ lý AI').fill('Hướng dẫn');
-      await panel.getByRole('button', { name: 'Hỏi', exact: true }).click();
+      await panel.getByRole('button', { name: 'Gửi câu hỏi', exact: true }).click();
       await expect(panel.getByRole('region', { name: 'Nguồn tham khảo' })).toBeVisible();
       expect(await panel.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
     });
@@ -110,12 +113,12 @@ test.describe('overlay regressions', () => {
       await page.setViewportSize({ width, height: 900 });
       await fixture(page, 'CUSTOMER');
       await page.goto('/buyer');
-      const assistant = page.getByRole('button', { name: 'Mở chat chăm sóc khách hàng' });
+      const assistant = page.getByRole('button', { name: 'Mở trợ lý AI' });
       await assistant.click();
-      await expect(page.getByRole('region', { name: 'Trợ lý AI Emukey' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Trợ lý AI EmuKey' })).toBeVisible();
       await page.getByRole('button', { name: 'Mở menu', exact: true }).click();
       await expect(assistant).toBeHidden();
-      await expect(page.getByRole('region', { name: 'Trợ lý AI Emukey' })).toBeHidden();
+      await expect(page.getByRole('dialog', { name: 'Trợ lý AI EmuKey' })).toBeHidden();
       await page.keyboard.press('Escape');
       await expect(assistant).toBeVisible();
     });

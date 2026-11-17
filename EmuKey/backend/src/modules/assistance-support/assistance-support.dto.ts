@@ -9,6 +9,17 @@ export class CloseConversationDto {
 }
 
 export class CreateConversationDto {
+  @ApiPropertyOptional({ enum: ['AI', 'SUPPORT'], default: 'AI' })
+  @IsOptional() @IsIn(['AI', 'SUPPORT'])
+  mode?: 'AI' | 'SUPPORT';
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'Stable creation intent key; required for SUPPORT.' })
+  @IsOptional() @IsUUID()
+  clientRequestId?: string;
+
+  @ApiPropertyOptional({ minLength: 1, maxLength: 8_000, description: 'Required for SUPPORT.' })
+  @IsOptional() @IsString() @Length(1, 8_000)
+  initialMessage?: string;
   @ApiPropertyOptional({ format: 'uuid' })
   @IsOptional()
   @IsUUID()
@@ -122,6 +133,8 @@ export class ConversationDto {
 }
 
 export class MessageDto {
+  @ApiProperty({ type: String, format: 'date-time' })
+  createdAt!: string;
   @ApiPropertyOptional() intent?: string;
   @ApiPropertyOptional() outcome?: string;
   @ApiPropertyOptional({ type: () => CatalogSourceDto, isArray: true }) catalogSources?: CatalogSourceDto[];

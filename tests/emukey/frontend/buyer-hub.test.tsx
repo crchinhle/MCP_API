@@ -12,6 +12,36 @@ afterEach(() => {
 });
 
 describe('Customer hub', () => {
+  it('preserves the cited document version and excerpt in the shared AI timeline', () => {
+    render(<ConversationPanel author="Support" initialMessages={[
+      { id: 'ai', author: 'AI', body: 'Hướng dẫn', citationDetails: [{ documentId: 'guide', chunkId: 'chunk', documentTitle: 'Hướng dẫn gốc', documentVersion: 3, chunkIndex: 0, excerpt: 'Nội dung nguồn khi AI trả lời.' }] },
+    ]} inputLabel="Phản hồi" submitLabel="Gửi" readOnly />);
+    expect(screen.getByRole('link', { name: 'Xem nguồn: Hướng dẫn gốc' }).getAttribute('href')).toBe('/help/guide');
+    expect(screen.getByText('Trích dẫn · phiên bản 3')).toBeTruthy();
+    expect(screen.getByText('Nội dung nguồn khi AI trả lời.')).toBeTruthy();
+  });
+  it('renders system events separately from staff messages and uses server timestamps', () => {
+    render(<ConversationPanel author="Buyer" initialMessages={[
+      { id: 'event', author: 'System', body: 'Đang chờ tiếp nhận', createdAt: '2026-11-16T02:00:00.000Z' },
+      { id: 'reply', author: 'Support', body: 'Xin chào', createdAt: '2026-11-16T02:01:00.000Z' },
+    ]} inputLabel="Tin nhắn" submitLabel="Gửi" readOnly />);
+    expect(screen.getByText('Đang chờ tiếp nhận').closest('article')?.className).toContain('message--system');
+    expect(screen.getAllByText('Nhân viên hỗ trợ')).toHaveLength(1);
+    expect(screen.getByText('Đang chờ tiếp nhận').closest('article')?.querySelector('time')?.dateTime).toBe('2026-11-16T02:00:00.000Z');
+  });
+
+  it('uses only the AI action while a conversation is AI_ACTIVE', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (input, init) => String(input).endsWith('/conversations') && !init?.method
+      ? Response.json([{ id: 'ai-only', title: 'AI thread', status: 'AI_ACTIVE', contextType: 'GENERAL' }]) : original(input, init));
+    try {
+      render(<App initialEntries={['/buyer/support']} />);
+      await screen.findByRole('heading', { name: 'AI thread' });
+      expect(screen.queryByRole('button', { name: 'Gửi tin nhắn' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Hỏi AI có nguồn' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Chuyển cho nhân viên' })).toBeTruthy();
+    } finally { vi.mocked(fetch).mockImplementation(original); }
+  });
   it('retries loading licenses after a temporary failure', async () => {
     const original = vi.mocked(fetch).getMockImplementation()!;
     let fail = true;
@@ -138,7 +168,7 @@ describe('Customer hub', () => {
   it('creates and selects a new support thread after the previous thread closed', async () => {
     const original = vi.mocked(fetch).getMockImplementation()!;
     const closed = { id: 'closed', title: 'Yêu cầu cũ', status: 'CLOSED', contextType: 'GENERAL' };
-    const opened = { ...closed, id: 'opened', title: 'Yêu cầu mới', status: 'AI_ACTIVE' };
+    const opened = { ...closed, id: 'opened', title: 'Yêu cầu mới', status: 'WAITING_SUPPORT' };
     let created = false;
     let attempts = 0;
     vi.mocked(fetch).mockImplementation(async (input, init) => {
@@ -157,9 +187,13 @@ describe('Customer hub', () => {
     try {
       render(<App initialEntries={['/buyer/support']} />);
       fireEvent.click(await screen.findByRole('button', { name: 'Tạo yêu cầu mới' }));
+      fireEvent.change(screen.getByLabelText('Chủ đề hỗ trợ'), { target: { value: 'Yêu cầu mới' } });
+      fireEvent.change(screen.getByLabelText('Mô tả vấn đề'), { target: { value: 'Cần nhân viên kiểm tra' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu hỗ trợ' }));
       expect(await screen.findByText('Không thể tạo hội thoại. Vui lòng thử lại.')).toBeTruthy();
       expect(screen.getByRole('heading', { name: 'Yêu cầu cũ' })).toBeTruthy();
-      fireEvent.click(screen.getByRole('button', { name: 'Tạo yêu cầu mới' }));
+      expect(screen.getByLabelText<HTMLTextAreaElement>('Mô tả vấn đề').value).toBe('Cần nhân viên kiểm tra');
+      fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu hỗ trợ' }));
       expect(await screen.findByLabelText('Tin nhắn hỗ trợ')).toBeTruthy();
       expect(screen.getByRole('heading', { name: 'Yêu cầu mới' })).toBeTruthy();
       expect(created).toBe(true);
@@ -229,12 +263,23 @@ describe('Customer hub', () => {
   });
 
   it('appends a support message through the API', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const response = await original(input, init);
+      if (String(input).endsWith('/conversations') && (!init?.method || init.method === 'GET')) {
+        const conversations = await response.json();
+        return Response.json(conversations.map((item: Record<string, unknown>) => ({ ...item, status: 'WAITING_SUPPORT' })));
+      }
+      return response;
+    });
+    try {
     render(<App initialEntries={['/buyer/support']} />);
     fireEvent.change(await screen.findByLabelText('Tin nhắn hỗ trợ'), {
       target: { value: 'Tôi cần kiểm tra thiết bị mới.' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Gửi tin nhắn' }));
     expect(await screen.findByText('Tôi cần kiểm tra thiết bị mới.')).toBeTruthy();
+    } finally { vi.mocked(fetch).mockImplementation(original); }
   });
 
   it('does not expose a fake AI suggestion without a backend response', async () => {

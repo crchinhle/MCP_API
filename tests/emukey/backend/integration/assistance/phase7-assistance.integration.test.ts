@@ -27,6 +27,7 @@ import { fileURLToPath } from 'node:url';
 import { RedisContainer } from '@testcontainers/redis';
 import { Redis } from 'ioredis';
 import { SupportLeaseScheduler } from '../../../../../EmuKey/backend/src/modules/assistance-support/worker/support-lease.scheduler.js';
+import { PublicAssistantService } from '../../../../../EmuKey/backend/src/modules/assistance-support/application/public-assistant.service.js';
 
 const supportWorkerFixture = process.env.EMUKEY_SUPPORT_WORKER_FIXTURE === '1';
 
@@ -50,6 +51,80 @@ describe.skipIf(supportWorkerFixture)('Phase 7 assistance PostgreSQL integration
   }, 120_000);
 
   afterAll(async () => { await client?.end(); await container?.stop(); });
+
+  it('creates a direct support request atomically and deduplicates concurrent retries', async () => {
+    const input = { mode: 'SUPPORT' as const, title: 'Direct support', initialMessage: 'Please help without AI', clientRequestId: randomUUID() };
+    const service = new AssistanceSupportService(repository);
+    const actor = { sub: customerId, role: 'CUSTOMER' as const, sessionVersion: 1 };
+    const [first, retry] = await Promise.all([service.createConversation(actor, input), service.createConversation(actor, input)]);
+    expect(first.id).toBe(retry.id);
+    expect(first.status).toBe('WAITING_SUPPORT');
+    const messages = (await repository.listMessages(actor, first.id))!;
+    expect(messages.filter(message => message.senderType === 'CUSTOMER')).toMatchObject([{ content: input.initialMessage }]);
+    expect(messages.map(message => message.serverSequence)).toEqual([1, 2]);
+    expect((await repository.listSupportQueue({ sub: supportId, role: 'SUPPORT_STAFF' })).some(item => item.id === first.id)).toBe(true);
+    expect(Number((await client.query("SELECT count(*) FROM notifications WHERE data->>'conversationId'=$1 AND type='SUPPORT_REQUESTED'", [first.id])).rows[0].count)).toBe(2);
+    await expect(service.createConversation(actor, { ...input, initialMessage: 'Different intent' })).rejects.toMatchObject({ status: 409 });
+  });
+
+  it('requires explicit handoff instead of escalating an ordinary AI conversation message', async () => {
+    const conversation = await repository.createConversation(customerId, {});
+    await expect(repository.appendMessage({ actorUserId: customerId, senderType: 'CUSTOMER', conversationId: conversation.id, clientMessageId: randomUUID(), content: 'Ambiguous send' })).rejects.toThrow('CONVERSATION_STATE_INVALID');
+    expect((await repository.findConversationForActor({ sub: customerId, role: 'CUSTOMER' }, conversation.id))?.status).toBe('AI_ACTIVE');
+    expect(await repository.listMessages({ sub: customerId, role: 'CUSTOMER' }, conversation.id)).toEqual([]);
+  });
+
+  it('rolls back the direct request and outbox together when notification persistence fails', async () => {
+    const notifications = new NotificationRepository(client);
+    const failing = new AssistanceSupportRepository(client, { enqueueInTransaction: async (transaction, input) => {
+      await notifications.enqueueInTransaction(transaction, input);
+      throw new Error('Injected notification persistence failure');
+    } } as never);
+    const input = { mode: 'SUPPORT' as const, title: 'Atomic rollback', initialMessage: 'Help', clientRequestId: randomUUID() };
+    await expect(failing.createConversation(customerId, input)).rejects.toThrow('Injected notification');
+    expect((await client.query('SELECT id FROM conversations WHERE title=$1', [input.title])).rows).toHaveLength(0);
+    const retried = await repository.createConversation(customerId, input);
+    expect((await repository.listMessages({ sub: customerId, role: 'CUSTOMER' }, retried.id))!).toHaveLength(2);
+  });
+
+  it('fences an AI answer that finishes after the customer hands off', async () => {
+    const conversation = await repository.createConversation(customerId, {});
+    let finish!: (answer: { answer: string; grounded: boolean; citedSourceIds: string[] }) => void;
+    let started!: () => void;
+    const generating = new Promise<void>(resolve => { started = resolve; });
+    const ai = new AiAssistanceService({ answerGrounded: () => { started(); return new Promise(resolve => { finish = resolve; }); } }, {
+      appendCustomerMessage: input => repository.appendCustomerMessage(input), appendAiMessage: input => repository.appendAiMessage(input),
+      searchSources: async () => [{ id: 'source', content: 'Official instructions' }],
+    });
+    const pending = ai.answer({ conversationId: conversation.id, customerUserId: customerId, question: 'Help', clientMessageId: randomUUID() });
+    const outcome = pending.then(() => 'accepted', (error: Error) => error.message);
+    await generating;
+    await Promise.all([repository.requestSupport(customerId, conversation.id, 'Human help'), repository.requestSupport(customerId, conversation.id, 'Duplicate request')]);
+    finish({ answer: 'Late answer', grounded: true, citedSourceIds: ['source'] });
+    expect(await outcome).toBe('CONVERSATION_STATE_INVALID');
+    const messages = (await repository.listMessages({ sub: customerId, role: 'CUSTOMER' }, conversation.id))!;
+    expect(messages.filter(message => message.senderType === 'AI')).toHaveLength(0);
+    expect(messages.filter(message => message.senderType === 'SYSTEM')).toHaveLength(1);
+    expect(Number((await client.query("SELECT count(*) FROM notifications WHERE data->>'conversationId'=$1 AND type='SUPPORT_REQUESTED'", [conversation.id])).rows[0].count)).toBe(2);
+  });
+
+  it('rate limits support sends and fails recoverably when Redis is unavailable', async () => {
+    const cache = await new RedisContainer('redis:8.2-alpine').start();
+    const redis = new Redis(cache.getConnectionUrl(), { maxRetriesPerRequest: 1 });
+    try {
+      const service = new AssistanceSupportService(repository, undefined, new PublicAssistantService(redis, undefined as never));
+      const actor = { sub: customerId, role: 'CUSTOMER' as const, sessionVersion: 1 };
+      const conversation = await service.createConversation(actor, { mode: 'SUPPORT', clientRequestId: randomUUID(), initialMessage: 'Rate test' });
+      const minute = Math.floor(Date.now() / 60_000);
+      for (const bucket of [minute, minute + 1]) await redis.set(`ai:rate:support:message:${customerId}:${bucket}`, '59', 'EX', 120);
+      await service.appendMessage(actor, conversation.id, { clientMessageId: randomUUID(), content: 'Last permitted message' });
+      await expect(service.appendMessage(actor, conversation.id, { clientMessageId: randomUUID(), content: 'Too fast' })).rejects.toMatchObject({ status: 429 });
+      redis.disconnect();
+      await expect(service.appendMessage(actor, conversation.id, { clientMessageId: randomUUID(), content: 'Retry later' })).rejects.toMatchObject({ status: 503 });
+      const messages = (await repository.listMessages(actor, conversation.id))!;
+      expect(messages.filter(message => message.senderType === 'CUSTOMER').map(message => message.content)).toEqual(['Rate test', 'Last permitted message']);
+    } finally { redis.disconnect(); await cache.stop(); }
+  });
 
   it('requeues an abandoned conversation after SIGKILL and restart of the support lease worker', async () => {
     const conversation = await repository.createConversation(customerId, { title: 'Support worker crash' });
@@ -87,7 +162,7 @@ describe.skipIf(supportWorkerFixture)('Phase 7 assistance PostgreSQL integration
       const replacement = await repository.claimConversation(otherSupportId, conversation.id);
       expect(replacement.claimVersion).toBe(claim.claimVersion + 1);
       await expect(repository.heartbeat(supportId, conversation.id, claim.claimVersion)).rejects.toThrow('CONVERSATION_CLAIM_EXPIRED');
-      expect((await repository.listMessages({ sub: customerId, role: 'CUSTOMER' }, conversation.id))?.filter((message) => message.content.includes('Support session expired'))).toHaveLength(1);
+      expect((await repository.listMessages({ sub: customerId, role: 'CUSTOMER' }, conversation.id))?.filter((message) => message.content.includes('Phiên hỗ trợ đã hết hạn'))).toHaveLength(1);
       await repository.closeConversation({ sub: otherSupportId, role: 'SUPPORT_STAFF' }, conversation.id, replacement.claimVersion);
     } catch (error) { throw new Error(`${String(error)}\nSupport worker fixture: ${diagnostics}`, { cause: error }); }
     finally {
@@ -105,6 +180,7 @@ describe.skipIf(supportWorkerFixture)('Phase 7 assistance PostgreSQL integration
       staff: { sub: supportId, role: 'SUPPORT_STAFF', sessionVersion: 1 },
       otherStaff: { sub: otherSupportId, role: 'SUPPORT_STAFF', sessionVersion: 1 },
       provider: { sub: customerId, role: 'PROVIDER_ADMIN', sessionVersion: 1 },
+      admin: { sub: supportId, role: 'SYSTEM_ADMIN', sessionVersion: 1 },
     };
     const knowledge = new KnowledgeRepository(client);
     const ai = new AiAssistanceService(new FakeAiGateway(), {
@@ -126,8 +202,22 @@ describe.skipIf(supportWorkerFixture)('Phase 7 assistance PostgreSQL integration
       await http.get('/conversations/queue').auth('invalid', { type: 'bearer' }).expect(401);
       await http.get('/conversations/queue').auth('customer', { type: 'bearer' }).expect(403);
       await http.post('/conversations').auth('provider', { type: 'bearer' }).send({}).expect(403);
+      await http.post('/conversations').auth('customer', { type: 'bearer' }).send({ mode: 'SUPPORT' }).expect(400);
+      await http.post('/conversations').auth('customer', { type: 'bearer' }).send({ mode: 'SUPPORT', clientRequestId: randomUUID(), initialMessage: '   ' }).expect(400);
+      const directInput = { mode: 'SUPPORT', title: 'Direct HTTP request', initialMessage: 'No AI required', clientRequestId: randomUUID() };
+      const direct = await http.post('/conversations').auth('customer', { type: 'bearer' }).send(directInput).expect(201);
+      expect(direct.body.status).toBe('WAITING_SUPPORT');
+      expect((await http.post('/conversations').auth('customer', { type: 'bearer' }).send(directInput).expect(201)).body.id).toBe(direct.body.id);
+      await http.post('/conversations').auth('customer', { type: 'bearer' }).send({ ...directInput, title: 'Changed intent' }).expect(409);
       const created = await http.post('/conversations').auth('customer', { type: 'bearer' }).send({ title: 'HTTP support matrix' }).expect(201);
       const path = `/conversations/${created.body.id}`;
+      await http.get(`${path}/messages`).auth('outsider', { type: 'bearer' }).expect(404);
+      await http.post(`${path}/request-support`).auth('outsider', { type: 'bearer' }).send({ reason: 'Not my conversation' }).expect(404);
+      await http.post(`${path}/ai-ask`).auth('outsider', { type: 'bearer' }).send({ question: 'Private context', clientMessageId: randomUUID() }).expect(404);
+      await http.get(`${path}/messages/queue-preview`).auth('customer', { type: 'bearer' }).expect(403);
+      await http.post(`${path}/close`).auth('outsider', { type: 'bearer' }).send({}).expect(409);
+      await http.post(`${path}/messages`).auth('admin', { type: 'bearer' }).send({ content: 'Impersonation', clientMessageId: randomUUID() }).expect(403);
+      await http.post(`${path}/messages`).auth('customer', { type: 'bearer' }).send({ content: 'Spoofed', clientMessageId: randomUUID(), senderType: 'SUPPORT', actorUserId: supportId }).expect(400);
       await http.get(path).auth('outsider', { type: 'bearer' }).expect(404);
       await http.post(`${path}/ai-ask`).auth('customer', { type: 'bearer' }).send({ question: 'Help', clientMessageId: randomUUID() }).expect(200);
       await http.post(`${path}/request-support`).auth('customer', { type: 'bearer' }).send({ reason: 'Human help' }).expect(200);
@@ -136,6 +226,10 @@ describe.skipIf(supportWorkerFixture)('Phase 7 assistance PostgreSQL integration
       await http.post(`${path}/claim`).auth('customer', { type: 'bearer' }).send({}).expect(403);
       const claimed = await http.post(`${path}/claim`).auth('staff', { type: 'bearer' }).send({}).expect(200);
       const version = claimed.body.claimVersion as number;
+      await http.get(`${path}/messages`).auth('otherStaff', { type: 'bearer' }).expect(404);
+      await http.get(`${path}/messages/queue-preview`).auth('otherStaff', { type: 'bearer' }).expect(404);
+      await http.post(`${path}/messages`).auth('staff', { type: 'bearer' }).send({ content: ' ', clientMessageId: randomUUID(), claimVersion: version }).expect(400);
+      await http.post(`${path}/messages`).auth('staff', { type: 'bearer' }).send({ content: 'x'.repeat(8001), clientMessageId: randomUUID(), claimVersion: version }).expect(400);
       await http.post(`${path}/claim`).auth('otherStaff', { type: 'bearer' }).send({}).expect(409);
       for (const payload of [{}, { claimVersion: '1' }, { claimVersion: 0 }, { claimVersion: version, extra: true }]) {
         await http.post(`${path}/heartbeat`).auth('staff', { type: 'bearer' }).send(payload).expect(400);
@@ -239,8 +333,8 @@ describe.skipIf(supportWorkerFixture)('Phase 7 assistance PostgreSQL integration
     await expect(repository.appendMessage({ actorUserId: supportId, senderType: 'SUPPORT', conversationId: conversation.id, clientMessageId: randomUUID(), content: 'Stale tab', claimVersion: first.claimVersion })).rejects.toThrow('CONVERSATION_CLAIM_EXPIRED');
     await repository.releaseConversation(supportId, conversation.id, second.claimVersion);
     const messages = await repository.listMessages({ role: 'CUSTOMER', sub: customerId }, conversation.id);
-    expect(messages!.filter((message) => message.content.includes('released this conversation'))).toHaveLength(2);
-    expect(messages!.filter((message) => message.content.includes('claimed this conversation'))).toHaveLength(2);
+    expect(messages!.filter((message) => message.senderType === 'SYSTEM' && message.content.includes('trả về hàng đợi'))).toHaveLength(2);
+    expect(messages!.filter((message) => message.senderType === 'SYSTEM' && message.content.includes('đã tiếp nhận'))).toHaveLength(2);
   });
 
   it('recovers successive abandoned claims once per generation with two sweepers', async () => {
@@ -254,10 +348,10 @@ describe.skipIf(supportWorkerFixture)('Phase 7 assistance PostgreSQL integration
       await expect(repository.heartbeat(supportId, conversation.id, claimed.claimVersion)).rejects.toThrow('CONVERSATION_CLAIM_EXPIRED');
     }
     const messages = await repository.listMessages({ role: 'CUSTOMER', sub: customerId }, conversation.id);
-    expect(messages!.filter((message) => message.content.includes('Support session expired'))).toHaveLength(2);
+    expect(messages!.filter((message) => message.content.includes('Phiên hỗ trợ đã hết hạn'))).toHaveLength(2);
   });
 
-  it.each(['heartbeat', 'release', 'reply'] as const)('rejects %s when its row-lock wait crosses the lease expiry', async (action) => {
+  it.each(['heartbeat', 'release', 'reply', 'close'] as const)('rejects %s when its row-lock wait crosses the lease expiry', async (action) => {
     const conversation = await repository.createConversation(customerId, { title: `Blocked ${action}` });
     await repository.requestSupport(customerId, conversation.id, 'Human help');
     const claimed = await repository.claimConversation(supportId, conversation.id);
@@ -269,6 +363,7 @@ describe.skipIf(supportWorkerFixture)('Phase 7 assistance PostgreSQL integration
       await blocker.query('SELECT id FROM conversations WHERE id=$1 FOR UPDATE', [conversation.id]);
       const operation = action === 'heartbeat' ? repository.heartbeat(supportId, conversation.id, claimed.claimVersion)
         : action === 'release' ? repository.releaseConversation(supportId, conversation.id, claimed.claimVersion)
+          : action === 'close' ? repository.closeConversation({ sub: supportId, role: 'SUPPORT_STAFF' }, conversation.id, claimed.claimVersion)
           : repository.appendMessage({ actorUserId: supportId, senderType: 'SUPPORT', conversationId: conversation.id, claimVersion: claimed.claimVersion, clientMessageId: randomUUID(), content: 'Delayed behind a row lock' });
       pending = operation.then(() => ({ accepted: true as const }), (error: Error) => ({ error: error.message }));
       await expect.poll(async () => Number((await client.query("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%conversations%'")).rows[0].count)).toBeGreaterThan(0);
@@ -375,6 +470,7 @@ describe.skipIf(supportWorkerFixture)('Phase 7 assistance PostgreSQL integration
 
   it('creates, appends idempotently, claims concurrently, and closes a conversation', async () => {
     const conversation = await repository.createConversation(customerId, { title: 'Phase 7 real flow' });
+    await repository.requestSupport(customerId, conversation.id, 'Xin hỗ trợ');
     const first = await repository.appendMessage({ actorUserId: customerId, clientMessageId: '00000000-0000-4000-8000-000000000701', content: 'Xin hỗ trợ', conversationId: conversation.id, senderType: 'CUSTOMER' });
     const duplicate = await repository.appendMessage({ actorUserId: customerId, clientMessageId: first.clientMessageId, content: 'Xin hỗ trợ', conversationId: conversation.id, senderType: 'CUSTOMER' });
     expect(duplicate.id).toBe(first.id);
@@ -383,7 +479,37 @@ describe.skipIf(supportWorkerFixture)('Phase 7 assistance PostgreSQL integration
     expect(claims.filter((claim) => claim.status === 'fulfilled')).toHaveLength(1);
     const winner = claims.find((claim) => claim.status === 'fulfilled')!;
     if (winner.status !== 'fulfilled') throw new Error('Missing claim winner');
+    expect((await repository.claimConversation(winner.value.assignedSupportUserId!, conversation.id)).claimVersion).toBe(winner.value.claimVersion);
+    const customerMessage = { actorUserId: customerId, clientMessageId: randomUUID(), content: 'More details', conversationId: conversation.id, senderType: 'CUSTOMER' as const };
+    await Promise.all([repository.appendMessage(customerMessage), repository.appendMessage(customerMessage)]);
+    expect(Number((await client.query("SELECT count(*) FROM notifications WHERE data->>'conversationId'=$1 AND type='SUPPORT_MESSAGE'", [conversation.id])).rows[0].count)).toBe(1);
     expect((await repository.closeConversation({ role: 'SUPPORT_STAFF', sub: winner.value.assignedSupportUserId! }, conversation.id, winner.value.claimVersion)).status).toBe('CLOSED');
+  });
+
+  it('keeps independent concurrent conversations ordered without losing or duplicating committed messages', async () => {
+    const conversations = await Promise.all(Array.from({ length: 5 }, (_, i) => repository.createConversation(customerId, { title: `Concurrent chat ${i}` })));
+    await Promise.all(conversations.map(conversation => repository.requestSupport(customerId, conversation.id, 'Concurrent test')));
+    await Promise.all(conversations.map(async conversation => {
+      const inputs = Array.from({ length: 8 }, (_, i) => ({ actorUserId: customerId, senderType: 'CUSTOMER' as const, conversationId: conversation.id, clientMessageId: randomUUID(), content: `Message ${i}` }));
+      await Promise.all(inputs.flatMap(input => [repository.appendMessage(input), repository.appendMessage(input)]));
+      const messages = (await repository.listMessages({ sub: customerId, role: 'CUSTOMER' }, conversation.id))!;
+      expect(messages).toHaveLength(9);
+      expect(messages.map(message => message.serverSequence)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+      expect(new Set(messages.map(message => message.clientMessageId)).size).toBe(9);
+    }));
+  });
+
+  it('bounds unclaimed previews but preserves the complete history for the claim owner', async () => {
+    const conversation = await repository.createConversation(customerId, {});
+    await repository.requestSupport(customerId, conversation.id, 'Preview context');
+    for (let i = 0; i < 24; i++) await repository.appendMessage({ actorUserId: customerId, senderType: 'CUSTOMER', conversationId: conversation.id, clientMessageId: randomUUID(), content: `Context ${i}` });
+    const preview = (await repository.listQueuePreviewMessages({ sub: supportId, role: 'SUPPORT_STAFF' }, conversation.id))!;
+    expect(preview).toHaveLength(20);
+    expect(preview[0]!.serverSequence).toBe(6);
+    expect(preview.at(-1)!.serverSequence).toBe(25);
+    await repository.claimConversation(supportId, conversation.id);
+    expect(await repository.listQueuePreviewMessages({ sub: otherSupportId, role: 'SUPPORT_STAFF' }, conversation.id)).toBeNull();
+    expect((await repository.listMessages({ sub: supportId, role: 'SUPPORT_STAFF' }, conversation.id))!).toHaveLength(26);
   });
 
   it('rejects new AI messages after a conversation closes or enters the support queue', async () => {
@@ -395,6 +521,7 @@ describe.skipIf(supportWorkerFixture)('Phase 7 assistance PostgreSQL integration
     await repository.closeConversation({ role: 'CUSTOMER', sub: customerId }, closed.id);
     await expect(repository.appendCustomerMessage({ conversationId: closed.id, customerUserId: customerId, clientMessageId: '00000000-0000-4000-8000-000000000087', content: 'Should not send' })).rejects.toThrow('CONVERSATION_CLOSED');
     const waiting = await repository.createConversation(customerId, {});
+    await repository.requestSupport(customerId, waiting.id, 'Human help');
     await repository.appendMessage({ conversationId: waiting.id, actorUserId: customerId, senderType: 'CUSTOMER', clientMessageId: '00000000-0000-4000-8000-000000000088', content: 'Human help' });
     await expect(repository.appendCustomerMessage({ conversationId: waiting.id, customerUserId: customerId, clientMessageId: '00000000-0000-4000-8000-000000000089', content: 'AI question' })).rejects.toThrow('CONVERSATION_STATE_INVALID');
     await expect(repository.appendAiMessage({ conversationId: waiting.id, clientMessageId: '00000000-0000-4000-8000-000000000090', content: 'Delayed AI answer', grounded: false, citedSourceIds: [] })).rejects.toThrow('CONVERSATION_STATE_INVALID');
