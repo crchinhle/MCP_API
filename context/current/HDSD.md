@@ -1,6 +1,6 @@
 # Import dữ liệu demo
 
-> Cập nhật 06/11/2026: chỉ khởi tạo mới từ SQL, gồm 23 bảng. Khi đổi cấu trúc, dừng API/worker, build backend, chạy `corepack pnpm --dir backend db:initialize --allow-destructive` từ `EmuKey/`, rồi chạy `corepack pnpm --dir backend db:verify`. Lệnh xóa dữ liệu trong schema public và tạo lại. Database rỗng không cần flag destructive. Production vẫn bị chặn. Xem `EmuKey/README.md`.
+> Cập nhật 17/11/2026: schema gồm 24 bảng, cần pgvector. Database có dữ liệu không được nâng cấp bằng initializer/reset. `db:migrate` chỉ diễn tập rồi rollback việc archive ledger cũ `schema_versions`; operator chỉ thêm `--apply` sau khi kiểm tra backup/phụ thuộc. Các thay đổi schema khác cần SQL tăng dần và kiểm thử disposable riêng. `db:initialize --allow-destructive` chỉ dành database phát triển có thể bỏ dữ liệu; production bị chặn. Xem `EmuKey/README.md`.
 
 > Giao diện hiện hành dùng mục **Bản quyền**. Với bản quyền mới, theo dõi lần lượt **Đang xác nhận blockchain → Đang bàn giao cho nhà cung cấp → Nhà cung cấp đã nhận bản quyền → Mã bản quyền đã được nhận**. Chỉ bấm **Tôi đã lưu mã** sau khi đã lưu an toàn. Sau xác nhận, trang đơn hàng và danh sách bản quyền cập nhật cùng trạng thái; tải lại không cấp key lần nữa. Quota thiết bị trong gói do nhà cung cấp quản lý; điều khiển thiết bị của EmuKey chỉ còn cho dữ liệu legacy.
 

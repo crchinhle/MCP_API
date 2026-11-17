@@ -155,11 +155,11 @@ describe('Customer commerce', () => {
     }
   });
 
-  it('keeps disabled, zero and structured entitlements in the purchase snapshot', () => {
+  it('shows excluded documented benefits and keeps unknown entitlement keys private', () => {
     render(<OrderSummary order={{ total: 100000, entitlements: { desktop: false, quota: 0, limits: { seats: 2 } } }} />);
     expect(screen.getByText(/Ứng dụng máy tính: Không/)).toBeTruthy();
-    expect(screen.getByText(/quota: 0/)).toBeTruthy();
-    expect(screen.getByText(/limits: \{"seats":2\}/)).toBeTruthy();
+    expect(screen.queryByText(/quota: 0/)).toBeNull();
+    expect(screen.queryByText(/limits: \{"seats":2\}/)).toBeNull();
   });
   it('reuses the order idempotency key when retrying a lost response', async () => {
     const original = vi.mocked(fetch).getMockImplementation()!;
@@ -194,12 +194,12 @@ try {
     render(<App initialEntries={['/buyer']} />);
 
     expect(await screen.findByRole('region', { name: 'Tóm tắt tài khoản' })).toBeTruthy();
-    expect(await screen.findByText('Đơn hàng gần đây')).toBeTruthy();
-    expect(screen.getByText('Thiết bị đang dùng')).toBeTruthy();
+    expect(screen.getByLabelText(/Bản quyền đang hoạt động:/)).toBeTruthy();
+    expect(screen.getByText('Thiết bị đang sử dụng')).toBeTruthy();
     expect(screen.getByText('Sắp hết hạn trong 30 ngày')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Lối tắt' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Mở danh mục' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Xác minh ngay' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Quản lý bản quyền: Xem và gia hạn' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Xác minh: Kiểm tra bản quyền' })).toBeTruthy();
   });
 
   it('reopens the checkout modal after closing it without creating another order', async () => {
@@ -265,7 +265,7 @@ try {
       }),
     );
     fireEvent.click(
-      screen.getByRole('button', { name: 'Thanh toán qua SePay' }),
+      screen.getByRole('button', { name: 'Tiếp tục thanh toán' }),
     );
 
     expect(await screen.findByRole('dialog')).toBeTruthy();
@@ -417,7 +417,7 @@ try {
     );
 
     const create = await screen.findByRole('button', { name: 'Tạo đơn gia hạn' });
-    expect(screen.getByRole('table', { name: 'Chi tiết đơn hàng' }).querySelector('tfoot')?.textContent).toContain('2.500.000 ₫');
+    expect(screen.getByRole('heading', { name: 'Chi tiết đơn hàng' }).closest('section')?.textContent).toContain('2.500.000 ₫');
     fireEvent.click(create);
 
     expect(
@@ -447,7 +447,7 @@ try {
       render(<App initialEntries={['/buyer/licenses/00000000-0000-4000-8000-000000000401/renew']} />);
       expect(await screen.findByRole('button', { name: orderStatus === 'WAITING_PAYMENT' ? 'Tiếp tục thanh toán' : 'Theo dõi gia hạn' })).toBeTruthy();
       expect(screen.queryByRole('button', { name: 'Tạo đơn gia hạn' })).toBeNull();
-      expect(screen.getByRole('table', { name: 'Chi tiết đơn hàng' }).querySelector('tfoot')?.textContent).toContain('2.082.500 ₫');
+      expect(screen.getByRole('heading', { name: 'Chi tiết đơn hàng' }).closest('section')?.textContent).toContain('2.082.500 ₫');
       expect(creates).toBe(0);
     } finally { vi.mocked(fetch).mockImplementation(original); }
   });

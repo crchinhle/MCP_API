@@ -1,4 +1,5 @@
 import type { Server } from 'node:http';
+import type { Request, Response } from 'express';
 
 import type { INestApplication } from '@nestjs/common';
 import type { OpenAPIObject } from '@nestjs/swagger';
@@ -68,11 +69,22 @@ describe('API platform contract', () => {
     const { createApiApplication } =
       await import('../../../../../EmuKey/backend/src/entrypoints/api/create-api-application.js');
     app = await createApiApplication({ logger: false });
+    app.use('/_test/proxy', (incoming: Request, response: Response) => response.json({ ip: incoming.ip }));
     await app.init();
   }, 30_000);
 
   afterAll(async () => {
     await app.close();
+  });
+
+  it('ignores spoofed forwarded IPs by default and trusts only the nearest untrusted hop', async () => {
+    const express = app.getHttpAdapter().getInstance() as { set(name: string, value: unknown): void };
+    const requestIp = () => request(app.getHttpServer() as Server).get('/_test/proxy').set('X-Forwarded-For', '203.0.113.9, 198.51.100.4');
+    expect((await requestIp().expect(200)).body.ip).toMatch(/127\.0\.0\.1|::1/);
+    try {
+      express.set('trust proxy', ['127.0.0.1/32', '::1/128']);
+      expect((await requestIp().expect(200)).body.ip).toBe('198.51.100.4');
+    } finally { express.set('trust proxy', false); }
   });
 
   it('serves liveness under the versioned API prefix', async () => {
@@ -207,16 +219,31 @@ describe('API platform contract', () => {
       'PublicLicenseVerificationDto'
     ] as { properties?: Record<string, unknown> };
     expect(Object.keys(publicSchema.properties ?? {}).sort()).toEqual([
+      'activeDeviceCount',
       'blockNumber',
+      'chainId',
       'confirmationCount',
+      'contractAddress',
       'expiresAt',
+      'explorerUrl',
       'finality',
       'fulfillmentMode',
+      'history',
+      'historyComplete',
+      'historyNote',
+      'historySource',
+      'keyVersion',
       'licenseId',
+      'matchedBy',
+      'matchedKeyVersion',
+      'maxActiveDevices',
+      'network',
+      'periodStart',
       'plan',
       'productName',
       'provider',
       'providerDeliveryStatus',
+      'rpcStatus',
       'state',
       'status',
       'transactionHash',

@@ -17,11 +17,13 @@ describe('knowledge upload through the production Caddy rules', () => {
     await new Promise<void>((done) => upstream.listen(0, '0.0.0.0', done));
     const address = upstream.address();
     if (!address || typeof address === 'string') throw new Error('No upstream port');
-    await TestContainers.exposeHostPorts(address.port);
+    // Docker Desktop supplies a host gateway; the SSH tunnel is needed on Linux.
+    const upstreamHost = process.platform === 'win32' ? 'host.docker.internal' : 'host.testcontainers.internal';
+    if (process.platform !== 'win32') await TestContainers.exposeHostPorts(address.port);
     const caddy = await readFile(resolve(import.meta.dirname, '../../../../../EmuKey/frontend/Caddyfile'), 'utf8');
     proxy = await new GenericContainer('caddy:2.10.2-alpine')
       .withEnvironment({ EMUKEY_DOMAIN: ':80' })
-      .withCopyContentToContainer([{ content: caddy.replaceAll('api:3000', `host.testcontainers.internal:${address.port}`), target: '/etc/caddy/Caddyfile' }])
+      .withCopyContentToContainer([{ content: caddy.replaceAll('api:3000', `${upstreamHost}:${address.port}`), target: '/etc/caddy/Caddyfile' }])
       .withExposedPorts(80).start();
     baseUrl = `http://${proxy.getHost()}:${proxy.getMappedPort(80)}`;
   }, 120_000);
@@ -32,14 +34,14 @@ describe('knowledge upload through the production Caddy rules', () => {
 
   it('passes a document over 1 MiB while retaining the ordinary API limit', async () => {
     const body = Buffer.alloc(1_500_000, 'a');
-    const uploaded = await fetch(`${baseUrl}/api/v1/knowledge/documents`, { method: 'POST', body });
+    const uploaded = await fetch(`${baseUrl}/api/v1/knowledge/documents`, { method: 'POST', body, signal: AbortSignal.timeout(15_000) });
     expect(uploaded.status).toBe(200);
     expect(await uploaded.json()).toEqual({ bytes: body.length });
-    expect((await fetch(`${baseUrl}/api/v1/conversations`, { method: 'POST', body })).status).toBe(413);
+    expect((await fetch(`${baseUrl}/api/v1/conversations`, { method: 'POST', body, signal: AbortSignal.timeout(15_000) })).status).toBe(413);
   });
 
   it('rejects multipart envelopes above 12 MiB before they reach application code', async () => {
-    const response = await fetch(`${baseUrl}/api/v1/knowledge/documents`, { method: 'POST', body: Buffer.alloc(12 * 1024 * 1024 + 1, 'a') });
+    const response = await fetch(`${baseUrl}/api/v1/knowledge/documents`, { method: 'POST', body: Buffer.alloc(12 * 1024 * 1024 + 1, 'a'), signal: AbortSignal.timeout(15_000) });
     expect(response.status).toBe(413);
   });
 });

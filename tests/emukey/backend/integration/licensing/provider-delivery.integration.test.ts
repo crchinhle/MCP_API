@@ -34,33 +34,15 @@ import { IdentityService } from '../../../../../EmuKey/backend/src/modules/ident
 import { ProviderIntegrationController, ProviderDeliveryOperationsController } from '../../../../../EmuKey/backend/src/modules/licensing/presentation/provider-integration.controller.js';
 import { RedisContainer, type StartedRedisContainer } from '@testcontainers/redis';
 import { Redis } from 'ioredis';
-import { Queue, Worker } from 'bullmq';
 import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import { ProviderDeliveryScheduler } from '../../../../../EmuKey/backend/src/modules/licensing/worker/provider-delivery.scheduler.js';
-import { ProviderDeliveryProcessor, PROVIDER_DELIVERY_QUEUE } from '../../../../../EmuKey/backend/src/modules/licensing/worker/provider-delivery.processor.js';
-import { LicenseController } from '../../../../../EmuKey/backend/src/modules/blockchain/presentation/license.controller.js';
+import { handoffRuntime, fixtureProvider, fixtureCustomer } from './provider-handoff-runtime.fixture.js';
 
-const childFixture = process.env.EMUKEY_HANDOFF_CHILD;
-const fixtureProvider = '00000000-0000-4000-8000-000000000002';
-const fixtureCustomer = '00000000-0000-4000-8000-000000000004';
-
-function handoffRuntime(pool: Pool, origin: string) {
-  const codec = new LicenseSecretCodec('a'.repeat(64));
-  const gateway = new HttpProviderLicenseGateway(origin);
-  const configs = new ProviderIntegrationRepository(pool);
-  const integration = new ProviderIntegrationService(configs, codec, gateway);
-  const repo = new ProviderDeliveryRepository(pool);
-  const handoff = new ProviderHandoffService(repo, configs, codec, gateway, integration, new NotificationRepository(pool));
-  return { codec, gateway, configs, integration, repo, handoff };
-}
-
-describe.skipIf(Boolean(childFixture))('durable provider handoff storage', () => {
+describe('durable provider handoff storage', () => {
   let container: StartedPostgreSqlContainer;
   let redisContainer: StartedRedisContainer;
   let pool: Pool;
   beforeAll(async () => {
-    container = await new PostgreSqlContainer('postgres:15-alpine').withDatabase('emukey_provider_handoff_fixture').start();
+    container = await new PostgreSqlContainer('pgvector/pgvector:pg15').withDatabase('emukey_provider_handoff_fixture').start();
     redisContainer = await new RedisContainer('redis:8.2-alpine').start();
     pool = new Pool({ connectionString: container.getConnectionUri() });
     await pool.query(await readFile(resolve(import.meta.dirname, '../../../../../EmuKey/backend/database/schema.sql'), 'utf8'));
@@ -173,18 +155,18 @@ describe.skipIf(Boolean(childFixture))('durable provider handoff storage', () =>
       // owned by this test are touched. Payment and chain remain fixtures.
       const connection=new Redis(redisContainer.getConnectionUrl(),{maxRetriesPerRequest:null});
       connection.on('error',()=>undefined);
-      const children:Array<{process:ReturnType<typeof spawn>;exited:Promise<void>;url?:string}>=[];
+      const children:Array<{process:ReturnType<typeof spawn>;exited:Promise<void>;url?:string;ready:boolean}>=[];
       let diagnostics='';
       const startChild=(kind:'api'|'worker')=>{
         const process=spawn(globalThis.process.execPath,[resolve(globalThis.process.cwd(),'node_modules/vitest/vitest.mjs'),'run','--config',
-          resolve(import.meta.dirname,'../../../../../tooling/emukey/verification/vitest.backend.config.ts'),fileURLToPath(import.meta.url),
+          resolve(import.meta.dirname,'../../../../../tooling/emukey/verification/vitest.backend.config.ts'),resolve(import.meta.dirname,'provider-handoff-worker.fixture.test.ts'),
           '--pool=threads','--maxWorkers=1',`--testNamePattern=handoff ${kind} child fixture`,'--reporter=dot'],{
           cwd:globalThis.process.cwd(),windowsHide:true,stdio:['ignore','pipe','pipe'],env:{...globalThis.process.env,
             EMUKEY_HANDOFF_CHILD:kind,EMUKEY_HANDOFF_FIXTURE_PG:container.getConnectionUri(),
             EMUKEY_HANDOFF_FIXTURE_REDIS:redisContainer.getConnectionUrl(),EMUKEY_HANDOFF_FIXTURE_ORIGIN:origin},
         });
-        const child={process,exited:new Promise<void>((resolve,reject)=>{process.once('error',reject);process.once('close',()=>resolve());}),url:undefined as string|undefined};
-        const capture=(data:Buffer)=>{const text=data.toString();diagnostics=(diagnostics+text).slice(-2000);const match=text.match(/EMUKEY_HANDOFF_API:(http:\/\/127\.0\.0\.1:\d+)/);if(match)child.url=match[1];};
+        const child={process,exited:new Promise<void>((resolve,reject)=>{process.once('error',reject);process.once('close',()=>resolve());}),url:undefined as string|undefined,ready:false};
+        const capture=(data:Buffer)=>{const text=data.toString();diagnostics=(diagnostics+text).slice(-2000);const match=text.match(/EMUKEY_HANDOFF_API:(http:\/\/127\.0\.0\.1:\d+)/);if(match)child.url=match[1];if(text.includes('EMUKEY_HANDOFF_WORKER_READY'))child.ready=true;};
         process.stdout?.on('data',capture);process.stderr?.on('data',capture);children.push(child);return child;
       };
       const stopChild=async(child:typeof children[number])=>{if(child.process.exitCode===null)child.process.kill('SIGKILL');await child.exited;};
@@ -198,6 +180,7 @@ describe.skipIf(Boolean(childFixture))('durable provider handoff storage', () =>
         expect(await readLicense(api.url!)).toMatchObject({fulfillmentMode:'PROVIDER_HANDOFF',providerDeliveryStatus:'PENDING',activationKeyAvailable:false});
         receiver.setFault('HOLD_AFTER_COMMIT');
         const worker=startChild('worker');
+        await expect.poll(()=>worker.ready,{timeout:30000}).toBe(true);
         await expect.poll(async()=>(await providerPool.query('SELECT count(*)::int AS count FROM provider_receipts')).rows[0].count,{timeout:30000}).toBe(2);
         expect((await pool.query('SELECT status FROM provider_license_deliveries WHERE id=$1',[pendingDelivery.id])).rows[0].status).toBe('SENDING');
         await stopChild(worker);await stopChild(api);
@@ -207,7 +190,8 @@ describe.skipIf(Boolean(childFixture))('durable provider handoff storage', () =>
         connection.disconnect();
         await pool.query("UPDATE provider_license_deliveries SET lease_expires_at=now()-interval '1 second' WHERE id=$1",[pendingDelivery.id]);
         receiver.setFault(null);
-        startChild('worker');const replacement=startChild('api');
+        const recoveredWorker=startChild('worker');const replacement=startChild('api');
+        await expect.poll(()=>recoveredWorker.ready,{timeout:30000}).toBe(true);
         await expect.poll(async()=>(await pool.query('SELECT status FROM provider_license_deliveries WHERE id=$1',[pendingDelivery.id])).rows[0].status,{timeout:30000}).toBe('DELIVERED');
         await expect.poll(()=>replacement.url,{timeout:30000}).toMatch(/^http:/);
         recoveredApi=replacement.url!;
@@ -329,42 +313,4 @@ describe.skipIf(Boolean(childFixture))('durable provider handoff storage', () =>
       expect((await repo.list(providerId))[0]).toMatchObject({status:'FAILED',lastErrorCode:'PROVIDER_LEASE_EXHAUSTED'});
     } finally {await receiver.close();await providerPool.end();}
   },180000);
-});
-
-describe.runIf(Boolean(childFixture))('isolated handoff subprocess fixtures',()=>{
-  async function childRuntime(){
-    const database=new URL(process.env.EMUKEY_HANDOFF_FIXTURE_PG!);
-    const redisUrl=new URL(process.env.EMUKEY_HANDOFF_FIXTURE_REDIS!);
-    const origin=new URL(process.env.EMUKEY_HANDOFF_FIXTURE_ORIGIN!);
-    if(!['127.0.0.1','localhost'].includes(database.hostname)||database.pathname!=='/emukey_provider_handoff_fixture'||
-      !['127.0.0.1','localhost'].includes(redisUrl.hostname)||origin.hostname!=='127.0.0.1')throw new Error('Disposable local fixtures required');
-    const pool=new Pool({connectionString:database.href});
-    const redis=new Redis(redisUrl.href,{maxRetriesPerRequest:null});redis.on('error',()=>undefined);
-    return{pool,redis,...handoffRuntime(pool,origin.origin)};
-  }
-  it.runIf(childFixture==='worker')('handoff worker child fixture',async()=>{
-    const runtime=await childRuntime();
-    const queue=new Queue(PROVIDER_DELIVERY_QUEUE,{connection:runtime.redis});
-    const processor=new ProviderDeliveryProcessor(runtime.handoff);
-    const worker=new Worker(PROVIDER_DELIVERY_QUEUE,()=>processor.process(),{connection:runtime.redis});
-    worker.on('error',()=>undefined);
-    const scheduler=new ProviderDeliveryScheduler(queue,runtime.redis);
-    try{await worker.waitUntilReady();await scheduler.onModuleInit();await new Promise(resolve=>setTimeout(resolve,90000));}
-    finally{scheduler.onModuleDestroy();await worker.close(true);await queue.close();runtime.redis.disconnect();await runtime.pool.end();}
-  },100000);
-  it.runIf(childFixture==='api')('handoff api child fixture',async()=>{
-    const runtime=await childRuntime();
-    const projection=new LicenseProjectionRepository(runtime.pool);
-    const query=new LicenseQueryService(projection,{read:async()=>{throw new Error('Redis secret intentionally unavailable');},exists:async()=>false} as never,runtime.redis,30,new ActivationDeliveryRepository(runtime.pool,projection),runtime.handoff);
-    const module=await Test.createTestingModule({controllers:[LicenseController,ProviderIntegrationController],providers:[
-      {provide:LicenseQueryService,useValue:query},{provide:ProviderIntegrationService,useValue:runtime.integration},{provide:ProviderHandoffService,useValue:runtime.handoff},
-      {provide:IdentityService,useValue:{authenticate:async(value:string)=>{
-        if(!['customer','provider'].includes(value))throw new UnauthorizedException();
-        return{role:value==='customer'?'CUSTOMER':'PROVIDER_ADMIN',sessionVersion:1,sub:value==='customer'?fixtureCustomer:fixtureProvider};
-      }}},
-    ]}).compile();
-    const app=module.createNestApplication({logger:false});app.useGlobalPipes(new ValidationPipe({transform:true,whitelist:true,forbidNonWhitelisted:true}));
-    try{await app.listen(0,'127.0.0.1');console.log(`EMUKEY_HANDOFF_API:http://127.0.0.1:${app.getHttpServer().address().port}`);await new Promise(resolve=>setTimeout(resolve,90000));}
-    finally{await app.close();runtime.redis.disconnect();await runtime.pool.end();}
-  },100000);
 });

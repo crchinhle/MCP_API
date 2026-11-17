@@ -129,12 +129,12 @@
       "id": "CAT-04",
       "phase": 3,
       "actor": "BACKEND_OR_PROVIDER_ADMIN",
-      "owner": "catalog/terms-and-plan-commitment",
+      "owner": "catalog/plan-commitment",
       "api": "plan publish application interface",
       "tables": [
         "plans"
       ],
-      "transaction": "bind approved terms hash and deterministic commitment on publish",
+      "transaction": "compute deterministic plan commitment on publish; immutable service Terms snapshots belong to COM-01/COM-02",
       "testOwner": "tests/emukey/backend/unit/platform/license-crypto.test.ts"
     },
     {
@@ -450,7 +450,7 @@
       "phase": 7,
       "actor": "CUSTOMER_OR_SUPPORT_STAFF",
       "owner": "assistance-support/conversation",
-      "api": "conversation/message endpoints and socket protocol",
+      "api": "conversation/message HTTP endpoints with client polling",
       "tables": [
         "conversations",
         "messages"

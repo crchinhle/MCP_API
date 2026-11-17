@@ -80,6 +80,13 @@ describe('Gemini semantic understanding', () => {
     await expect(create().understandQuestion({ question: 'hello' })).rejects.toThrow('GEMINI_INVALID_RESPONSE');
   });
 
+  it.each(['LATEST', 'ORDINAL', 'ALL', 'COMPARE'] as const)('routes product facts referencing history through FOLLOW_UP: %s', async mode => {
+    const reference = { mode, index: mode === 'ORDINAL' ? 1 : null };
+    respond({ ...understanding, reference });
+    await expect(create().understandQuestion({ question: 'gói vừa nói giá sao?', history: [{ role: 'assistant', content: '1. Basic. 2. Pro.' }] }))
+      .resolves.toEqual({ ...understanding, intent: 'FOLLOW_UP', reference });
+  });
+
   it('propagates provider failures rather than inventing understanding', async () => {
     generateContent.mockRejectedValueOnce(new Error('provider unavailable'));
     await expect(create().understandQuestion({ question: 'hello' })).rejects.toThrow('provider unavailable');

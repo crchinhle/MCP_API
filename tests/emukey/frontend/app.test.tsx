@@ -1,16 +1,26 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { createMemoryRouter, MemoryRouter, RouterProvider, Route, Routes, useLocation } from 'react-router-dom';
 
 import { App } from '../../../EmuKey/frontend/src/presentation/app/App';
 import { AuthProvider } from '../../../EmuKey/frontend/src/application/auth/authContext';
 import { AuthScreen } from '../../../EmuKey/frontend/src/presentation/screens/AuthScreen';
 import { ProductDetailScreen } from '../../../EmuKey/frontend/src/presentation/screens/ProductDetailScreen';
+import { PublicHelpScreen } from '../../../EmuKey/frontend/src/presentation/screens/PublicHelpScreen';
 
 afterEach(cleanup);
 
 describe('Emukey public web screens', () => {
+  it('keeps the help search input synchronized with URL history', async () => {
+    const router = createMemoryRouter([{ path: '/help', element: <PublicHelpScreen /> }], { initialEntries: ['/help?q=install'] });
+    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><RouterProvider router={router} /></QueryClientProvider>);
+    expect((screen.getByLabelText('Tìm tài liệu hướng dẫn') as HTMLInputElement).value).toBe('install');
+    await act(() => router.navigate('/help?q=activate'));
+    expect((screen.getByLabelText('Tìm tài liệu hướng dẫn') as HTMLInputElement).value).toBe('activate');
+    await act(() => router.navigate(-1));
+    expect((screen.getByLabelText('Tìm tài liệu hướng dẫn') as HTMLInputElement).value).toBe('install');
+  });
   it.each([
     ['/buyer', 'Lối tắt'],
   ])('hides unfinished page content while initial data loads at %s', async (path, heading) => {
@@ -102,7 +112,9 @@ describe('Emukey public web screens', () => {
     });
     try {
       render(<App initialEntries={['/']} />);
-      await screen.findByRole('heading', { name: 'Sản phẩm nổi bật' });
+      await screen.findByRole('heading', { name: 'Sản phẩm đang phát hành' });
+      const titles = Array.from(document.querySelectorAll('.public-home-carousel h3')).map((element) => element.textContent);
+      expect(titles).toEqual(['CloudStudio AI', 'DataGuard SDK', 'Fourth Product', 'SecureDesk Pro']);
       const carousel = document.querySelector<HTMLElement>('.public-home-carousel');
       expect(carousel).toBeTruthy();
       const inactiveSlide = carousel?.querySelector<HTMLElement>('.public-home-page[aria-hidden="true"]');
@@ -119,6 +131,7 @@ describe('Emukey public web screens', () => {
     render(<App initialEntries={['/help']} />);
     expect(screen.getByRole('heading', { name: 'Trung tâm hướng dẫn' })).toBeTruthy();
     expect(screen.getByPlaceholderText('Tìm tài liệu hướng dẫn...')).toBeTruthy();
+    expect(screen.queryByText('Demo')).toBeNull();
   });
 
   it('prefills the reset token and confirms successful password reset', async () => {

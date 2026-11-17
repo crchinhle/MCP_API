@@ -47,6 +47,15 @@ export type ConversationDto = {
 };
 
 export type CreateConversationDto = {
+  mode?: 'AI' | 'SUPPORT';
+  /**
+   * Stable creation intent key; required for SUPPORT.
+   */
+  clientRequestId?: string;
+  /**
+   * Required for SUPPORT.
+   */
+  initialMessage?: string;
   contextId?: string;
   contextType?: 'GENERAL' | 'PRODUCT' | 'PLAN' | 'ORDER' | 'LICENSE';
   title?: string;
@@ -86,6 +95,7 @@ export type CitationDetailDto = {
 };
 
 export type MessageDto = {
+  createdAt: string;
   intent?: string;
   outcome?: string;
   catalogSources?: Array<CatalogSourceDto>;

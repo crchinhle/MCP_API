@@ -69,15 +69,16 @@ Removing `redis-data` is an explicit destructive clean-room operation and is not
 Never commit a real `.env`. The checked-in examples contain placeholders. Production must provide credentials and keys through its secret manager. Both the root and backend Compose files load the real database connection from the ignored `backend/.env`; `REDIS_URL` is overridden inside containers so they can reach the Compose Redis service.
 
 Database initialization is not part of normal `docker compose up`. The only SQL
-source, `backend/database/schema.sql`, declares the final 18-table structure.
-It has no historical migration modes. **Its default is destructive:** drop schema
+source, `backend/database/schema.sql`, declares the final 24-table structure and requires pgvector.
+It has no historical migration modes. Initialization refuses production and a
+non-empty database unless `--allow-destructive` is explicitly supplied. That flag drops schema
 `public` with `CASCADE`, recreate it and build the current structure. Dependent
 objects can also be removed, including dependencies in other schemas. This resets
 the application schema within the selected database; it does not drop the database
 or its roles. Stop the API/worker and confirm the database and recovery backup
 before explicitly running initialization.
 
-From `backend`, build the CLI and initialize only when a reset is intended:
+From `backend`, build the CLI and initialize only a new, empty disposable database:
 
 ```powershell
 corepack pnpm build

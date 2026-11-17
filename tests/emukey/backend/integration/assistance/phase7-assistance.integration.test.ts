@@ -23,15 +23,11 @@ import { FakeAiGateway } from '../../../../../EmuKey/backend/src/modules/assista
 import { IdentityService } from '../../../../../EmuKey/backend/src/modules/identity-access/identity.service.js';
 import type { AuthPrincipal } from '../../../../../EmuKey/backend/src/modules/identity-access/identity.types.js';
 import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import { RedisContainer } from '@testcontainers/redis';
 import { Redis } from 'ioredis';
-import { SupportLeaseScheduler } from '../../../../../EmuKey/backend/src/modules/assistance-support/worker/support-lease.scheduler.js';
 import { PublicAssistantService } from '../../../../../EmuKey/backend/src/modules/assistance-support/application/public-assistant.service.js';
 
-const supportWorkerFixture = process.env.EMUKEY_SUPPORT_WORKER_FIXTURE === '1';
-
-describe.skipIf(supportWorkerFixture)('Phase 7 assistance PostgreSQL integration', () => {
+describe('Phase 7 assistance PostgreSQL integration', () => {
   let client: Pool;
   let container: StartedPostgreSqlContainer;
   let repository: AssistanceSupportRepository;
@@ -136,7 +132,7 @@ describe.skipIf(supportWorkerFixture)('Phase 7 assistance PostgreSQL integration
     let diagnostics = '';
     const start = () => {
       const child = spawn(process.execPath, [resolve(process.cwd(), 'node_modules/vitest/vitest.mjs'), 'run', '--config',
-        resolve(import.meta.dirname, '../../../../../tooling/emukey/verification/vitest.backend.config.ts'), fileURLToPath(import.meta.url),
+        resolve(import.meta.dirname, '../../../../../tooling/emukey/verification/vitest.backend.config.ts'), resolve(import.meta.dirname, 'support-lease-worker.fixture.test.ts'),
         '--pool=threads', '--maxWorkers=1', '--testNamePattern=support lease child fixture', '--reporter=dot'], {
         cwd: process.cwd(), windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env,
           EMUKEY_SUPPORT_WORKER_FIXTURE: '1', EMUKEY_SUPPORT_FIXTURE_PG: container.getConnectionUri(), EMUKEY_SUPPORT_FIXTURE_REDIS: cache.getConnectionUrl() },
@@ -539,23 +535,4 @@ describe.skipIf(supportWorkerFixture)('Phase 7 assistance PostgreSQL integration
     await client.query("UPDATE products SET status='ARCHIVED' WHERE id=$1", [product.rows[0]!.id]);
     await expect(repository.createConversation(customerId, input)).rejects.toThrow('CONVERSATION_CONTEXT_NOT_FOUND');
   });
-});
-
-describe.runIf(supportWorkerFixture)('support worker subprocess fixture', () => {
-  it('support lease child fixture', async () => {
-    const database = new URL(process.env.EMUKEY_SUPPORT_FIXTURE_PG!);
-    const cache = new URL(process.env.EMUKEY_SUPPORT_FIXTURE_REDIS!);
-    if (!['localhost', '127.0.0.1', '[::1]'].includes(database.hostname) || database.pathname !== '/emukey_phase7' ||
-      !['localhost', '127.0.0.1', '[::1]'].includes(cache.hostname)) throw new Error('Disposable local support fixture required');
-    const pool = new Pool({ connectionString: database.href });
-    const redis = new Redis(cache.href);
-    await pool.query('SELECT 1');
-    await redis.ping();
-    process.stdout.write('Support worker fixture connected to disposable PostgreSQL/Redis\n');
-    const service = new AssistanceSupportService(new AssistanceSupportRepository(pool, new NotificationRepository(pool)));
-    const scheduler = new SupportLeaseScheduler(service, redis);
-    scheduler.onModuleInit();
-    try { await new Promise<void>((resolve) => setTimeout(resolve, 45_000)); }
-    finally { scheduler.onModuleDestroy(); await redis.quit(); await pool.end(); }
-  }, 60_000);
 });

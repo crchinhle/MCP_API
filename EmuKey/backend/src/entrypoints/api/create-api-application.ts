@@ -49,7 +49,8 @@ export async function createApiApplication(
   });
   const expressApp = app.getHttpAdapter().getInstance() as { set: (name: string, value: unknown) => void };
   expressApp.set('x-powered-by', false);
-  expressApp.set('trust proxy', config.get<string>('NODE_ENV') === 'production');
+  const trustedProxies = config.get<string[]>('TRUST_PROXY_CIDRS') ?? [];
+  expressApp.set('trust proxy', trustedProxies.length ? trustedProxies : false);
   app.setGlobalPrefix('api/v1');
   app.enableCors({
     credentials: true,

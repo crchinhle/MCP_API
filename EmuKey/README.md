@@ -6,7 +6,7 @@ Nền tảng bán và quản lý license: NestJS API/worker, PostgreSQL external
 
 - Node 22.21.0, Corepack và pnpm 11.25.0; Docker Compose v2.
 - PostgreSQL 15 hoặc mới hơn, database riêng đã tạo và tài khoản có quyền cài `pgcrypto`, `citext`, tạo schema/bảng/function/trigger. Không dùng database chung có dữ liệu ngoài EmuKey.
-- `backend/database/schema.sql` là nguồn cấu trúc database duy nhất, gồm 23 bảng. Khi đổi cấu trúc, dựng lại database từ đầu; không còn lệnh nâng cấp tại chỗ.
+- `backend/database/schema.sql` là nguồn cấu trúc database duy nhất, gồm 24 bảng; PostgreSQL cần extension `vector` (pgvector) bên cạnh `pgcrypto` và `citext`. Database có dữ liệu phải được nâng cấp bằng SQL có kiểm chứng trên bản sao disposable; không dùng initializer làm migration.
 - Blockchain runtime dùng Sepolia thật. Cần RPC, relayer testnet có gas và địa chỉ contract hợp lệ để nghiệm thu phát hành/gia hạn trên chain. API/worker ở `NODE_ENV=development` yêu cầu SePay sandbox, Brevo, Gemini và FCM cùng credentials tương ứng. Adapter `fake` chỉ được dùng trong `NODE_ENV=test` với fixture cô lập; không khởi động được runtime development thông thường và không chứng minh tích hợp thật.
 
 Từ thư mục `EmuKey/`, sao chép `backend/.env.example` thành `backend/.env`, điền PostgreSQL, JWT secret, các credentials provider, activation envelope key 32 bytes dạng 64 ký tự hex và cấu hình Sepolia. Mẫu chỉ liệt kê biến cần điền, chưa thể chạy bằng các placeholder. Giữ `.env` ngoài Git. Với Compose, PostgreSQL phải truy cập được từ container: `localhost` trong container không phải máy host; Docker Desktop có thể dùng `host.docker.internal`.
@@ -36,7 +36,15 @@ corepack pnpm --dir backend db:verify
 
 Initializer từ chối `NODE_ENV=production` và từ chối database không rỗng nếu không có `--allow-destructive`. Không dùng flag đó để nâng cấp. Demo seed là tùy chọn phát triển: `corepack pnpm --dir backend db:initialize --demo` trên database rỗng với `NODE_ENV=development`; tài khoản/mã trong demo không phải dữ liệu vận hành.
 
-## Dựng lại database khi thay đổi cấu trúc
+## Database có dữ liệu và thay đổi cấu trúc
+
+Không chạy `db:initialize` hoặc `db:reset` để nâng cấp database cần giữ dữ liệu. Trước khi nâng cấp cần xác định schema nguồn thực tế, chuẩn bị SQL tăng dần có review và cập nhật schema đích duy nhất. Kiểm tra backup/restore trên database disposable, đối chiếu row counts, khóa ngoại, snapshot Terms, key material và outbox; chạy `db:verify`, regression giao dịch và reconcile ở môi trường cô lập. Giữ backup và bản runtime tương ứng để phục hồi; không tự tạo SQL bằng cách so chuỗi schema. Chưa chứng minh các bước này thì chưa được coi là nâng cấp production an toàn.
+
+`corepack pnpm --dir backend db:migrate` hiện chỉ hỗ trợ trường hợp schema chuẩn có thêm bảng metadata cũ `public.schema_versions`. Mặc định lệnh diễn tập trong transaction rồi **ROLLBACK**, không lưu thay đổi; có giữ khóa metadata trong thời gian diễn tập. Sau khi operator kiểm tra backup và xác nhận các công cụ cũ không còn đọc tên bảng đó, `db:migrate --apply` chuyển chính bảng sang `emukey_maintenance.schema_versions`, giữ nguyên OID/dữ liệu, kiểm tra lại baseline rồi mới COMMIT. Lệnh từ chối mọi drift khác, target archive có sẵn hoặc thiếu quyền. Chạy lại trên baseline chuẩn là no-op. Đây chưa phải trình nâng cấp tùy ý giữa các phiên bản schema.
+
+Phục hồi vị trí ledger sau khi apply chỉ dành operator đã kiểm tra phụ thuộc: trong một transaction, `ALTER TABLE emukey_maintenance.schema_versions SET SCHEMA public`. Dữ liệu ledger không bị xóa; `db:verify` sẽ lại báo extra table như trước. Không dùng thao tác này để hoàn tác thay đổi nghiệp vụ hoặc trạng thái blockchain.
+
+Chỉ dựng lại **database phát triển disposable có thể bỏ toàn bộ dữ liệu**, với quyết định reset rõ ràng:
 
 Dừng API và worker, cập nhật `backend/database/schema.sql`, rồi chạy từ `EmuKey/` với `NODE_ENV=development`:
 
@@ -46,9 +54,15 @@ corepack pnpm --dir backend db:initialize --allow-destructive
 corepack pnpm --dir backend db:verify
 ```
 
-Lệnh xóa toàn bộ dữ liệu trong schema `public` và các đối tượng phụ thuộc, rồi tạo lại 23 bảng trong một transaction. Database và role PostgreSQL vẫn được giữ. Nếu tự drop và tạo lại database rỗng, chạy `db:initialize` không cần flag. Khởi tạo ở production vẫn bị chặn. `db:reset` là tên gọi khác của init; thêm `--demo` khi cần dữ liệu mẫu. Khởi động lại API/worker sau khi kiểm tra đạt.
+Lệnh xóa toàn bộ dữ liệu trong schema `public` và các đối tượng phụ thuộc, rồi tạo lại 24 bảng trong một transaction. Database và role PostgreSQL vẫn được giữ. Nếu tự drop và tạo lại database rỗng, chạy `db:initialize` không cần flag. Khởi tạo ở production vẫn bị chặn. `db:reset` là tên gọi khác của init; thêm `--demo` khi cần dữ liệu mẫu. Khởi động lại API/worker sau khi kiểm tra đạt.
 
-Không còn bảng ghi phiên bản schema hoặc cơ chế nâng cấp giữ dữ liệu. Init không phục hồi dữ liệu cũ. Dữ liệu blockchain và hệ thống nhà cung cấp nằm bên ngoài, không bị xóa khi reset database; dùng môi trường demo riêng khi bắt đầu lại.
+Schema chuẩn không tạo bảng ghi phiên bản mới; ledger cũ được bảo toàn ngoài `public` khi operator áp dụng migration giới hạn ở trên. Init không phục hồi dữ liệu cũ. Dữ liệu blockchain và hệ thống nhà cung cấp nằm bên ngoài, không bị xóa khi reset database; dùng môi trường demo riêng khi bắt đầu lại.
+
+## Phê duyệt điều khoản cho production
+
+Chủ dự án cần duyệt nội dung chính xác của `backend/config/service-terms.md`, đặt `SERVICE_TERMS_VERSION` (tối đa 40 ký tự) và `SERVICE_TERMS_APPROVED_SHA256` theo SHA-256 của đúng bytes UTF-8 đã duyệt. Production kiểm tra lúc khởi động và mỗi lần tạo snapshot; thiếu approval hoặc hash lệch sẽ từ chối. Không lấy hash fixture làm bằng chứng phê duyệt pháp lý. Development/test vẫn dùng fixture v1. Order giữ nguyên snapshot/version/hash của lúc tạo; thay tài liệu hiện hành không đổi sự chấp thuận của đơn cũ. `config/license-terms/v1.md` là baseline lịch sử, không phải văn bản đã được phê duyệt.
+
+`TRUST_PROXY_CIDRS` chỉ nhận IP/CIDR của ingress thực tế. Mặc định rỗng sẽ bỏ qua forwarded headers do client gửi; không dùng `true`, subnet toàn Internet hoặc số hop. Cần xác định network của reverse proxy và chặn truy cập trực tiếp API trước khi cấu hình production để giữ đúng IP cho rate limit.
 
 ## Chạy local
 
@@ -68,6 +82,8 @@ Sau khi Redis restart, client tự kết nối lại với backoff tối đa 2 g
 Khôi phục backup Redis không mở lại receipt nhận key đã ACK hoặc kéo dài cửa sổ retry đã hết trong PostgreSQL. Envelope chưa ACK bị mất thì API không tái tạo secret từ receipt metadata; dùng quy trình khôi phục key nếu không thể lấy lại envelope hợp lệ trong thời hạn. Không lưu dump hoặc key thật trong source/log.
 
 Mobile: cấu hình `mobile/.env` theo mẫu rồi chạy `corepack pnpm --dir mobile start`. Android emulator dùng `EXPO_PUBLIC_API_URL=http://10.0.2.2:3000/api/v1`; điện thoại thật cần địa chỉ HTTPS hoặc mạng phát triển truy cập được. Đăng nhập native chỉ nhận CUSTOMER, refresh token và mã đã nhận lưu trong SecureStore theo tài khoản. Đăng xuất xóa các mã/receipt được ứng dụng hiện tại quản lý. Mở app từ thanh toán/thông báo luôn đọc lại API; URL return không xác nhận tiền.
+
+`mobile/patches/decode-uri-component@0.5.1.patch` giữ thuật toán decoder đã vá bảo mật và đổi export sang CommonJS để tương thích `query-string` 7 của navigation. pnpm áp dụng patch qua `patchedDependencies`; Docker cần copy patch trước frozen install. Không bỏ patch để làm install xanh: chỉ gỡ khi dependency phía gọi hỗ trợ export upstream và regression URL/navigation, export, dependency audit đều đạt.
 
 Để build Android manager, cần JDK 17, Android SDK 36 và NDK mà Expo prebuild chọn. Đặt `ANDROID_HOME` và `ANDROID_SDK_ROOT` cùng trỏ tới SDK đã cài, thêm platform-tools vào `PATH`. Expo gọi `pnpm` trong tiến trình con: bảo đảm `pnpm --version` chạy được (có thể dùng `corepack enable` hoặc `corepack enable --install-directory <thư-mục-tools>` rồi thêm thư mục đó vào `PATH`). Trong `mobile/`, chạy:
 

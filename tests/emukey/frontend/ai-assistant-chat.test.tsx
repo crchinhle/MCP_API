@@ -490,7 +490,8 @@ describe("AI assistant chat", () => {
         .getByRole("link", { name: /Hướng dẫn cài đặt/ })
         .getAttribute("href"),
     ).toBe("/help/guide");
-    expect(screen.queryByText("Tải bộ cài chính thức.")).toBeNull();
+    const excerpt = screen.getByText("Tải bộ cài chính thức.");
+    expect(excerpt.closest('details')?.hasAttribute('open')).toBe(false);
     expect(
       screen.getByRole("link", { name: "Xem nguồn: Hướng dẫn cài đặt" }),
     ).toBeTruthy();

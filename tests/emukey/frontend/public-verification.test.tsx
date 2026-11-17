@@ -6,6 +6,35 @@ import { App } from '../../../EmuKey/frontend/src/presentation/app/App';
 afterEach(cleanup);
 
 describe('public verification', () => {
+  it.each(['PENDING_ONCHAIN', 'PROJECTION_STALE', 'REORGED'])('does not claim validity for %s', async (state) => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ state, status: 'ACTIVE', productName: 'Unconfirmed Product' }));
+    try {
+      render(<App initialEntries={['/verify']} />);
+      fireEvent.change(screen.getByLabelText('Mã xác thực'), { target: { value: 'EMU-UNCONFIRMED-LICENSE' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Xác minh' }));
+      await screen.findByText('Unconfirmed Product');
+      expect(screen.queryByText(/Bản quyền hợp lệ và đã xác thực/)).toBeNull();
+      expect(screen.queryByText('Đang hoạt động')).toBeNull();
+      expect(screen.getAllByText(/Chưa xác nhận tính hợp lệ/).length).toBeGreaterThan(0);
+    } finally { vi.restoreAllMocks(); }
+  });
+  it('does not invent missing business metadata or provider device measurements', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify({
+      state: 'CHAIN_CONFIRMED', status: 'ACTIVE', productName: 'Minimal Product',
+      fulfillmentMode: 'PROVIDER_HANDOFF', maxActiveDevices: 5, activeDeviceCount: 0,
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    render(<App initialEntries={['/verify']} />);
+    fireEvent.change(screen.getByLabelText('Mã xác thực'), { target: { value: 'EMU-MISSING-METADATA' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Xác minh' }));
+    expect(await screen.findByText('Minimal Product')).toBeTruthy();
+    expect(screen.queryByText('Gói tiêu chuẩn')).toBeNull();
+    expect(screen.queryByText('Emukey Software')).toBeNull();
+    expect(screen.queryByText('Vĩnh viễn')).toBeNull();
+    expect(screen.getByText('Bên bán quản lý · tối đa 5 thiết bị')).toBeTruthy();
+    expect(screen.getAllByText('Chưa có thông tin').length).toBeGreaterThanOrEqual(3);
+    vi.restoreAllMocks();
+  });
+
   it('shows the backend allowlist without Buyer PII', async () => {
     render(<App initialEntries={['/verify']} />);
     fireEvent.change(screen.getByLabelText('Mã xác thực'), { target: { value: 'EMU-TEST-LICENSE' } });

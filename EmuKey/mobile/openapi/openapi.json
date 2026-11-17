@@ -4233,6 +4233,25 @@
       "CreateConversationDto": {
         "type": "object",
         "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "AI",
+              "SUPPORT"
+            ],
+            "default": "AI"
+          },
+          "clientRequestId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable creation intent key; required for SUPPORT."
+          },
+          "initialMessage": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 8000,
+            "description": "Required for SUPPORT."
+          },
           "contextId": {
             "type": "string",
             "format": "uuid"
@@ -4379,6 +4398,10 @@
       "MessageDto": {
         "type": "object",
         "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
           "intent": {
             "type": "string"
           },
@@ -4442,6 +4465,7 @@
           }
         },
         "required": [
+          "createdAt",
           "citationDetails",
           "id",
           "conversationId",

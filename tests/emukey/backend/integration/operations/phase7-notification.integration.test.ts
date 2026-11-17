@@ -263,11 +263,17 @@ describe.skipIf(childFixture)('Phase 7 notification PostgreSQL integration', () 
   it('backs off an HTTP timeout and dead-letters the same durable delivery at the configured limit', async () => {
     const notice = await repository.create({ channel: 'EMAIL', content: 'Timeout fixture', data: {}, eventKey: 'http-timeout', title: 'Timeout fixture', type: 'TEST', userId });
     let requests = 0;
-    const vendor = createServer((_request, _response) => { requests += 1; });
+    let activeRequest: AbortController;
+    const vendor = createServer((_request, _response) => {
+      requests += 1;
+      // Start the timeout after the real HTTP request arrives. Under CPU load a
+      // timer created before fetch can abort before the local vendor observes it.
+      setTimeout(() => activeRequest.abort(new DOMException('Vendor timeout', 'TimeoutError')), 100);
+    });
     await new Promise<void>((resolve) => vendor.listen(0, '127.0.0.1', resolve));
     const port = (vendor.address() as { port: number }).port;
-    const email = { deliver: async () => { await fetch(`http://127.0.0.1:${port}`, { signal: AbortSignal.timeout(100) }); return { providerMessageId: 'unreachable' }; } };
-    const config = new ConfigService({ NOTIFICATION_LEASE_SECONDS: 30, NOTIFICATION_MAX_ATTEMPTS: 2, NOTIFICATION_RETRY_BASE_SECONDS: 1 });
+    const email = { deliver: async () => { activeRequest = new AbortController(); await fetch(`http://127.0.0.1:${port}`, { signal: activeRequest.signal }); return { providerMessageId: 'unreachable' }; } };
+    const config = new ConfigService({ NOTIFICATION_LEASE_SECONDS: 30, NOTIFICATION_MAX_ATTEMPTS: 2, NOTIFICATION_RETRY_BASE_SECONDS: 60 });
     const heartbeat = { set: async () => 'OK' };
     try {
       await new NotificationProcessor(repository, email, {} as never, config, heartbeat as never).process({ id: 'timeout-first' } as never);
@@ -276,7 +282,7 @@ describe.skipIf(childFixture)('Phase 7 notification PostgreSQL integration', () 
       expect(failed.next_attempt_at.getTime()).toBeGreaterThan(failed.updated_at.getTime());
       await new NotificationProcessor(repository, email, {} as never, config, heartbeat as never).process({ id: 'too-soon' } as never);
       expect(requests).toBe(1);
-      await client.query('SELECT pg_sleep(1.1)');
+      await client.query("UPDATE notification_deliveries SET next_attempt_at=clock_timestamp()-interval '1 second' WHERE notification_id=$1", [notice.id]);
       await new NotificationProcessor(new NotificationRepository(client), email, {} as never, config, heartbeat as never).process({ id: 'timeout-retry' } as never);
       expect((await client.query('SELECT delivery_status,attempt_count,next_attempt_at FROM notification_deliveries WHERE notification_id=$1', [notice.id])).rows)
         .toEqual([{ delivery_status: 'DEAD_LETTER', attempt_count: 2, next_attempt_at: null }]);

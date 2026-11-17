@@ -102,7 +102,7 @@ describe('PurchaseFlowModal offer configuration', () => {
     await user.click(screen.getByRole('button', { name: 'Tiếp tục' }));
     await waitFor(() => expect(orderCreates()).toHaveLength(1));
     expect(JSON.parse(orderCreates()[0]!.body!)).toEqual({ planId: 'plan-starter', deviceQuantity: 4, durationMonths: 3 });
-    expect(await screen.findByRole('table', { name: 'Chi tiết đơn hàng' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Chi tiết đơn hàng' })).toBeTruthy();
     expect(screen.getByText('Người mua')).toBeTruthy();
     expect(screen.getByText('Nhà cung cấp')).toBeTruthy();
     expect(screen.getByText('Demo Provider')).toBeTruthy();
@@ -286,7 +286,7 @@ describe('PurchaseFlowModal order creation from Tiếp tục', () => {
       await userEvent.setup().click(screen.getByRole('button', { name: 'Tiếp tục' }));
       expect(await screen.findByRole('link', { name: orderStatus === 'PAYMENT_ACCEPTED' ? 'Theo dõi cấp bản quyền' : 'Mở trạng thái đơn hàng' })).toBeTruthy();
       expect(screen.queryByRole('region', { name: /Điều khoản dịch vụ/ })).toBeNull();
-      expect(screen.queryByRole('button', { name: 'Thanh toán qua SePay' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Tiếp tục thanh toán' })).toBeNull();
     } finally { vi.mocked(fetch).mockImplementation(original); }
   });
 
@@ -368,8 +368,10 @@ describe('PurchaseFlowModal terms and payment stage', () => {
     const user = userEvent.setup();
     await openTermsStage(user);
 
-    const payButton = await screen.findByRole('button', { name: 'Thanh toán qua SePay' });
-    expect((payButton as HTMLButtonElement).disabled).toBe(true);
+    const payButton = await screen.findByRole('button', { name: 'Tiếp tục thanh toán' });
+    await user.click(payButton);
+    expect(await screen.findByText('Bạn cần đồng ý đúng phiên bản điều khoản của đơn hàng trước khi thanh toán.')).toBeTruthy();
+    expect(requests().some((call) => call.method === 'POST' && call.path.endsWith('/checkout'))).toBe(false);
 
     await user.click(screen.getByRole('checkbox'));
     await waitFor(() => expect((payButton as HTMLButtonElement).disabled).toBe(false));
@@ -380,7 +382,7 @@ describe('PurchaseFlowModal terms and payment stage', () => {
     const user = userEvent.setup();
     await openTermsStage(user);
     await user.click(screen.getByRole('checkbox'));
-    await user.click(screen.getByRole('button', { name: 'Thanh toán qua SePay' }));
+    await user.click(screen.getByRole('button', { name: 'Tiếp tục thanh toán' }));
 
     await waitFor(() => expect(requests().some((call) => call.method === 'POST' && call.path.endsWith('/checkout'))).toBe(true));
     const calls = requests();
@@ -400,7 +402,7 @@ describe('PurchaseFlowModal terms and payment stage', () => {
   it('never creates a second order when Tiếp tục is pressed again after reopening', async () => {
     const user = userEvent.setup();
     await openTermsStage(user);
-    await user.click(screen.getByRole('button', { name: 'Quay lại' }));
+    await user.click(screen.getByRole('button', { name: 'Chỉnh gói' }));
     await user.click(screen.getByRole('button', { name: 'Tiếp tục' }));
 
     await screen.findByRole('region', { name: /Điều khoản dịch vụ/ });
@@ -463,7 +465,7 @@ describe('PurchaseFlowModal conflict handling', () => {
     await user.click(screen.getByRole('button', { name: 'Tiếp tục' }));
 
     expect(await screen.findByText('Cấu hình của đơn không còn khớp với gói đã công bố')).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Thanh toán qua SePay' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Tiếp tục thanh toán' }) as HTMLButtonElement).disabled).toBe(true);
     expect(requests().some((call) => call.method === 'POST' && call.path.endsWith('/checkout'))).toBe(false);
     vi.mocked(fetch).mockImplementation(original);
   });

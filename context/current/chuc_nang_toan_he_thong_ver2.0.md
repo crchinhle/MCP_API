@@ -56,7 +56,7 @@ Chưa có chữ ký license hoặc kiểm tra ngoại tuyến. Cơ chế này ng
 
 ## 6. Phạm vi dữ liệu
 
-Schema vật lý duy nhất: `EmuKey/backend/database/schema.sql`, hiện 23 bảng. Ba bảng mới: provider_integrations, license_key_materials, provider_license_deliveries. Bảng license_key_deliveries vẫn ghi receipt của Customer.
+Schema vật lý duy nhất: `EmuKey/backend/database/schema.sql`, hiện 24 bảng. Ba bảng mới: provider_integrations, license_key_materials, provider_license_deliveries. Bảng license_key_deliveries vẫn ghi receipt của Customer.
 
 Đơn/license cũ giữ `LEGACY_DEVICE`; đơn mua mới sau cutover dùng `PROVIDER_HANDOFF`. Mode bất biến, renewal kế thừa license đích. Bảng/device protocol cũ còn để bảo toàn lịch sử và tương thích; không phải quy trình sử dụng bản quyền mới của đồ án. Không backfill key plaintext từ commitment/hash.
 
@@ -78,7 +78,7 @@ Schema vật lý duy nhất: `EmuKey/backend/database/schema.sql`, hiện 23 b�
 | `CAT-01` | Hồ sơ Provider và chain namespace | Provider Admin/System Admin | `PROVIDER_ADMIN` chính là Provider account; System Admin seed/approve, không self-register |
 | `CAT-02` | Product lifecycle | Provider | Provider-scoped DRAFT/PUBLISHED/ARCHIVED |
 | `CAT-03` | Plan lifecycle | Provider | Published immutable; thay đổi tạo version mới |
-| `CAT-04` | Terms binding và plan commitment | Backend/Provider | Một Terms template chung; Plan bind version/hash; commitment deterministic |
+| `CAT-04` | Plan commitment | Backend/Provider | Commitment deterministic theo dữ liệu Plan; Terms version/hash/content được snapshot riêng trên Order qua COM-01/COM-02, không đổi commitment đã phát hành |
 | `CAT-05` | Catalog và so sánh Plan | Public/Customer | Chỉ Product/Plan published; compare dữ liệu cấu trúc, không AI mutation |
 
 ### MOD-03 — Commerce & Payment (6)

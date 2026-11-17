@@ -25,11 +25,11 @@ export function BuyerHomeScreen() {
   const licenseRows = licenses.data ?? [];
   const orderRows = orders.data ?? [];
   const metrics = selectBuyerHomeMetrics(orderRows, licenseRows, new Date());
-  const loading = licenses.isLoading;
-  const failed = licenses.isError;
+  const loading = licenses.isLoading || orders.isLoading;
+  const failed = licenses.isError || orders.isError;
 
   if (loading) return <PageLoading />;
-  if (failed && !licenses.data) {
+  if (failed && (!licenses.data || !orders.data)) {
     return (
       <div className="buyer-home-screen">
         <main className="buyer-home-main" id="main-content" tabIndex={-1}>
@@ -75,13 +75,14 @@ export function BuyerHomeScreen() {
             type="button"
             className="buyer-home-metric"
             onClick={() => void navigate('/buyer/licenses')}
-            aria-label={`Thiết bị đang sử dụng: ${loading || failed ? 'chưa có dữ liệu' : metrics.activeDevices}`}
+            aria-label={`Thiết bị đang sử dụng: ${loading || failed || metrics.activeDevices === null ? 'chưa có dữ liệu' : metrics.activeDevices}`}
           >
             <div className="buyer-home-metric-icon buyer-home-metric-icon--neutral">
               <DesktopOutlined />
             </div>
-            <strong>{loading || failed ? '—' : formatMetric(metrics.activeDevices)}</strong>
+            <strong>{loading || failed || metrics.activeDevices === null ? '—' : formatMetric(metrics.activeDevices)}</strong>
             <span>Thiết bị đang sử dụng</span>
+            {!loading && !failed && metrics.activeDevices === null && <small>Số thiết bị do bên bán quản lý chưa được xác minh.</small>}
           </button>
 
           <button

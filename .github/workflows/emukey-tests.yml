@@ -33,6 +33,11 @@ jobs:
           # Validate against current recommendations, without a stale local cache.
           EXPO_NO_CACHE: '1'
         run: pnpm --dir EmuKey/mobile exec expo install --check
+      - name: Audit runtime dependencies
+        run: |
+          for component in backend frontend mobile; do
+            pnpm --dir EmuKey/$component audit --prod --audit-level high
+          done
       - name: Workspace verification
         run: |
           node tooling/emukey/run.mjs baseline

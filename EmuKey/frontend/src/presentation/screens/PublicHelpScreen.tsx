@@ -1,6 +1,6 @@
 import { Empty, Input, Pagination, Select, Spin } from 'antd';
 import { FileTextOutlined, RightOutlined, SearchOutlined } from '@ant-design/icons';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { SiteHeader } from '../components/SiteHeader';
 import { usePublicKnowledgeDocuments } from '../../application/assistance/knowledgeQueries';
@@ -15,6 +15,7 @@ export function PublicHelpScreen() {
   const pageParam = Math.max(1, parseInt(params.get('page') ?? '1', 10) || 1);
 
   const [searchInput, setSearchInput] = useState(searchParam);
+  useEffect(() => { setSearchInput(searchParam); }, [searchParam]);
 
   const queryArgs: { search?: string; tag?: string; productId?: string; page?: number; limit?: number } = {
     page: pageParam,
@@ -83,7 +84,6 @@ export function PublicHelpScreen() {
           {/* Header row */}
           <div className="public-help-header-row">
             <h1 className="public-help-title">Trung tâm hướng dẫn</h1>
-            <span className="public-help-demo-badge">Demo</span>
           </div>
 
           {/* Search Bar */}
@@ -172,11 +172,11 @@ export function PublicHelpScreen() {
                   <div
                     key={doc.id}
                     className="public-help-item-card"
-                    onClick={() => navigate(`/help/${doc.id}`)}
+                    onClick={() => void navigate(`/help/${doc.id}`)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
-                        navigate(`/help/${doc.id}`);
+                        void navigate(`/help/${doc.id}`);
                       }
                     }}
                     role="button"

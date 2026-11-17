@@ -29,6 +29,13 @@ const validEnvironment = {
 };
 
 describe('validateEnvironment', () => {
+  it('trusts only explicitly configured ingress addresses, never every forwarded hop', () => {
+    expect(validateEnvironment(validEnvironment).TRUST_PROXY_CIDRS).toEqual([]);
+    expect(validateEnvironment({ ...validEnvironment, TRUST_PROXY_CIDRS: '127.0.0.1/32,10.42.0.0/24,::1' }).TRUST_PROXY_CIDRS).toEqual(['127.0.0.1/32', '10.42.0.0/24', '::1']);
+    for (const value of ['true', '0.0.0.0/0', '::/0', '127.0.0.1/33', 'evil.example', '10.0.0.1/1.5']) {
+      expect(() => validateEnvironment({ ...validEnvironment, TRUST_PROXY_CIDRS: value })).toThrow('TRUST_PROXY_CIDRS');
+    }
+  });
   it('keeps namespace issuance disabled by default and requires a distinct complete deployment', () => {
     expect(validateEnvironment(validEnvironment).EVM_NAMESPACE_CONTRACT_ADDRESS).toBeUndefined();
     expect(() => validateEnvironment({ ...validEnvironment, EVM_NAMESPACE_CONTRACT_ADDRESS: `0x${'12'.repeat(20)}` })).toThrow('EVM_NAMESPACE_DEPLOYMENT_BLOCK is required');

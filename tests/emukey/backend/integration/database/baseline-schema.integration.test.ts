@@ -49,6 +49,38 @@ describe('account-linked Customer PostgreSQL baseline', () => {
     expect(files.filter((name) => name.endsWith('.sql'))).toEqual(['schema.sql']);
   });
 
+  it('archives only recognized legacy metadata without losing rows and rehearses with rollback', async () => {
+    await database.query('CREATE DATABASE emukey_metadata_migration');
+    const url = new URL(container.getConnectionUri());
+    url.pathname = '/emukey_metadata_migration';
+    const isolated = new Client({ connectionString: url.toString() });
+    await isolated.connect();
+    const run = promisify(execFile);
+    const entrypoint = resolve(process.cwd(), 'dist/entrypoints/database/migrate.js');
+    const env = { ...process.env, NODE_ENV: 'test', DATABASE_URL: url.toString() };
+    try {
+      await isolated.query(await readFile(resolve(process.cwd(), 'database/schema.sql'), 'utf8'));
+      await isolated.query("CREATE TABLE schema_versions(version text PRIMARY KEY, evidence jsonb); INSERT INTO schema_versions VALUES ('historical', '{\"preserve\":true}')");
+      const original = (await isolated.query('SELECT * FROM schema_versions')).rows;
+      expect((await run(process.execPath, [entrypoint], { env })).stdout).toContain('REHEARSAL_ROLLED_BACK');
+      expect((await isolated.query('SELECT * FROM public.schema_versions')).rows).toEqual(original);
+      await isolated.query('CREATE TABLE unrelated_sentinel(id integer)');
+      await expect(run(process.execPath, [entrypoint, '--apply'], { env })).rejects.toMatchObject({ stderr: expect.stringContaining('MIGRATION_UNKNOWN_SCHEMA_DRIFT') });
+      expect((await isolated.query('SELECT * FROM public.schema_versions')).rows).toEqual(original);
+      await isolated.query('DROP TABLE unrelated_sentinel');
+      expect((await run(process.execPath, [entrypoint, '--apply'], { env })).stdout).toContain('LEGACY_METADATA_ARCHIVED');
+      expect(await verifyBaselineDatabase(isolated)).toMatchObject({ matchesBaseline: true, tables: 24 });
+      expect((await isolated.query('SELECT * FROM emukey_maintenance.schema_versions')).rows).toEqual(original);
+      expect((await run(process.execPath, [entrypoint, '--apply'], { env })).stdout).toContain('ALREADY_CURRENT');
+      await isolated.query('BEGIN; ALTER TABLE emukey_maintenance.schema_versions SET SCHEMA public; COMMIT;');
+      expect((await isolated.query('SELECT * FROM public.schema_versions')).rows).toEqual(original);
+      expect((await verifyBaselineDatabase(isolated)).extraTables).toEqual(['schema_versions']);
+    } finally {
+      await isolated.end();
+      await database.query('DROP DATABASE emukey_metadata_migration');
+    }
+  });
+
   it('requires explicit consent before rebuilding and initializes without a version table', async () => {
     await database.query('CREATE DATABASE emukey_rebuild_cli_test');
     const url = new URL(container.getConnectionUri());

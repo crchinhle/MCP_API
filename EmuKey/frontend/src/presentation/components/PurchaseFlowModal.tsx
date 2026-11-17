@@ -435,6 +435,7 @@ export function PurchaseFlowModal({
               <section aria-label="Điều khoản dịch vụ" className="purchase-flow-modal__terms">
                 <header>
                   <h3>Điều khoản dịch vụ</h3>
+                  <details><summary>Phiên bản điều khoản</summary><p>Phiên bản {terms.data.version}</p><p>Hash {terms.data.hash}</p></details>
                 </header>
                 <div className="purchase-flow-modal__terms-scroll" tabIndex={0}>
                   <pre>{terms.data.content}</pre>

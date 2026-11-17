@@ -249,10 +249,10 @@ export function PublicVerificationScreen() {
 
   const isRevoked = result?.status === 'REVOKED';
   const isSuspended = result?.status === 'SUSPENDED';
+  const isConfirmed = result?.state === 'CHAIN_CONFIRMED';
   const isExpired = result?.expiresAt
     ? new Date(result.expiresAt).getTime() < Date.now()
     : false;
-  const isActive = result?.status === 'ACTIVE' && !isExpired;
 
   return (
     <div className="page-shell">
@@ -354,14 +354,16 @@ export function PublicVerificationScreen() {
                 type={
                   isRevoked
                     ? 'error'
-                    : isSuspended || isExpired
+                    : !isConfirmed || isSuspended || isExpired
                       ? 'warning'
                       : 'success'
                 }
                 title={
                   <span>
                     <span>Đã tìm thấy License</span>
-                    {isRevoked
+                    {!isConfirmed
+                      ? ' — Chưa xác nhận tính hợp lệ'
+                      : isRevoked
                       ? ' — Bản quyền đã bị thu hồi'
                       : isSuspended
                         ? ' — Bản quyền đang bị tạm khóa'
@@ -371,7 +373,9 @@ export function PublicVerificationScreen() {
                   </span>
                 }
                 description={
-                  isRevoked
+                  !isConfirmed
+                    ? 'Chưa xác nhận tính hợp lệ: đang chờ xác nhận hoặc đối soát Blockchain. Không sử dụng kết quả này để khẳng định bản quyền có hiệu lực.'
+                    : isRevoked
                     ? 'Bản quyền đã bị thu hồi vĩnh viễn trên Blockchain và không còn giá trị sử dụng.'
                     : isSuspended
                       ? 'Bản quyền đang trong trạng thái tạm ngưng hoạt động trên hệ thống.'
@@ -409,22 +413,24 @@ export function PublicVerificationScreen() {
                       <div className="modern-overview-plan">
                         {result.plan?.name
                           ? `${result.plan.name} (v${result.plan.version})`
-                          : 'Gói tiêu chuẩn'}
+                          : 'Chưa có thông tin'}
                       </div>
                       <div className="modern-overview-provider">
-                        Nhà phát hành: <span>{result.provider?.organizationName ?? result.provider?.displayName ?? 'Emukey Software'}</span>
+                        Nhà phát hành: <span>{result.provider?.organizationName || result.provider?.displayName || 'Chưa có thông tin'}</span>
                       </div>
                       <div className="modern-overview-badge-row">
                         <span
                           className={`modern-status-badge badge--${
                             isRevoked
                               ? 'error'
-                              : isSuspended || isExpired
+                              : !isConfirmed || isSuspended || isExpired
                                 ? 'warning'
                                 : 'success'
                           }`}
                         >
-                          {isRevoked
+                          {!isConfirmed
+                            ? 'Chưa xác nhận tính hợp lệ'
+                            : isRevoked
                             ? 'Đã thu hồi'
                             : isSuspended
                               ? 'Tạm khóa'
@@ -453,15 +459,19 @@ export function PublicVerificationScreen() {
                       <strong className="stat-value">
                         {result.expiresAt
                           ? formatDateOnlyVi(result.expiresAt)
-                          : 'Vĩnh viễn'}
+                          : 'Chưa có thông tin'}
                       </strong>
                     </div>
                     <div className="modern-overview-stat">
                       <span className="stat-label">Thiết bị</span>
                       <strong className="stat-value">
-                        {result.maxActiveDevices !== undefined
-                          ? `${result.activeDeviceCount ?? 0} / ${result.maxActiveDevices} thiết bị`
-                          : `${result.activeDeviceCount ?? 0} thiết bị`}
+                        {result.fulfillmentMode === 'PROVIDER_HANDOFF'
+                          ? `Bên bán quản lý${result.maxActiveDevices != null ? ` · tối đa ${result.maxActiveDevices} thiết bị` : ''}`
+                          : result.activeDeviceCount != null
+                            ? result.maxActiveDevices != null
+                              ? `${result.activeDeviceCount} / ${result.maxActiveDevices} thiết bị`
+                              : `${result.activeDeviceCount} thiết bị`
+                            : 'Chưa có thông tin'}
                       </strong>
                     </div>
                   </div>

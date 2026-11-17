@@ -15,6 +15,42 @@ import type { PaymentGatewayPort } from '../../../../EmuKey/backend/src/modules/
 import type { ActivationEnvelopePort } from '../../../../EmuKey/backend/src/modules/blockchain/application/ports/activation-envelope.port.js';
 import type { ActivationEnvelopeRecoveryService } from '../../../../EmuKey/backend/src/modules/blockchain/application/activation-envelope-recovery.service.js';
 import { ServiceTermsContent } from '../../../../EmuKey/backend/src/platform/terms/service-terms-content.js';
+import { createHash } from 'node:crypto';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+describe('ServiceTermsContent production readiness', () => {
+  it('rejects missing approval and detects content changes against the approved hash', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'emukey-terms-'));
+    const path = join(directory, 'terms.md');
+    const content = 'Isolated test terms. No legal approval is asserted.';
+    await writeFile(path, content);
+    try {
+      await expect(new ServiceTermsContent(path, { nodeEnvironment: 'production' }).onModuleInit()).rejects.toThrow('SERVICE_TERMS_APPROVAL_REQUIRED');
+      const terms = new ServiceTermsContent(path, {
+        nodeEnvironment: 'production', version: 'review-2026-11',
+        approvedHash: createHash('sha256').update(content).digest('hex'),
+      });
+      await expect(terms.onModuleInit()).resolves.toBeUndefined();
+      await expect(new ServiceTermsContent(path, {
+        nodeEnvironment: 'production', version: 'x'.repeat(41),
+        approvedHash: createHash('sha256').update(content).digest('hex'),
+      }).onModuleInit()).rejects.toThrow('SERVICE_TERMS_APPROVAL_REQUIRED');
+      expect((await terms.loadServiceTermsArtifact()).version).toBe('review-2026-11');
+      await writeFile(path, content + ' changed');
+      await expect(terms.loadServiceTermsArtifact()).rejects.toThrow('SERVICE_TERMS_APPROVAL_HASH_MISMATCH');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('retains deterministic local/test fixture terms without claiming approval', async () => {
+    const artifact = await new ServiceTermsContent(undefined, { nodeEnvironment: 'test' }).loadServiceTermsArtifact();
+    expect(artifact.version).toBe('v1');
+    expect(artifact.hash).toBe(createHash('sha256').update(artifact.content).digest('hex'));
+  });
+});
 
 const customer = { role: 'CUSTOMER' as const, sessionVersion: 1, sub: '00000000-0000-4000-8000-000000000004' };
 const admin = { role: 'SYSTEM_ADMIN' as const, sessionVersion: 1, sub: '00000000-0000-4000-8000-000000000001' };

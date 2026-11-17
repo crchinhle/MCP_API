@@ -2,6 +2,7 @@ import * as SecureStore from 'expo-secure-store';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { runInNewContext } from 'node:vm';
+import queryString from 'query-string';
 import { acceptServiceTerms, createOrder, storeActivationKey, loadActivationKey, retrieveActivationKey, registerPushToken, restoreSession, logout, login, listOrders, updateProfile, type MobileOrderDetail } from '../../../../EmuKey/mobile/src/infrastructure/api/client';
 
 jest.mock('expo-crypto', () => ({ randomUUID: jest.fn(() => '11111111-2222-4333-8444-555555555555') }));
@@ -19,6 +20,14 @@ beforeEach(() => {
   jest.mocked(SecureStore.deleteItemAsync).mockImplementation((key) => { validKey(key); values.delete(key); return Promise.resolve(); });
 });
 afterEach(() => jest.restoreAllMocks());
+
+it('decodes navigation query parameters through the patched CommonJS dependency', () => {
+  expect(queryString.parse('q=hello%20world&label=%E1%BB%A9ng%20d%E1%BB%A5ng')).toMatchObject({
+    q: 'hello world', label: 'ứng dụng',
+  });
+  expect(queryString.parse('q=%E0%A4%A')).toEqual({ q: '%E0%A4%A' });
+  expect(queryString.parse(`q=${'%EF'.repeat(10000)}`).q).toBe('%EF'.repeat(10000));
+});
 
 it('embeds the configured API origin in a production Expo bundle without a Node environment', () => {
   const expoRequire = createRequire(require.resolve('expo/package.json'));

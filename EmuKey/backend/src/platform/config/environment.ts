@@ -1,3 +1,5 @@
+import { isIP } from 'node:net';
+
 const NODE_ENVIRONMENTS = ['development', 'test', 'production'] as const;
 const LOG_LEVELS = [
   'fatal',
@@ -42,6 +44,7 @@ export interface PlatformEnvironment {
   GEMINI_EMBEDDING_DIMENSIONS?: number;
   REDIS_URL: string;
   CORS_ORIGINS: string[];
+  TRUST_PROXY_CIDRS: string[];
   LOG_LEVEL: LogLevel;
   OTEL_ENABLED: boolean;
   OTEL_EXPORTER_OTLP_ENDPOINT?: string;
@@ -211,6 +214,7 @@ export function validateEnvironment(
     DATABASE_URL: requiredString(environment, 'DATABASE_URL'),
     REDIS_URL: requiredString(environment, 'REDIS_URL'),
     CORS_ORIGINS: parseOrigins(requiredString(environment, 'CORS_ORIGINS')),
+    TRUST_PROXY_CIDRS: (typeof environment.TRUST_PROXY_CIDRS === 'string' ? environment.TRUST_PROXY_CIDRS : '').split(',').map((value) => value.trim()).filter(Boolean),
     LOG_LEVEL: oneOf(
       requiredString(environment, 'LOG_LEVEL'),
       'LOG_LEVEL',
@@ -438,5 +442,13 @@ export function validateEnvironment(
     }
   }
 
+  for (const entry of result.TRUST_PROXY_CIDRS) {
+    const [address, prefix, ...extra] = entry.split('/');
+    const family = isIP(address ?? '');
+    if (!family || extra.length || (prefix !== undefined &&
+      (!/^\d+$/.test(prefix) || Number(prefix) < 1 || Number(prefix) > (family === 4 ? 32 : 128)))) {
+      throw new Error('TRUST_PROXY_CIDRS must contain explicit IP addresses or non-global CIDRs');
+    }
+  }
   return result;
 }

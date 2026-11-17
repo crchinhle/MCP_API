@@ -1,6 +1,6 @@
 # APP IMPLEMENTATION PLAN — baseline v5.1-r5
 
-> Cập nhật 06/11/2026: khi đổi cấu trúc, dựng lại database từ SQL hiện hành; không còn nâng cấp tại chỗ. Xem HDSD.md. Các kết quả nâng cấp trước đây chỉ là bằng chứng lịch sử.
+> Cập nhật 17/11/2026: không dùng reset/initializer để nâng cấp database có dữ liệu. `db:migrate` hỗ trợ đúng một transition archive ledger lịch sử, mặc định rollback; thay đổi khác cần review schema nguồn, SQL tăng dần và kiểm thử disposable. Xem HDSD.md và `EmuKey/README.md`. Các kết quả nâng cấp trước đây là bằng chứng lịch sử.
 
 > Phạm vi hiện hành 04/11/2026: phát hành và bàn giao key theo ủy quyền nhà cung cấp. Kế hoạch chi tiết và trạng thái kiểm thử: `docs/emukey/plans/2026-11-04-provider-key-handoff-plan.md`. Các báo cáo continuity trước đây là bằng chứng lịch sử, không chứng minh luồng mới đã nghiệm thu toàn bộ.
 
@@ -23,14 +23,14 @@ Sản phẩm nhà cung cấp kiểm tra whitelist bên ngoài EmuKey. EmuKey kh�
 | Gói | Owner | Gate |
 |---|---|---|
 | Policy/contract | Licensing application/domain | Payment, issuance, provider ACK và buyer receipt là các bước riêng |
-| Schema/key storage | SQL/pg, khởi tạo mới | 23 bảng; dựng lại sẽ xóa dữ liệu; Redis mất không đổi key đã lưu |
+| Schema/key storage | SQL/pg, khởi tạo mới | 24 bảng; dựng lại sẽ xóa dữ liệu; Redis mất không đổi key đã lưu |
 | Provider configuration | Licensing | Ownership, probe version, authorization, encrypted credential, SSRF |
 | Durable delivery | Licensing worker | Lease/fencing, idempotency, bounded retry, matching receipt |
 | Lifecycle | Licensing/Blockchain/Commerce | Renewal không cộng hạn hai lần, rotate thay key, suspend/revoke/trust gửi snapshot |
 | UI/API | Web/mobile quản lý | Trạng thái tách biệt, nhận key có gate, không CTA tiêu thụ quyền ở EmuKey |
 | Integration verification | Workspace tests/fixture | Receiver DB độc lập, không đọc DB EmuKey để giả kiểm tra key |
 | Documentation/diagrams | Context/draw.io | Cùng boundary, giữ phong cách vẽ hiện có |
-| Rollout | Guarded database CLI/operator | Dừng API/worker, dựng lại schema và kiểm tra trước khi chạy; không giữ dữ liệu qua lần dựng lại |
+| Rollout | Guarded database CLI/operator | Backup/restore disposable, kiểm tra drift và transition được hỗ trợ; không reset dữ liệu vận hành |
 
 ## 4. Khởi tạo database và giao dịch
 

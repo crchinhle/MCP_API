@@ -5,6 +5,8 @@ import { beforeEach, vi } from 'vitest';
 
 configure({ asyncUtilTimeout: 5_000 });
 vi.stubGlobal('crypto', webcrypto);
+// jsdom has no layout/scroll engine; exercise consent focus without a browser scroll.
+Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', { configurable: true, value: vi.fn() });
 
 const testOrderId = '00000000-0000-4000-8000-000000000501';
 const acceptedOrderId = '00000000-0000-4000-8000-000000000502';

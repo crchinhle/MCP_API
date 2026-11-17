@@ -6,7 +6,15 @@ autoInstallPeers: true
 strictPeerDependencies: true
 strictDepBuilds: true
 overrides:
-  multer: '>=2.3.0'
+  # Security patch floors for runtime transitives; see the 2026-11-17 audit.
+  multer: '2.5.0'
+  proxy-addr: '2.0.8'
+  follow-redirects: '1.16.2'
+  systeminformation: '5.33.16'
+  body-parser: '2.4.0'
+  # Only abitype/zod needs this optional peer; runtime uses core exports.
+  # Preserve Hardhat's development Zod 3 API instead of forcing a major upgrade.
+  'abitype>zod': '-'
 allowBuilds:
   '@google/genai': false
   '@parcel/watcher': true

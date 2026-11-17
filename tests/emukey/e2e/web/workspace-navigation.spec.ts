@@ -233,18 +233,19 @@ test('provider mobile navigation traps focus and restores it on Escape', async (
 
 // Navigation/empty-state checks with an isolated API; these are not live integration evidence.
 for (const width of [390, 1280]) {
-  test(`public and auth pages keep titles without introductions at ${width}px`, async ({ page }) => {
+  for (const path of ['/', '/catalog', '/compare', '/verify', '/help', '/auth', '/auth?mode=register', '/auth?mode=forgot', '/auth?mode=verify']) {
+  test(`public and auth pages keep titles and fit the viewport at ${width}px ${path}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.route('**/api/v1/**', (route) => route.fulfill(route.request().url().endsWith('/auth/refresh')
       ? { status: 401, json: { message: 'Unauthorized' } }
       : { json: [] }));
-    for (const path of ['/', '/catalog', '/compare', '/verify', '/help', '/auth', '/auth?mode=register', '/auth?mode=forgot', '/auth?mode=verify']) {
       await page.goto(path);
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-      await expect(page.locator('h1 + p, .auth-card > p')).toHaveCount(0);
+      // Verification explains the lookup boundary; other pages keep compact headers.
+      await expect(page.locator('h1 + p, .auth-card > p')).toHaveCount(path === '/verify' ? 1 : 0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-    }
   });
+  }
 }
 
 const workspaces = [

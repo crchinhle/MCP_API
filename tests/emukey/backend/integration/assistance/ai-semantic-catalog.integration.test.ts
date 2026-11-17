@@ -11,6 +11,9 @@ import { AiAdvisorService } from '../../../../../EmuKey/backend/src/modules/assi
 describe.skipIf(process.env.EMUKEY_TEST_REAL_CATALOG !== '1')('Real semantic advisor over the public Catalog', () => {
   let reader: AiRetrievalDatabase;
   let advisor: AiAdvisorService;
+  // A semantic answer may require multiple provider calls. Pace this opt-in
+  // suite so evaluation does not manufacture quota failures with a local burst.
+  beforeEach(async () => { await new Promise((resolve) => setTimeout(resolve, 9000)); });
   beforeAll(() => {
     reader = new AiRetrievalDatabase(new ConfigService({ DATABASE_URL: process.env.DATABASE_URL, AI_RETRIEVAL_DATABASE_URL: process.env.AI_RETRIEVAL_DATABASE_URL }));
     const gateway = new GeminiAiGateway({ apiKey: process.env.GEMINI_API_KEY ?? '', model: process.env.GEMINI_MODEL ?? '', timeoutMs: 20000, maxOutputTokens: 1024 });

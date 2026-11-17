@@ -49,6 +49,20 @@ describe('Buyer Home metrics', () => {
     expect(metrics).toEqual({ activeLicenses: 0, activeDevices: 0, licensesExpiringWithin30Days: 0, recentOrders: 0 });
   });
 
+  it('does not report provider-managed device activity as a measured total', () => {
+    const metrics = selectBuyerHomeMetrics([], [
+      { activeDeviceCount: 0, expiresAt: '2027-01-01', fulfillmentMode: 'PROVIDER_HANDOFF' },
+      { activeDeviceCount: 3, expiresAt: '2027-01-01', fulfillmentMode: 'LEGACY_DEVICE' },
+    ], now);
+    expect(metrics.activeLicenses).toBe(2);
+    expect(metrics.activeDevices).toBeNull();
+  });
+
+  it('distinguishes an unknown legacy measurement from measured zero', () => {
+    expect(selectBuyerHomeMetrics([], [{ expiresAt: '2027-01-01' }] as never[], now).activeDevices).toBeNull();
+    expect(selectBuyerHomeMetrics([], [{ expiresAt: '2027-01-01', activeDeviceCount: 0 }], now).activeDevices).toBe(0);
+  });
+
   it('filters and sorts expiring licenses by closest expiration date', () => {
     const licExpiringSoon = { id: 'soon', expiresAt: '2026-09-28T00:00:00.000Z', status: 'ACTIVE' };
     const licExpiringLater = { id: 'later', expiresAt: '2026-10-15T00:00:00.000Z', status: 'ACTIVE' };

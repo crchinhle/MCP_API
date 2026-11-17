@@ -89,7 +89,7 @@ for (const width of [320, 1440]) {
       await route.fulfill({ json: data });
     });
     await page.goto('/buyer/licenses/existing-license/renew');
-    await expect(page.getByText('2.500.000 ₫')).toBeVisible();
+    await expect(page.locator('.order-summary__total').getByText('2.500.000 ₫')).toBeVisible();
     await expect(page.locator('input[type="password"]')).toHaveCount(0);
     await page.getByRole('button', { name: 'Tạo đơn gia hạn' }).click();
     await expect(page.getByRole('heading', { name: 'Điều khoản gia hạn' })).toBeVisible();
@@ -347,7 +347,7 @@ for (const state of ['ready', 'success-return', 'cancelled'] as const) {
     await page.goto(`/buyer/orders/test-order/payment${state === 'success-return' ? '?sepay=success' : ''}`);
     if (state === 'success-return') await page.getByRole('dialog').getByRole('button', { name: 'Đóng', exact: true }).click();
     await expect(page.getByText('SecureDesk Pro', { exact: true })).toBeVisible();
-    await expect(page.getByText('1.200.000 ₫', { exact: true })).toBeVisible();
+    await expect(page.locator('.order-summary__total').getByText('1.200.000 ₫', { exact: true })).toBeVisible();
     if (state === 'success-return') await expect(page.getByRole('button', { name: 'Tiếp tục phiên thanh toán' })).toHaveCount(0);
     if (state === 'cancelled') await expect(page.getByText('Chưa xác nhận', { exact: true })).toBeVisible();
   });

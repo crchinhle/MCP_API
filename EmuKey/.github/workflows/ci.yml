@@ -44,6 +44,7 @@ jobs:
         run: corepack pnpm install --frozen-lockfile
       - name: Verify backend
         run: |
+          corepack pnpm audit --prod --audit-level high
           corepack pnpm lint
           corepack pnpm typecheck
           corepack pnpm contracts:build
@@ -73,6 +74,7 @@ jobs:
         run: corepack pnpm install --frozen-lockfile
       - name: Verify frontend
         run: |
+          corepack pnpm audit --prod --audit-level high
           corepack pnpm lint
           corepack pnpm typecheck
           corepack pnpm openapi:check
@@ -104,6 +106,7 @@ jobs:
         run: corepack pnpm exec expo install --check
       - name: Verify mobile
         run: |
+          corepack pnpm audit --prod --audit-level high
           corepack pnpm lint
           corepack pnpm typecheck
           corepack pnpm openapi:check

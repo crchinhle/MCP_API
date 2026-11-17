@@ -1,10 +1,9 @@
-import { Alert, Breadcrumb, Button, Empty, Spin } from 'antd';
+import { Breadcrumb, Button, Empty, Spin } from 'antd';
 import {
   ArrowLeftOutlined,
   BookOutlined,
   FileTextOutlined,
   QuestionCircleOutlined,
-  RightOutlined,
   ShoppingOutlined,
 } from '@ant-design/icons';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -42,7 +41,7 @@ export function PublicHelpDetailScreen() {
             <Button
               className="public-help-back-link"
               icon={<ArrowLeftOutlined />}
-              onClick={() => navigate('/help')}
+              onClick={() => void navigate('/help')}
               type="text"
             >
               Quay lại danh sách hướng dẫn
@@ -52,7 +51,7 @@ export function PublicHelpDetailScreen() {
                 description="Không tìm thấy tài liệu hướng dẫn này hoặc tài liệu chưa được công bố."
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
               />
-              <Button style={{ marginTop: 16 }} type="primary" onClick={() => navigate('/help')}>
+              <Button style={{ marginTop: 16 }} type="primary" onClick={() => void navigate('/help')}>
                 Khám phá các hướng dẫn khác
               </Button>
             </div>
@@ -94,7 +93,7 @@ export function PublicHelpDetailScreen() {
             <Button
               className="public-help-back-link"
               icon={<ArrowLeftOutlined />}
-              onClick={() => navigate('/help')}
+              onClick={() => void navigate('/help')}
               type="text"
             >
               Quay lại danh sách
@@ -226,7 +225,7 @@ export function PublicHelpDetailScreen() {
                   <Button
                     block
                     className="public-help-product-btn"
-                    onClick={() => navigate(`/products/id/${doc.productId}`)}
+                    onClick={() => void navigate(`/products/id/${doc.productId}`)}
                     type="default"
                   >
                     Xem chi tiết sản phẩm
@@ -246,7 +245,7 @@ export function PublicHelpDetailScreen() {
                       <div
                         key={rel.id}
                         className="public-help-related-doc-item"
-                        onClick={() => navigate(`/help/${rel.id}`)}
+                        onClick={() => void navigate(`/help/${rel.id}`)}
                         role="button"
                         tabIndex={0}
                       >
@@ -278,7 +277,7 @@ export function PublicHelpDetailScreen() {
                 <Button
                   block
                   onClick={() =>
-                    navigate(
+                    void navigate(
                       auth?.user
                         ? auth.user.role === 'CUSTOMER'
                           ? '/buyer/support'

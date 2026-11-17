@@ -44,14 +44,14 @@ export function entitlementLabel(key: string, value: unknown): string | null {
 }
 
 export function OrderEntitlements({ entitlements }: { readonly entitlements?: Readonly<Record<string, unknown>> | undefined }) {
-  const entries = Object.entries(entitlements ?? {}).filter(([key, value]) => Object.hasOwn(entitlementLabels, key) && value === true);
+  const entries = Object.entries(entitlements ?? {}).filter(([key]) => Object.hasOwn(entitlementLabels, key));
   if (!entries.length) return null;
   return <section className="order-summary__benefit-section" aria-label="Quyền lợi của gói">
     <h3>Quyền lợi của gói</h3>
     <ul className="order-summary__benefits">
-      {entries.map(([key]) => <li key={key}>
-        <span aria-hidden="true" className="order-summary__benefit-included">✓</span>
-        <span>{entitlementLabels[key]}</span>
+      {entries.map(([key, value]) => <li key={key}>
+        <span aria-hidden="true" className="order-summary__benefit-included">{value === true ? '✓' : '—'}</span>
+        <span>{entitlementLabel(key, value)}</span>
       </li>)}
     </ul>
   </section>;

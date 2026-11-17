@@ -2,7 +2,7 @@ import type { LicenseProjectionDto, OrderDto } from '../infrastructure/api/gener
 
 export interface BuyerHomeMetrics {
   readonly activeLicenses: number;
-  readonly activeDevices: number;
+  readonly activeDevices: number | null;
   readonly licensesExpiringWithin30Days: number;
   readonly recentOrders: number;
 }
@@ -40,7 +40,10 @@ export function selectBuyerHomeMetrics(
 
   return {
     activeLicenses: activeLicenses.length,
-    activeDevices: activeLicenses.reduce((total, license) => total + (license.activeDeviceCount ?? 0), 0),
+    activeDevices: activeLicenses.some((license) =>
+      license.fulfillmentMode === 'PROVIDER_HANDOFF' ||
+      !Number.isFinite(license.activeDeviceCount) || license.activeDeviceCount < 0,
+    ) ? null : activeLicenses.reduce((total, license) => total + license.activeDeviceCount, 0),
     licensesExpiringWithin30Days: expiringLicenses.length,
     recentOrders: orders.length,
   };

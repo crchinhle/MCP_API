@@ -67,7 +67,9 @@ async function dump() {
 async function waitForPostgres() {
   for (let attempt = 0; attempt < 30; attempt += 1) {
     try {
-      await run('docker', ['exec', containerName, 'pg_isready', '-U', 'restore', '-d', 'restore_db']);
+      // The image's bootstrap server accepts Unix sockets before initialization
+      // ends. Restore uses TCP, so readiness must probe the same transport.
+      await run('docker', ['exec', containerName, 'pg_isready', '-h', '127.0.0.1', '-p', '5432', '-U', 'restore', '-d', 'restore_db']);
       return;
     } catch {
       await new Promise((resolveDelay) => globalThis.setTimeout(resolveDelay, 1_000));
@@ -80,15 +82,15 @@ async function restoreIntoDisposable() {
   const restorePassword = randomUUID();
   const restoreUrl = new URL(`postgresql://restore@127.0.0.1:${hostPort}/restore_db`);
   restoreUrl.password = restorePassword;
-  await run('docker', [
-    'run', '-d', '--name', containerName,
-    '-e', 'POSTGRES_USER=restore',
-    '-e', 'POSTGRES_PASSWORD',
-    '-e', 'POSTGRES_DB=restore_db',
-    '-p', `127.0.0.1:${hostPort}:5432`,
-    restoreImage,
-  ], { env: { ...process.env, POSTGRES_PASSWORD: restorePassword } });
   try {
+    await run('docker', [
+      'run', '-d', '--name', containerName,
+      '-e', 'POSTGRES_USER=restore',
+      '-e', 'POSTGRES_PASSWORD',
+      '-e', 'POSTGRES_DB=restore_db',
+      '-p', `127.0.0.1:${hostPort}:5432`,
+      restoreImage,
+    ], { env: { ...process.env, POSTGRES_PASSWORD: restorePassword } });
     await waitForPostgres();
     const network = `container:${containerName}`;
     await run('docker', [
@@ -126,7 +128,7 @@ async function restoreIntoDisposable() {
     await writeMetadata('RESTORE_VERIFIED', {
       disposableDatabase: true,
       durableRowCounts: verification.stdout.trim(),
-      restoreCommand: 'pg_restore executed inside a disposable PostgreSQL 18 container',
+      restoreCommand: `pg_restore executed inside a disposable ${restoreImage} container`,
       reconcileStatus,
       ...(reconcileError ? { reconcileError } : {}),
     });

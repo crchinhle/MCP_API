@@ -70,7 +70,21 @@ export function BuyerRenewalScreen() {
         {requestError ? <Alert showIcon role="alert" type="error" title={describeApiError(requestError, 'Không thể xử lý gia hạn. Vui lòng thử lại.')} /> : null}
       </div>
       <aside className="checkout-stack">
-        <OrderSummary order={{ total: order?.priceVndSnapshot ?? offer.priceVnd }} />
+        <OrderSummary order={{
+          total: order?.priceVndSnapshot ?? offer.priceVnd,
+          productName: offer.productName,
+          planName: order?.planNameSnapshot ?? offer.planName,
+          durationMonths: order?.durationMonthsSnapshot ?? offer.durationMonths,
+          ...(liveOrder.data ? {
+            orderNumber: liveOrder.data.orderNumber,
+            providerName: liveOrder.data.providerNameSnapshot,
+            maxActiveDevices: liveOrder.data.maxActiveDevicesSnapshot,
+            entitlements: liveOrder.data.entitlementsSnapshot,
+            createdAt: liveOrder.data.createdAt,
+            paymentDueAt: liveOrder.data.paymentDueAt,
+            orderStatus: liveOrder.data.orderStatus,
+          } : {}),
+        }} />
         <p className="muted-copy">{order ? 'Giá đã được lưu cho đơn gia hạn này.' : 'Giá hiện tại của gói. Giá chính thức được xác nhận khi tạo đơn.'}</p>
         <Alert showIcon type="info" title="Hạn sử dụng được cập nhật sau khi thanh toán và giao dịch gia hạn được xác nhận." />
         <div className="workspace-actions">

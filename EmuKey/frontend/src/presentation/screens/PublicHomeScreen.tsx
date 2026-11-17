@@ -589,7 +589,8 @@ function FeaturedCarousel({ products }: { readonly products: readonly Product[] 
 
 export function PublicHomeScreen() {
   const { data: products = [], isLoading, isError, refetch } = useProducts();
-  const featured = products.slice(0, 6);
+  // The public catalog is the authority; this is an A–Z preview, not popularity data.
+  const featured = [...products].sort((a, b) => a.name.localeCompare(b.name, 'vi') || a.slug.localeCompare(b.slug)).slice(0, 6);
 
   if (isLoading) return <div className="page-shell"><SiteHeader /><main id="main-content" tabIndex={-1}><PageLoading /></main></div>;
 
@@ -685,8 +686,8 @@ export function PublicHomeScreen() {
         <section aria-labelledby="public-home-featured-title" className="public-home-featured">
           <div className="public-home-featured-header">
             <div>
-              <h2 id="public-home-featured-title">Sản phẩm nổi bật</h2>
-              <p>Các gói phần mềm đang được phát hành trên EmuKey.</p>
+              <h2 id="public-home-featured-title">Sản phẩm đang phát hành</h2>
+              <p>Danh mục A–Z: tối đa sáu sản phẩm đang được công bố trên EmuKey.</p>
             </div>
           </div>
 
