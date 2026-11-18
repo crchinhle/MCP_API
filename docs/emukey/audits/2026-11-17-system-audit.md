@@ -1,5 +1,13 @@
 # EmuKey — audit, remediation và bằng chứng kiểm chứng 17/11/2026
 
+## Cập nhật Android thực tế — 18/11/2026
+
+Đã build APK có bundle JS, cài và chạy manager trên LDPlayer đang mở của người dùng (Android 9, x86_64). Mục native NOT_RUN phía dưới là lịch sử, đã được thay thế bởi lượt này. Sửa ba lỗi phát hiện khi thao tác thật: bấm lần đầu khi input đang focus, UUID của trình duyệt trong chat native, kết quả xác minh cũ còn hiện sau đổi mã/lỗi. Bộ mobile mới **61/61**, typecheck/lint/parser qua; APK build **3m 3s**, cài `Success`. APK và hash nằm trong [kết quả kiểm thử](2026-11-17-test-results.md#native-android-continuation--18112026).
+
+Kiểm thử native dùng API Nest và PostgreSQL/Redis thật nhưng hoàn toàn dùng fixture riêng. Catalog/search/compare, hồ sơ, đơn/license/device/key, thông báo, lịch sử chat, chuyển nhân viên và gửi tin đã có bằng chứng native; gia hạn đi qua tạo đơn, tải/đồng ý điều khoản đến chờ thanh toán. Mua mới trả `PROVIDER_INTEGRATION_NOT_READY` đúng gate; không nới kiểm tra để tạo PASS giả. License legacy đang ACTIVE dùng payment/event có kiểm soát, không chứng nhận giao dịch thật. Không gọi Gemini live, không tác động điện thoại thật hoặc khởi động Redis vận hành. Terms/retention vận hành, SePay callback, provider bên ngoài và FCM receipt vẫn cần nghiệm thu riêng.
+
+Code cuối `012cb6b` có [CI SUCCESS cả hai job](https://github.com/crchinhle/MCP_API/actions/runs/44287280642), gồm năm regression mobile mới và runner native. APK cuối đã qua ca xác minh hợp lệ→sai, nhận phản hồi nhân viên, lỗi HTTP 503 có kiểm soát→gửi lại một lần và đóng hội thoại. Review độc lập không phát hiện lỗi đáng kể, đồng thời ghi rõ fixture legacy không chứng nhận provider delivery. Các sửa sau đó chỉ cập nhật tài liệu bàn giao.
+
 ## Authorized operational follow-up — 18/11/2026
 
 Người dùng đã cấp toàn quyền xử lý các phần còn lại, ngoại trừ Gemini live. Các giới hạn không apply/không push/không chạy native ở các snapshot bên dưới là lịch sử. Terms và retention cho vận hành thật vẫn chờ nội dung và thời hạn cụ thể do người dùng cung cấp; không tự duyệt nội dung mẫu, đặt TTL hoặc xóa dữ liệu.
