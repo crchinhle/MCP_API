@@ -143,8 +143,14 @@ try {
   assert.equal((await queries.find(customer, licenseId)).status, 'ACTIVE');
   report.issue.projection = 'ACTIVE';
   await assert.rejects(queries.find(other, licenseId), { status: 404 });
-  await assert.rejects(queries.retrieveActivation(other, licenseId), { status: 404 });
-  const { activationKey } = await queries.retrieveActivation(customer, licenseId);
+  await assert.rejects(queries.retrieveActivation(other, licenseId, randomUUID()), { status: 404 });
+  stage = 'key_delivery';
+  const deliveryId = randomUUID();
+  const delivery = await queries.retrieveActivation(customer, licenseId, deliveryId);
+  const { activationKey } = delivery;
+  assert.equal((await queries.retrieveActivation(customer, licenseId, deliveryId)).activationKey, activationKey);
+  await queries.acknowledgeActivation(customer, licenseId, deliveryId, delivery.keyVersion);
+  report.keyDelivery = { retrieved: true, retryIdempotent: true, acknowledged: true };
   const device = privateKeyToAccount(generatePrivateKey());
   const deviceRef = `sepolia-smoke-${randomUUID()}`;
   stage = 'public_activation';
@@ -167,7 +173,7 @@ try {
   const entitlementChallenge = await post('/activations/challenge', { licenseId, deviceId: active.id, deviceRef, purpose: 'ISSUE_ENTITLEMENT' });
   const entitlement = await post('/entitlements/issue', { licenseId, deviceId: active.id, challenge: entitlementChallenge.challenge,
     proof: await device.signMessage({ message: entitlementChallenge.challenge }) });
-  const verified = await post('/entitlements/verify', { token: entitlement.token });
+  const verified = await post('/entitlements/verify', { token: entitlement.token }, 200);
   assert.equal(verified.valid, true);
   report.entitlement = { issue: true, verify: true, beforeChainSync: true, purchaserLogin: false };
 
@@ -185,7 +191,7 @@ try {
   report.stage = stage;
   const code = error?.response?.code ?? error?.cause?.code ?? error?.code ?? error?.message;
   report.blocker = typeof code === 'string' && /^[A-Z0-9_]+$/.test(code) ? code : 'SEPOLIA_VERIFICATION_FAILED';
-  report.errorType = /^[A-Za-z]+(?:Error|Exception)$/.test(error?.name ?? '') ? error.name : 'UNKNOWN';
+  report.errorType = /^(?:[A-Za-z]+)?(?:Error|Exception)$/.test(error?.name ?? '') ? error.name : 'UNKNOWN';
   const location = error?.stack?.match(/verify-sepolia\.mjs:(\d+):\d+/)?.[1];
   if (location) report.verifierLine = Number(location);
   process.exitCode = 1;

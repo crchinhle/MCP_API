@@ -1,11 +1,17 @@
 {
-  "generatedAt": "2026-11-18T05:54:49.606Z",
-  "status": "BLOCKED_EXTERNAL",
+  "generatedAt": "2026-11-18T06:12:07.087Z",
+  "status": "REAL_EXTERNAL_VERIFIED",
   "chainId": 11155111,
   "database": "disposable PostgreSQL/Redis containers",
   "payment": "isolated test payment adapter; real commerce application path",
   "blockchain": "real Sepolia RPC only",
-  "timeline": {},
+  "timeline": {
+    "T0_active": "2026-11-18T06:12:57.974Z",
+    "T1_queued": "2026-11-18T06:12:57.974Z",
+    "T2_submitted": "2026-11-18T06:12:58.429Z",
+    "T3_confirmed": "2026-11-18T06:13:19.283Z",
+    "T4_indexed": "2026-11-18T06:13:22.064Z"
+  },
   "protocolVersion": 2,
   "runtimeCodeHash": "0xc6b6cdada91fc3b1c5bf328992bb88bc45bacbf22b51c7696971f469db07ebb9",
   "sourceReference": "b16f109bc59b5bbe15d428dd5bca459300b6d46a:EmuKey/backend/contracts/solidity/LicenseRegistry.sol",
@@ -13,16 +19,60 @@
   "deploymentBlock": 11842365,
   "relayerAddress": "0xeC3Aa982a569812471b337D5b8CA67f5C7A2FCfe",
   "fulfillmentMode": "LEGACY_DEVICE",
-  "orderId": "d5fc370e-19c1-496f-be0c-d040b8c10eb5",
-  "licenseId": "4e2b29db-8e14-4909-841c-189f1bd19bc5",
+  "orderId": "40c2dd6e-85de-401e-b37d-5d3a54aa1ee1",
+  "licenseId": "5f3563c6-2fdb-4e8a-817b-d27b9381f5e8",
   "submittedTransactions": [
     {
-      "commandId": "41c216c1-a2f8-4af8-8b7d-7367d8979feb",
-      "transactionHash": "0x11d450971da1f94b0e6bf6859208158239ae309fc5379b6a08c619b4f9341dd7"
+      "commandId": "0c82609e-e840-4169-acb7-d9b768d39d9a",
+      "transactionHash": "0x0c0c1e242bf412b0f3443f3bb3054a5a0dec98841a5ab6c68907a24eb87a83e4"
+    },
+    {
+      "commandId": "b4e4b4d5-7fe0-4479-a02f-7a5a59943858",
+      "transactionHash": "0x59895604fe28853124bb3e5d4f816c85b395900c5cade257bfe12b9a1e7f7c37"
     }
   ],
-  "stage": "issue_license_index",
-  "blocker": "SEPOLIA_VERIFICATION_FAILED",
-  "errorType": "UNKNOWN",
-  "verifierLine": 129
+  "issue": {
+    "commandId": "0c82609e-e840-4169-acb7-d9b768d39d9a",
+    "transactionHash": "0x0c0c1e242bf412b0f3443f3bb3054a5a0dec98841a5ab6c68907a24eb87a83e4",
+    "receipt": "success",
+    "confirmations": 2,
+    "blockNumber": 12159618,
+    "event": "LICENSE_ISSUED",
+    "finality": "CONFIRMED",
+    "projection": "ACTIVE"
+  },
+  "keyDelivery": {
+    "retrieved": true,
+    "retryIdempotent": true,
+    "acknowledged": true
+  },
+  "activation": {
+    "status": "ACTIVE",
+    "publicHttp": true,
+    "purchaserLogin": false,
+    "deviceId": "05f73090-ef65-48ca-a7c5-2e2f27e2a96d",
+    "chainTransactionAbsentAtActivation": true,
+    "ownershipIsolation": true
+  },
+  "entitlement": {
+    "issue": true,
+    "verify": true,
+    "beforeChainSync": true,
+    "purchaserLogin": false
+  },
+  "sync": {
+    "commandId": "b4e4b4d5-7fe0-4479-a02f-7a5a59943858",
+    "transactionHash": "0x59895604fe28853124bb3e5d4f816c85b395900c5cade257bfe12b9a1e7f7c37",
+    "receipt": "success",
+    "confirmations": 2,
+    "blockNumber": 12159620,
+    "event": "ACTIVE_DEVICE_COUNT_SYNCED",
+    "finality": "CONFIRMED",
+    "aggregate": {
+      "activeDeviceCount": 1,
+      "deviceStateVersion": 1,
+      "databaseSyncStatus": "CONFIRMED",
+      "matchesSepolia": true
+    }
+  }
 }

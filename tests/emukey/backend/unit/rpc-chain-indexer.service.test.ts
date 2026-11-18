@@ -1,15 +1,43 @@
-import type { Hex } from 'viem';
+import { createPublicClient, type Hex } from 'viem';
 import type { Pool } from 'pg';
 
 import { CompositeChainRpcIndexer, RpcChainIndexerService } from '../../../../EmuKey/backend/src/modules/blockchain/application/rpc-chain-indexer.service.js';
 import { ChainIndexerCheckpointRepository } from '../../../../EmuKey/backend/src/modules/blockchain/infrastructure/chain-indexer-checkpoint.repository.js';
 import type { ObservedChainEvent } from '../../../../EmuKey/backend/src/modules/blockchain/infrastructure/chain-event.repository.js';
+import { createViemRpcTransport } from '../../../../EmuKey/backend/src/platform/blockchain/viem-rpc-transport.js';
 
 function bytes16(value: string): Hex {
   return `0x${value.replaceAll('-', '')}`;
 }
 
 describe('RpcChainIndexerService', () => {
+  it('preserves the primary log-range limit when a fallback has pruned history', async () => {
+    const requests: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as { id: number };
+      requests.push(String(url));
+      return Response.json({ jsonrpc: '2.0', id: body.id, error: { code: -32600,
+        message: String(url).includes('primary') ? 'Free tier supports up to a 10 block range' : 'pruned history unavailable' } });
+    }));
+    try {
+      const client = createPublicClient({ transport: createViemRpcTransport('https://primary.example.test', 'https://fallback.example.test') });
+      await expect(client.getLogs({ fromBlock: 10n, toBlock: 109n })).rejects.toThrow('10 block range');
+      expect(requests.every(url => url.includes('primary'))).toBe(true);
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it('still uses the fallback for ordinary RPC availability failures', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as { id: number };
+      return Response.json(String(url).includes('primary')
+        ? { jsonrpc: '2.0', id: body.id, error: { code: -32600, message: 'RPC temporarily unavailable' } }
+        : { jsonrpc: '2.0', id: body.id, result: '0xaa' });
+    }));
+    try {
+      const client = createPublicClient({ transport: createViemRpcTransport('https://primary.example.test', 'https://fallback.example.test') });
+      await expect(client.getBlockNumber()).resolves.toBe(170n);
+    } finally { vi.unstubAllGlobals(); }
+  });
   it('indexes an owned receipt ahead of backfill without advancing the historical cursor', async () => {
     const commandId='00000000-0000-4000-8000-000000000901';
     const licenseId='00000000-0000-4000-8000-000000000401';
