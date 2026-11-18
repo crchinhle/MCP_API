@@ -4,6 +4,8 @@ Operational continuation 18/11/2026: user grants full authority to resolve remai
 
 Final code checkpoint **241f8db REMOTE_CI_PASS**: [run 44251790917](https://github.com/crchinhle/MCP_API/actions/runs/44251790917), both jobs SUCCESS. The observation step above is complete; all default suites and quality gates passed on that single clean checkout. Final handoff edits are documentation only. Full external golden-flow/native acceptance remains limited by the explicit inputs and execution blocks above, with Gemini live excluded by the user.
 
+Email follow-up at 16:15 Asia/Saigon: corrected recipient supplied, Brevo-only smoke sent successfully, and message-specific HTTP 200 event report confirms delivered. Await user inbox/spam receipt, not another recipient. Other external inputs and execution blocks above remain unchanged; this follow-up changes only evidence/documentation.
+
 Baseline: `562bbc6`; clean working tree. Request: full-system audit, fixes and truthful end-to-end evidence, 17 November 2026.
 
 Constraints: preserve existing data and nested repository; no commits, pushes, deployments, paid transactions or real-user notifications. Use disposable databases for writes. Keep `backend/database/schema.sql` authoritative. Do not equate fixtures with external acceptance.

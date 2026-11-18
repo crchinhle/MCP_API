@@ -1,6 +1,6 @@
 {
-  "runId": "emukey-ext-20261118053801-829cf48e",
-  "generatedAt": "2026-11-18T05:38:01.769Z",
+  "runId": "emukey-ext-20261118091346-c59515d6",
+  "generatedAt": "2026-11-18T09:13:46.592Z",
   "providers": {
     "Gemini": {
       "status": "SKIPPED_BY_OPT_IN",
@@ -13,9 +13,23 @@
     "Brevo": {
       "status": "PROVIDER_ACCEPTED_VERIFIED",
       "evidence": {
-        "providerMessageId": "<202611180538.77136471888@smtp-relay.mailin.fr>",
+        "providerMessageId": "<202611180913.60733112005@smtp-relay.mailin.fr>",
         "recipient": "E2E_TEST_EMAIL_RECIPIENT",
-        "inboxReceiptVerified": false
+        "inboxReceiptVerified": false,
+        "eventReport": {
+          "checkedAt": "2026-11-18T09:15:13.243Z",
+          "httpStatus": 200,
+          "events": [
+            {
+              "date": "2026-11-18T16:13:58.000+07:00",
+              "event": "delivered"
+            },
+            {
+              "date": "2026-11-18T16:13:55.316+07:00",
+              "event": "requests"
+            }
+          ]
+        }
       }
     },
     "FCM": {
