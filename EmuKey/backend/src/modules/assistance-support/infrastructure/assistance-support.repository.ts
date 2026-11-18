@@ -10,7 +10,7 @@ function stableEventUuid(value: string): string {
   return `${bytes.slice(0, 8).join('')}-${bytes.slice(8, 12).join('')}-${bytes.slice(12, 16).join('')}-${bytes.slice(16, 20).join('')}-${bytes.slice(20).join('')}`;
 }
 
-import type { ConversationActor } from '../assistance-support.types.js';
+import type { ConversationActor, MessagePageQuery } from '../assistance-support.types.js';
 import type {
   ConversationRecord,
   ConversationStatus,
@@ -134,6 +134,26 @@ export class AssistanceSupportRepository {
     return result.rows.map(mapConversation);
   }
 
+  async importGuestHistory(customerUserId: string, sessionId: string, turns: AiTurn[]) {
+    return this.transaction(async client => {
+      // One durable destination per guest session, across accounts and crash retries.
+      const id = stableEventUuid(`guest:history:${sessionId.toLowerCase()}`);
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [id]);
+      const existing = await client.query<Record<string, unknown>>('SELECT * FROM conversations WHERE id=$1', [id]);
+      if (existing.rows[0]) {
+        if (existing.rows[0].customer_user_id !== customerUserId) throw new Error('CONVERSATION_NOT_FOUND');
+        return mapConversation(existing.rows[0]);
+      }
+      const result = await client.query<Record<string, unknown>>("INSERT INTO conversations(id,customer_user_id,title,status) VALUES ($1,$2,'Hội thoại khách đã liên kết','AI_ACTIVE') RETURNING *", [id, customerUserId]);
+      for (const [index, turn] of turns.slice(-16).entries()) {
+        await client.query(`INSERT INTO messages(conversation_id,sender_user_id,sender_type,client_message_id,server_sequence,content,ai_metadata)
+          VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)`, [id, turn.role === 'user' ? customerUserId : null, turn.role === 'user' ? 'CUSTOMER' : 'AI', stableEventUuid(`${id}:guest:${index}`), index + 1, turn.content, turn.role === 'assistant' ? JSON.stringify({ catalogSources: turn.catalogSources ?? [], grounded: false, citationDetails: [] }) : '{}']);
+      }
+      await this.appendSystemMessageInTransaction(client, id, 'Lịch sử khách đã được lưu theo xác nhận của bạn. Thông tin cũ không thay thế việc tra cứu nguồn hiện hành.', 'guest-linked');
+      return mapConversation(result.rows[0]!);
+    });
+  }
+
   async listSupportQueue(actor: ConversationActor) {
     const result = await this.pool.query<Record<string, unknown>>(
       `SELECT * FROM conversations
@@ -158,12 +178,12 @@ export class AssistanceSupportRepository {
     return result.rows[0] ? mapConversation(result.rows[0]) : null;
   }
 
-  async listMessages(actor: ConversationActor, conversationId: string) {
+  async listMessages(actor: ConversationActor, conversationId: string, page: MessagePageQuery = {}) {
     return this.transaction(async client => {
       const permitted = await client.query(`SELECT id FROM conversations WHERE id=$1 AND (
         ($2='CUSTOMER' AND customer_user_id=$3) OR ($2='SUPPORT_STAFF' AND assigned_support_user_id=$3) OR $2='SYSTEM_ADMIN') FOR SHARE`, [conversationId, actor.role, actor.sub]);
       if (!permitted.rows[0]) return null;
-      return this.listMessagesForConversation(client, conversationId);
+      return this.listMessagesForConversation(client, conversationId, page);
     });
   }
 
@@ -178,17 +198,21 @@ export class AssistanceSupportRepository {
       [conversationId, actor.role],
     );
     if (!result.rows[0]) return null;
-    return this.listMessagesForConversation(client, conversationId, true);
+    return this.listMessagesForConversation(client, conversationId, { limit: 20 });
     });
   }
 
-  private async listMessagesForConversation(client: PoolClient, conversationId: string, preview = false) {
+  private async listMessagesForConversation(client: PoolClient, conversationId: string, page: MessagePageQuery) {
+    const forward = page.after !== undefined;
+    const limit = Math.min(100, Math.max(1, page.limit ?? 50));
     const result = await client.query<Record<string, unknown>>(
-      preview ? `SELECT * FROM messages WHERE conversation_id=$1 ORDER BY server_sequence DESC LIMIT 20`
-        : `SELECT * FROM messages WHERE conversation_id = $1 ORDER BY server_sequence`,
-      [conversationId],
+      `SELECT * FROM messages WHERE conversation_id=$1
+       AND ($2::bigint IS NULL OR server_sequence < $2)
+       AND ($3::bigint IS NULL OR server_sequence > $3)
+       ORDER BY server_sequence ${forward ? 'ASC' : 'DESC'} LIMIT $4`,
+      [conversationId, page.before ?? null, page.after ?? null, limit],
     );
-    return (preview ? result.rows.reverse() : result.rows).map(mapMessage);
+    return (forward ? result.rows : result.rows.reverse()).map(mapMessage);
   }
 
   async requestSupport(customerUserId: string, conversationId: string, reason: string) {

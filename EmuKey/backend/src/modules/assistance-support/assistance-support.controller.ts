@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { CurrentUser, Roles } from '../identity-access/security.decorators.js';
@@ -6,7 +6,7 @@ import { AuthGuard, RolesGuard } from '../identity-access/security.guards.js';
 import type { AuthPrincipal } from '../identity-access/identity.types.js';
 import { AiAnswerDto, AiAskDto, AppendMessageDto, ConversationDto, CreateConversationDto, MessageDto, RequestSupportDto } from './assistance-support.dto.js';
 import { AssistanceSupportService } from './assistance-support.service.js';
-import { SupportClaimDto, CloseConversationDto } from './assistance-support.dto.js';
+import { SupportClaimDto, CloseConversationDto, MessagePageQueryDto, LinkGuestHistoryDto } from './assistance-support.dto.js';
 
 @ApiTags('assistance')
 @Controller('conversations')
@@ -35,6 +35,11 @@ export class AssistanceSupportController {
   @ApiOkResponse({ type: ConversationDto })
   find(@CurrentUser() actor: AuthPrincipal, @Param('conversationId', ParseUUIDPipe) conversationId: string) { return this.service.find(actor, conversationId); }
 
+  @Post('link-guest-history')
+  @Roles('CUSTOMER')
+  @ApiCreatedResponse({ type: ConversationDto })
+  linkGuest(@CurrentUser() actor: AuthPrincipal, @Body() dto: LinkGuestHistoryDto) { return this.service.linkGuestHistory(actor, dto); }
+
   @Post(':conversationId/messages')
   @Roles('CUSTOMER', 'SUPPORT_STAFF')
   @ApiCreatedResponse({ type: MessageDto })
@@ -43,7 +48,7 @@ export class AssistanceSupportController {
   @Get(':conversationId/messages')
   @Roles('CUSTOMER', 'SUPPORT_STAFF', 'SYSTEM_ADMIN')
   @ApiOkResponse({ type: MessageDto, isArray: true })
-  messages(@CurrentUser() actor: AuthPrincipal, @Param('conversationId', ParseUUIDPipe) conversationId: string) { return this.service.listMessages(actor, conversationId); }
+  messages(@CurrentUser() actor: AuthPrincipal, @Param('conversationId', ParseUUIDPipe) conversationId: string, @Query() page: MessagePageQueryDto) { return this.service.listMessages(actor, conversationId, page); }
 
   @Post(':conversationId/ai-ask')
   @HttpCode(200)

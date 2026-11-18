@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => {
   return { generateContent: vi.fn() };
 });
 const generateContent = mocks.generateContent;
-vi.mock('@google/genai', () => ({ GoogleGenAI: class { models = { generateContent: mocks.generateContent }; } }));
+vi.mock('@google/genai', () => ({ ThinkingLevel: { LOW: 'LOW' }, GoogleGenAI: class { models = { generateContent: mocks.generateContent }; } }));
 
 const understanding: QuestionUnderstanding = {
   intent: 'PRODUCT_QA', searchQuery: 'Classroom Hub các gói giá', productReference: 'Classroom',
@@ -21,12 +21,33 @@ const sources = [
   { id: 'photo', kind: 'CATALOG' as const, productId: 'photo', productName: 'Photo Studio', content: 'Photo Studio: photo editing' },
 ];
 const create = (maxOutputTokens = 2048) => new GeminiAiGateway({ apiKey: 'test-only-key', model: 'test-model', timeoutMs: 100, maxOutputTokens });
-const respond = (value: unknown) => generateContent.mockResolvedValue({ text: JSON.stringify(value) });
+const respond = (value: unknown) => generateContent.mockImplementation((request: { config: { responseJsonSchema: { properties: Record<string, unknown> } } }) => {
+  const reference = (value as QuestionUnderstanding | null | undefined)?.reference;
+  return Promise.resolve({ text: JSON.stringify(request.config.responseJsonSchema.properties.mode
+    ? { ...reference, ambiguous: false } : value) });
+});
 beforeEach(() => vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined));
 afterEach(() => vi.restoreAllMocks());
 
 describe('Gemini semantic understanding', () => {
-  beforeEach(() => generateContent.mockReset());
+  beforeEach(() => { generateContent.mockReset(); });
+
+  it('asks for clarification when a focused reference decision finds several possible recent targets', async () => {
+    generateContent.mockResolvedValueOnce({ text: JSON.stringify({ ...understanding, reference: { mode: 'ORDINAL', index: 1 } }) })
+      .mockResolvedValueOnce({ text: JSON.stringify({ mode: 'LATEST', index: null, ambiguous: true }) });
+    const result = await create().understandQuestion({ question: 'sản phẩm vừa nói giá sao?', history: [{ role: 'assistant', content: '1. Basic. 2. Pro.' }] });
+    expect(result.reference).toEqual({ mode: 'LATEST', index: null });
+    expect(result.intent).toBe('FOLLOW_UP');
+    expect(result.clarification).toBeTruthy();
+  });
+
+  it('resolves an indirect history reference independently of the full fact classifier', async () => {
+    generateContent.mockResolvedValueOnce({ text: JSON.stringify(understanding) })
+      .mockResolvedValueOnce({ text: JSON.stringify({ mode: 'LATEST', index: null, ambiguous: false }) });
+    await expect(create().understandQuestion({ question: 'ứng dụng phòng khám ấy', history: [{ role: 'assistant', content: 'ClinicDesk là ứng dụng quản lý phòng khám.' }] }))
+      .resolves.toMatchObject({ intent: 'FOLLOW_UP', reference: { mode: 'LATEST', index: null }, clarification: null });
+    expect(generateContent.mock.calls[1][0].config.abortSignal).toBe(generateContent.mock.calls[0][0].config.abortSignal);
+  });
 
   it('delegates unmodified Vietnamese typos and history as data with a strict bounded schema', async () => {
     respond(understanding);
@@ -176,7 +197,7 @@ describe('Gemini semantic understanding', () => {
 });
 
 describe('Gemini catalog selection', () => {
-  beforeEach(() => generateContent.mockReset());
+  beforeEach(() => { generateContent.mockReset(); });
 
   it('returns all supplied variants selected for a product family and caps output at 512', async () => {
     const value = { sourceIds: ['class-basic', 'class-pro'], ambiguous: false, clarification: null };

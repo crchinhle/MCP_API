@@ -12,6 +12,7 @@ export const REDACTED_LOG_PATHS = [
   'req.body.actionToken',
   'req.body.refreshToken',
   'req.body.accessToken',
+  'req.body.sessionToken',
   'req.body.proof',
   'req.body.activationSecret',
   'req.body.envelope',
@@ -28,5 +29,6 @@ export const REDACTED_LOG_PATHS = [
   'res.headers["set-cookie"]',
   'res.body.accessToken',
   'res.body.refreshToken',
+  'res.body.sessionToken',
   'res.body.activationKey',
 ] as const;

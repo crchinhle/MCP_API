@@ -61,6 +61,15 @@ export type CreateConversationDto = {
   title?: string;
 };
 
+export type LinkGuestHistoryDto = {
+  sessionId: string;
+  sessionToken: string;
+  /**
+   * Explicit consent to save this guest history to the signed-in account.
+   */
+  accepted: true;
+};
+
 export type AppendMessageDto = {
   claimVersion?: number;
   clientMessageId: string;
@@ -295,6 +304,10 @@ export type PublicKnowledgeDetailDto = {
 export type PublicAiAskDto = {
   clientMessageId: string;
   question: string;
+  /**
+   * Independent proof issued with the guest session.
+   */
+  sessionToken?: string;
   sessionId?: string;
 };
 
@@ -320,6 +333,7 @@ export type PublicAiAnswerDto = {
   citedSourceIds: Array<string>;
   grounded: boolean;
   sessionId: string;
+  sessionToken: string;
 };
 
 export type InviteProviderDto = {
@@ -1292,12 +1306,36 @@ export type AssistanceSupportControllerFindResponses = {
 export type AssistanceSupportControllerFindResponse =
   AssistanceSupportControllerFindResponses[keyof AssistanceSupportControllerFindResponses];
 
+export type AssistanceSupportControllerLinkGuestData = {
+  body: LinkGuestHistoryDto;
+  path?: never;
+  query?: never;
+  url: '/api/v1/conversations/link-guest-history';
+};
+
+export type AssistanceSupportControllerLinkGuestResponses = {
+  201: ConversationDto;
+};
+
+export type AssistanceSupportControllerLinkGuestResponse =
+  AssistanceSupportControllerLinkGuestResponses[keyof AssistanceSupportControllerLinkGuestResponses];
+
 export type AssistanceSupportControllerMessagesData = {
   body?: never;
   path: {
     conversationId: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * Exclusive server_sequence cursor for older messages.
+     */
+    before?: number;
+    /**
+     * Exclusive server_sequence cursor for new messages; cannot combine with before.
+     */
+    after?: number;
+    limit?: number;
+  };
   url: '/api/v1/conversations/{conversationId}/messages';
 };
 

@@ -48,6 +48,86 @@ describe('Phase 7 assistance PostgreSQL integration', () => {
 
   afterAll(async () => { await client?.end(); await container?.stop(); });
 
+  it.each([100, 1000])('pages %i messages in both directions without losing concurrent inserts or authorization', async count => {
+    const actor = { sub: customerId, role: 'CUSTOMER' as const, sessionVersion: 1 };
+    const conversation = await repository.createConversation(customerId, { title: 'Cursor history', mode: 'SUPPORT', initialMessage: 'message 1', clientRequestId: randomUUID() });
+    await client.query(`INSERT INTO messages(conversation_id,sender_user_id,sender_type,client_message_id,server_sequence,content)
+      SELECT $1,$2,'CUSTOMER',gen_random_uuid(),n,'message '||n FROM generate_series(3,$3::integer) n`, [conversation.id, customerId, count]);
+    const service = new AssistanceSupportService(repository);
+    const latest = (await service.listMessages(actor, conversation.id))!;
+    expect(latest).toHaveLength(50);
+    expect(latest[0]?.serverSequence).toBe(count - 49);
+    let collected = [...latest];
+    while (collected[0]!.serverSequence > 1) {
+      const older = (await service.listMessages(actor, conversation.id, { before: collected[0]!.serverSequence, limit: 100 }))!;
+      expect(older.length).toBeLessThanOrEqual(100);
+      collected = [...older, ...collected];
+    }
+    expect(collected.map(message => message.serverSequence)).toEqual(Array.from({ length: count }, (_, index) => index + 1));
+    await Promise.all(Array.from({ length: 8 }, (_, index) => repository.appendMessage({ conversationId: conversation.id, actorUserId: customerId, senderType: 'CUSTOMER', clientMessageId: randomUUID(), content: `new ${index}` })));
+    const incoming = (await service.listMessages(actor, conversation.id, { after: count, limit: 100 }))!;
+    expect(incoming.map(message => message.serverSequence)).toEqual(Array.from({ length: 8 }, (_, index) => count + index + 1));
+    expect((await service.listMessages(actor, conversation.id, { before: 1 }))).toEqual([]);
+    await expect(service.listMessages({ ...actor, sub: otherSupportId }, conversation.id, { after: 1 })).rejects.toMatchObject({ status: 404 });
+    for (const page of [{ limit: 0 }, { limit: 101 }, { before: -1 }, { after: 0 }, { before: 2, after: 1 }, { before: 1.2 }]) {
+      await expect(service.listMessages(actor, conversation.id, page)).rejects.toMatchObject({ status: 400 });
+    }
+    const duplicate = { conversationId: conversation.id, actorUserId: customerId, senderType: 'CUSTOMER' as const, clientMessageId: randomUUID(), content: 'retry once' };
+    const sent = await Promise.all([repository.appendMessage(duplicate), repository.appendMessage(duplicate)]);
+    expect(sent[0]!.id).toBe(sent[1]!.id);
+    const claimed = await repository.claimConversation(supportId, conversation.id);
+    expect(await service.listMessages({ ...actor, sub: supportId, role: 'SUPPORT_STAFF' }, conversation.id, { before: count })).toHaveLength(50);
+    await repository.releaseConversation(supportId, conversation.id, claimed.claimVersion);
+    await expect(service.listMessages({ ...actor, sub: supportId, role: 'SUPPORT_STAFF' }, conversation.id, { before: count })).rejects.toMatchObject({ status: 404 });
+    await repository.closeConversation(actor, conversation.id);
+    const closed = (await service.listMessages(actor, conversation.id, { after: count }))!;
+    expect(new Set(closed.map(item => item.id)).size).toBe(closed.length);
+    expect(closed.filter(item => item.clientMessageId === duplicate.clientMessageId)).toHaveLength(1);
+  });
+
+  it('validates message cursors at the HTTP boundary', async () => {
+    const actor = { sub: customerId, role: 'CUSTOMER' as const, sessionVersion: 1 };
+    const service = new AssistanceSupportService(repository);
+    const conversation = await service.createConversation(actor, { mode: 'SUPPORT', initialMessage: 'HTTP cursor', clientRequestId: randomUUID() });
+    const module = await Test.createTestingModule({ controllers: [AssistanceSupportController], providers: [{ provide: AssistanceSupportService, useValue: service }] })
+      .overrideGuard(AuthGuard).useValue({ canActivate(context: ExecutionContext) { context.switchToHttp().getRequest<{ user: AuthPrincipal }>().user = actor; return true; } }).compile();
+    const app = module.createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
+    app.useGlobalFilters(new ApiExceptionFilter());
+    await app.init();
+    try {
+      const endpoint = `/conversations/${conversation.id}/messages`;
+      const page = await request(app.getHttpServer() as Server).get(`${endpoint}?before=3&limit=1`).expect(200);
+      expect(page.body).toHaveLength(1);
+      expect(page.body[0].serverSequence).toBe(2);
+      for (const query of ['before=no', 'after=1.5', 'limit=101', 'limit=0', 'before=2&after=1', 'before=9007199254740992']) await request(app.getHttpServer() as Server).get(`${endpoint}?${query}`).expect(400);
+      actor.sub = otherSupportId;
+      await request(app.getHttpServer() as Server).get(`${endpoint}?before=3`).expect(404);
+    } finally { await app.close(); }
+  });
+
+  it('links real Redis guest history atomically to one durable customer conversation', async () => {
+    const cache = await new RedisContainer('redis:8.2-alpine').start();
+    const redis = new Redis(cache.getConnectionUrl());
+    try {
+      const answer = { answer: 'Public answer', grounded: false, catalogSources: [], citationDetails: [], citedSourceIds: [], recommendations: [], intent: 'PRODUCT_QA', outcome: 'NO_SOURCES' };
+      const guest = new PublicAssistantService(redis, { answer: vi.fn().mockResolvedValue(answer) } as never);
+      const service = new AssistanceSupportService(repository, undefined, guest);
+      const actor = { sub: customerId, role: 'CUSTOMER' as const, sessionVersion: 1 };
+      const session = await guest.ask({ question: 'Guest question', clientMessageId: randomUUID() }, '127.0.0.1');
+      const input = { sessionId: session.sessionId, sessionToken: session.sessionToken, accepted: true };
+      const linked = (await service.linkGuestHistory(actor, input))!;
+      expect((await service.listMessages(actor, linked.id))!.map(item => item.content)).toEqual(['Guest question', 'Public answer', expect.stringContaining('Lịch sử khách')]);
+      expect((await service.linkGuestHistory(actor, input))!.id).toBe(linked.id);
+      // The PostgreSQL identity remains unique even after loss of the Redis completion marker.
+      expect((await repository.importGuestHistory(customerId, session.sessionId, [] )).id).toBe(linked.id);
+      await expect(repository.importGuestHistory(otherSupportId, session.sessionId, [])).rejects.toThrow('CONVERSATION_NOT_FOUND');
+      await expect(service.linkGuestHistory({ ...actor, sub: otherSupportId }, input)).rejects.toMatchObject({ status: 404 });
+      await expect(service.linkGuestHistory(actor, { ...input, sessionToken: '0'.repeat(64) })).rejects.toMatchObject({ status: 404 });
+      expect((await service.listMessages(actor, linked.id))!).toHaveLength(3);
+    } finally { await redis.quit(); await cache.stop(); }
+  });
+
   it('creates a direct support request atomically and deduplicates concurrent retries', async () => {
     const input = { mode: 'SUPPORT' as const, title: 'Direct support', initialMessage: 'Please help without AI', clientRequestId: randomUUID() };
     const service = new AssistanceSupportService(repository);

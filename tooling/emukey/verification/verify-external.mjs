@@ -25,6 +25,7 @@ const safeError = (error) => {
   return message
     .replaceAll(/https?:\/\/[^\s]+/g, '[REDACTED_RPC_URL]')
     .replaceAll(/\b(?:sk|rk)_[A-Za-z0-9_-]+\b/g, '[REDACTED_PROVIDER_KEY]')
+    .replaceAll(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, '[REDACTED_IP]')
     .replaceAll(/\b\d{8,}\b/g, '[REDACTED_NUMBER]');
 };
 

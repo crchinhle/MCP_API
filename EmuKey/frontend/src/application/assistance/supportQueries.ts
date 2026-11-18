@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { requestJson, useOptionalAuth } from '../auth/authContext';
-import type { ConversationDto, MessageDto } from './assistanceQueries';
+import { useConversationMessages, type ConversationDto, type MessageDto } from './assistanceQueries';
 
 export function useSupportQueue(resolved = false) {
   const account = useOptionalAuth()?.user?.id;
@@ -39,16 +39,7 @@ export function useClaimConversation() {
 }
 
 export function useSupportConversationMessages(conversationId: string | undefined, preview = false) {
-  const account = useOptionalAuth()?.user?.id;
-  return useQuery({
-    enabled: Boolean(conversationId),
-    queryKey: ['assistance', preview ? 'queue-preview' : 'messages', conversationId, account],
-    queryFn: () => requestJson<MessageDto[]>(`/conversations/${encodeURIComponent(conversationId!)}/messages${preview ? '/queue-preview' : ''}`),
-    refetchInterval: 2_000,
-    refetchOnWindowFocus: 'always',
-    refetchOnReconnect: 'always',
-    refetchIntervalInBackground: false,
-  });
+  return useConversationMessages(conversationId, preview);
 }
 
 export function useReleaseSupportConversation() {

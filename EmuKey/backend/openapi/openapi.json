@@ -182,6 +182,42 @@
         ]
       }
     },
+    "/api/v1/conversations/link-guest-history": {
+      "post": {
+        "operationId": "AssistanceSupportController_linkGuest",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkGuestHistoryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "assistance"
+        ]
+      }
+    },
     "/api/v1/conversations/{conversationId}/messages": {
       "post": {
         "operationId": "AssistanceSupportController_append",
@@ -235,6 +271,39 @@
             "in": "path",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "before",
+            "required": false,
+            "in": "query",
+            "description": "Exclusive server_sequence cursor for older messages.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 9007199254740991,
+              "type": "number"
+            }
+          },
+          {
+            "name": "after",
+            "required": false,
+            "in": "query",
+            "description": "Exclusive server_sequence cursor for new messages; cannot combine with before.",
+            "schema": {
+              "minimum": 1,
+              "maximum": 9007199254740991,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50,
+              "type": "number"
             }
           }
         ],
@@ -4272,6 +4341,30 @@
           }
         }
       },
+      "LinkGuestHistoryDto": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sessionToken": {
+            "type": "string"
+          },
+          "accepted": {
+            "type": "boolean",
+            "enum": [
+              true
+            ],
+            "description": "Explicit consent to save this guest history to the signed-in account."
+          }
+        },
+        "required": [
+          "sessionId",
+          "sessionToken",
+          "accepted"
+        ]
+      },
       "AppendMessageDto": {
         "type": "object",
         "properties": {
@@ -5124,6 +5217,10 @@
             "minLength": 1,
             "maxLength": 4000
           },
+          "sessionToken": {
+            "type": "string",
+            "description": "Independent proof issued with the guest session."
+          },
           "sessionId": {
             "type": "string",
             "format": "uuid"
@@ -5192,6 +5289,9 @@
           "sessionId": {
             "type": "string",
             "format": "uuid"
+          },
+          "sessionToken": {
+            "type": "string"
           }
         },
         "required": [
@@ -5199,7 +5299,8 @@
           "answer",
           "citedSourceIds",
           "grounded",
-          "sessionId"
+          "sessionId",
+          "sessionToken"
         ]
       },
       "InviteProviderDto": {

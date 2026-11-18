@@ -152,6 +152,10 @@ export function SupportConsoleScreen() {
           {messages.isError ? <Alert type="error" title="Không thể tải tin nhắn" action={<Button onClick={() => void messages.refetch()}>Thử lại</Button>} /> : null}
           {messages.isFetching ? <small role="status">Đang đồng bộ tin nhắn…</small> : null}
              <ConversationPanel
+               hasOlder={messages.hasOlder}
+               loadingOlder={messages.isLoadingOlder}
+               olderError={messages.olderError}
+               onLoadOlder={() => messages.loadOlder()}
                author="Support"
                draftKey={`support-draft:${auth?.user?.id}:${selected.id}`}
                initialMessages={(messages.data ?? []).map((message) => ({

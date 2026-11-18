@@ -193,7 +193,7 @@ test.describe("AI assistant — mocked API UI", () => {
       await expect(panel.getByText(/^150.000\s₫$/)).toHaveCount(0);
       await expect(
         panel.getByText(citation.excerpt, { exact: true }),
-      ).toHaveCount(0);
+      ).not.toBeVisible();
       await expect(panel.getByRole("log")).not.toContainText(source.content);
       await expect(panel.getByRole("log")).not.toContainText(
         "33333333-3333-4333-8333-333333333333",

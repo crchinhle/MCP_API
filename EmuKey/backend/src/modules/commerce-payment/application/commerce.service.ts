@@ -60,13 +60,16 @@ export class CommerceService {
         message: 'Idempotency-Key must be a UUIDv4.',
       });
     }
+    let terms;
+    try { terms = await this.serviceTerms.loadServiceTermsArtifact(); }
+    catch { throw new ServiceUnavailableException({ code: 'SERVICE_TERMS_NOT_READY', message: 'Điều khoản dịch vụ chưa sẵn sàng. Vui lòng thử lại sau.' }); }
     try {
       return await this.repository.createOrder(
         actor.sub,
         idempotencyKey,
         dto.planId,
         dto.targetLicenseId,
-        await this.serviceTerms.loadServiceTermsArtifact(),
+        terms,
         this.chain,
         { deviceQuantity: dto.deviceQuantity, durationMonths: dto.durationMonths },
       );

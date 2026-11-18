@@ -8,18 +8,43 @@ function setup() {
   return { records, redis, advisor, service: new PublicAssistantService(redis as never, advisor as never) };
 }
 describe('Public assistant session boundary', () => {
+  it('requires independent proof and explicit consent and binds a transfer to one account', async () => {
+    const { service } = setup();
+    const first = await service.ask({ question: 'Public history', clientMessageId: 'initial' }, 'ip');
+    const save = vi.fn().mockResolvedValue({ id: 'linked' });
+    await expect(service.ask({ sessionId: first.sessionId, question: 'Read without proof', clientMessageId: 'other' }, 'ip')).rejects.toMatchObject({ status: 404 });
+    await expect(service.link({ ...first, accepted: false }, 'customer-a', save)).rejects.toMatchObject({ status: 400 });
+    await expect(service.link({ ...first, sessionToken: '0'.repeat(64), accepted: true }, 'customer-a', save)).rejects.toMatchObject({ status: 404 });
+    expect(save).not.toHaveBeenCalled();
+    expect(await service.link({ ...first, accepted: true }, 'customer-a', save)).toEqual({ id: 'linked' });
+    expect(save).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ role: 'user', content: 'Public history' })]));
+    expect(await service.link({ ...first, accepted: true }, 'customer-a', save)).toEqual({ id: 'linked' });
+    expect(save).toHaveBeenCalledTimes(1);
+    await expect(service.link({ ...first, accepted: true }, 'customer-b', save)).rejects.toMatchObject({ status: 404 });
+    await expect(service.ask({ ...first, question: 'No guest access after linking', clientMessageId: 'later' }, 'ip')).rejects.toMatchObject({ status: 404 });
+  });
+  it('requires a separate session proof and explicit consent before linking guest history', async () => {
+    const { service } = setup();
+    const first = await service.ask({ question: 'Q', clientMessageId: 'first' }, 'ip');
+    const save = vi.fn().mockResolvedValue({ id: 'linked' });
+    await expect(service.link({ sessionId: first.sessionId, sessionToken: 'wrong', accepted: true }, 'buyer', save)).rejects.toMatchObject({ status: 404 });
+    await expect(service.link({ sessionId: first.sessionId, sessionToken: first.sessionToken, accepted: false }, 'buyer', save)).rejects.toMatchObject({ status: 400 });
+    await expect(service.link({ sessionId: first.sessionId, sessionToken: first.sessionToken, accepted: true }, 'buyer', save)).resolves.toEqual({ id: 'linked' });
+    await expect(service.link({ sessionId: first.sessionId, sessionToken: first.sessionToken, accepted: true }, 'other', save)).rejects.toMatchObject({ status: 404 });
+    expect(save).toHaveBeenCalledTimes(1);
+  });
   it('issues a server session and reuses its bounded history', async () => {
     const { service, advisor, redis } = setup();
     const first = await service.ask({ question: 'Sản phẩm nào?', clientMessageId: 'id1' }, '127.0.0.1');
     expect(first.sessionId).toMatch(/^[a-f\d-]{36}$/);
-    await service.ask({ question: 'Gói đó?', sessionId: first.sessionId, clientMessageId: 'id2' }, '127.0.0.1');
+    await service.ask({ question: 'Gói đó?', sessionId: first.sessionId, sessionToken: first.sessionToken, clientMessageId: 'id2' }, '127.0.0.1');
     expect(advisor.answer).toHaveBeenLastCalledWith(expect.objectContaining({ history: expect.arrayContaining([expect.objectContaining({ role: 'user', content: 'Sản phẩm nào?' })]) }));
     expect(redis.set).toHaveBeenCalledWith(expect.stringContaining('session'), expect.any(String), 'EX', 1800);
   });
   it('returns the same answer on retry without calling inference twice', async () => {
     const { service, advisor } = setup();
     const first = await service.ask({ question: 'Sản phẩm nào?', clientMessageId: 'same' }, 'ip');
-    const second = await service.ask({ question: 'Sản phẩm nào?', clientMessageId: 'same', sessionId: first.sessionId }, 'ip');
+    const second = await service.ask({ question: 'Sản phẩm nào?', clientMessageId: 'same', sessionId: first.sessionId, sessionToken: first.sessionToken }, 'ip');
     expect(second).toEqual(first); expect(advisor.answer).toHaveBeenCalledTimes(1);
   });
   it('does not let clients adopt an arbitrary session identifier', async () => {
@@ -30,13 +55,13 @@ describe('Public assistant session boundary', () => {
   it('rejects reused client IDs with changed content', async () => {
     const { service } = setup();
     const first = await service.ask({ question: 'Sản phẩm nào?', clientMessageId: 'same' }, 'ip');
-    await expect(service.ask({ question: 'Khác', clientMessageId: 'same', sessionId: first.sessionId }, 'ip')).rejects.toThrow();
+    await expect(service.ask({ question: 'Khác', clientMessageId: 'same', sessionId: first.sessionId, sessionToken: first.sessionToken }, 'ip')).rejects.toThrow();
   });
   it('rechecks stored evidence on a retry after publication changes', async () => {
     const { service, advisor } = setup();
     const first = await service.ask({ question: 'Sản phẩm nào?', clientMessageId: 'same' }, 'ip');
     advisor.isCurrent.mockResolvedValue(false);
-    await expect(service.ask({ question: 'Sản phẩm nào?', clientMessageId: 'same', sessionId: first.sessionId }, 'ip')).rejects.toThrow();
+    await expect(service.ask({ question: 'Sản phẩm nào?', clientMessageId: 'same', sessionId: first.sessionId, sessionToken: first.sessionToken }, 'ip')).rejects.toThrow();
     expect(advisor.answer).toHaveBeenCalledTimes(1);
   });
   it('fails closed when rate limit is exceeded', async () => {

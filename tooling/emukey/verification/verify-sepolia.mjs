@@ -6,7 +6,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { PostgreSqlContainer } from '@testcontainers/postgresql';
 import { RedisContainer } from '@testcontainers/redis';
 import { Pool } from 'pg';
-import { createPublicClient, http } from 'viem';
+import { createPublicClient, http, keccak256 } from 'viem';
 import { generatePrivateKey, mnemonicToAccount, privateKeyToAccount } from 'viem/accounts';
 
 const product = resolve(import.meta.dirname, '../../../EmuKey/backend');
@@ -32,7 +32,15 @@ try {
   const client = createPublicClient({ cacheTime: 0, transport: http(process.env.EVM_RPC_HTTP_URL, { timeout: 20_000, retryCount: 1 }) });
   assert.equal(await client.getChainId(), 11155111);
   const artifact = JSON.parse(await readFile(resolve(product, 'contracts/artifacts/solidity/LicenseRegistry.sol/LicenseRegistry.json'), 'utf8'));
-  assert.equal(await client.getCode({ address }), artifact.deployedBytecode);
+  // This configured deployment is legacy protocol 2. The latest source adds
+  // namespace issuance; its artifact must not redefine a deployed identity.
+  assert.equal(metadata.protocolVersion, 2, 'SEPOLIA_DEPLOYMENT_PROTOCOL_MISMATCH');
+  assert.match(metadata.runtimeCodeHash ?? '', /^0x[0-9a-f]{64}$/, 'SEPOLIA_RUNTIME_HASH_MISSING');
+  assert.match(metadata.sourceReference ?? '', /^[0-9a-f]{40}:EmuKey\/backend\/contracts\/solidity\/LicenseRegistry\.sol$/, 'SEPOLIA_SOURCE_REFERENCE_MISSING');
+  assert.equal(keccak256((await client.getCode({ address })) ?? '0x'), metadata.runtimeCodeHash, 'SEPOLIA_DEPLOYED_BYTECODE_MISMATCH');
+  report.protocolVersion = metadata.protocolVersion;
+  report.runtimeCodeHash = metadata.runtimeCodeHash;
+  report.sourceReference = metadata.sourceReference;
   const deploymentReceipt = await client.getTransactionReceipt({ hash: metadata.deploymentTransaction });
   assert.equal(deploymentReceipt.status, 'success');
   assert.equal(Number(deploymentReceipt.blockNumber), metadata.deploymentBlock);
@@ -60,6 +68,11 @@ try {
   });
   const { createApiApplication } = await import('../../../EmuKey/backend/dist/entrypoints/api/create-api-application.js');
   const { CommerceService } = await import('../../../EmuKey/backend/dist/modules/commerce-payment/application/commerce.service.js');
+  const { CommerceRepository } = await import('../../../EmuKey/backend/dist/modules/commerce-payment/infrastructure/commerce.repository.js');
+  const { PAYMENT_GATEWAY } = await import('../../../EmuKey/backend/dist/modules/commerce-payment/application/ports/payment-gateway.port.js');
+  const { ACTIVATION_ENVELOPE } = await import('../../../EmuKey/backend/dist/modules/blockchain/application/ports/activation-envelope.port.js');
+  const { ActivationEnvelopeRecoveryService } = await import('../../../EmuKey/backend/dist/modules/blockchain/application/activation-envelope-recovery.service.js');
+  const { NotificationWriter } = await import('../../../EmuKey/backend/dist/modules/operations/application/notification-writer.js');
   const { ChainCommandService } = await import('../../../EmuKey/backend/dist/modules/blockchain/application/chain-command.service.js');
   const { CHAIN_RPC_INDEXER } = await import('../../../EmuKey/backend/dist/modules/blockchain/application/rpc-chain-indexer.service.js');
   const { LicenseQueryService } = await import('../../../EmuKey/backend/dist/modules/blockchain/application/license-query.service.js');
@@ -73,7 +86,12 @@ try {
     if (response.status !== expected) throw new Error(`HTTP_${response.status}_${path.replaceAll('/', '_').replaceAll('-', '_').toUpperCase()}`);
     return result;
   };
-  const commerce = app.get(CommerceService);
+  // Explicit legacy-device qualification. Current API orders intentionally use
+  // provider handoff; this fixture does not claim to qualify that newer flow.
+  const commerce = new CommerceService(new CommerceRepository(pool, 86400, app.get(NotificationWriter)),
+    app.get(PAYMENT_GATEWAY), app.get(ACTIVATION_ENVELOPE), app.get(ActivationEnvelopeRecoveryService),
+    { chainId: 11155111, contractAddress: address, network: 'sepolia' });
+  report.fulfillmentMode = 'LEGACY_DEVICE';
   const commands = app.get(ChainCommandService);
   const indexer = app.get(CHAIN_RPC_INDEXER);
   const queries = app.get(LicenseQueryService);
@@ -92,15 +110,20 @@ try {
   report.licenseId = licenseId;
 
   const settle = async (commandId, deviceSync = false) => {
+    const operation = deviceSync ? 'device_sync' : 'issue_license';
+    stage = `${operation}_submit`;
     assert.equal(await commands.processNext('sepolia-smoke-relayer'), commandId);
     const command = (await pool.query('SELECT status, transaction_hash FROM chain_commands WHERE id=$1', [commandId])).rows[0];
     assert.equal(command.status, 'SUBMITTED');
+    (report.submittedTransactions ??= []).push({ commandId, transactionHash: command.transaction_hash });
     if (deviceSync) report.timeline.T2_submitted = new Date().toISOString();
     console.log(`Sepolia ${deviceSync ? 'device sync' : 'issue'} submitted: ${command.transaction_hash}`);
+    stage = `${operation}_receipt`;
     const receipt = await client.waitForTransactionReceipt({ hash: command.transaction_hash, confirmations: 2, timeout: 240_000 });
     assert.equal(receipt.status, 'success');
     if (deviceSync) report.timeline.T3_confirmed = new Date().toISOString();
     await commands.reconcileReceipt('sepolia-smoke-receipt');
+    stage = `${operation}_index`;
     let event;
     for (let attempt = 0; attempt < 90; attempt++) {
       await indexer.poll('sepolia-smoke-indexer');
@@ -160,7 +183,11 @@ try {
 } catch (error) {
   report.status = 'BLOCKED_EXTERNAL';
   report.stage = stage;
-  report.blocker = error instanceof Error && /^[A-Z0-9_]+$/.test(error.message) ? error.message : 'SEPOLIA_VERIFICATION_FAILED';
+  const code = error?.response?.code ?? error?.cause?.code ?? error?.code ?? error?.message;
+  report.blocker = typeof code === 'string' && /^[A-Z0-9_]+$/.test(code) ? code : 'SEPOLIA_VERIFICATION_FAILED';
+  report.errorType = /^[A-Za-z]+(?:Error|Exception)$/.test(error?.name ?? '') ? error.name : 'UNKNOWN';
+  const location = error?.stack?.match(/verify-sepolia\.mjs:(\d+):\d+/)?.[1];
+  if (location) report.verifierLine = Number(location);
   process.exitCode = 1;
 } finally {
   await app?.close();

@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, HttpException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 
 import type { AuthPrincipal } from '../identity-access/identity.types.js';
-import type { AppendMessageDto, CreateConversationDto } from './assistance-support.dto.js';
+import type { AppendMessageDto, CreateConversationDto, LinkGuestHistoryDto } from './assistance-support.dto.js';
 import type { AssistanceSupportRepository } from './infrastructure/assistance-support.repository.js';
 import type { AiAssistanceService } from './ai-assistance.service.js';
 import type { PublicAssistantService } from './application/public-assistant.service.js';
@@ -32,6 +32,14 @@ export class AssistanceSupportService {
   list(actor: AuthPrincipal) {
     if (!['CUSTOMER', 'SUPPORT_STAFF', 'SYSTEM_ADMIN'].includes(actor.role)) throw new ForbiddenException();
     return this.repository.listForActor(actor);
+  }
+
+  async linkGuestHistory(actor: AuthPrincipal, dto: LinkGuestHistoryDto) {
+    this.requireCustomer(actor);
+    if (!this.aiRequests) throw new ServiceUnavailableException({ code: 'AI_SESSION_UNAVAILABLE' });
+    try {
+      return await this.aiRequests.link(dto, actor.sub, turns => this.repository.importGuestHistory(actor.sub, dto.sessionId, turns));
+    } catch (error) { this.translate(error); }
   }
 
   queue(actor: AuthPrincipal) {
@@ -97,8 +105,12 @@ export class AssistanceSupportService {
     }
   }
 
-  async listMessages(actor: AuthPrincipal, conversationId: string) {
-    const messages = await this.repository.listMessages(actor, conversationId);
+  async listMessages(actor: AuthPrincipal, conversationId: string, page: import('./assistance-support.types.js').MessagePageQuery = {}) {
+    const { before, after, limit = 50 } = page;
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100 ||
+      [before, after].some(cursor => cursor !== undefined && (!Number.isSafeInteger(cursor) || cursor < 1)) ||
+      (before !== undefined && after !== undefined)) throw new BadRequestException({ code: 'MESSAGE_CURSOR_INVALID' });
+    const messages = await this.repository.listMessages(actor, conversationId, page);
     if (!messages) throw new NotFoundException({ code: 'CONVERSATION_NOT_FOUND' });
     return messages;
   }

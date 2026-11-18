@@ -1,0 +1,34 @@
+{
+  "runId": "emukey-ext-20261118053801-829cf48e",
+  "generatedAt": "2026-11-18T05:38:01.769Z",
+  "providers": {
+    "Gemini": {
+      "status": "SKIPPED_BY_OPT_IN",
+      "evidence": {}
+    },
+    "Cloudinary": {
+      "status": "SKIPPED_BY_OPT_IN",
+      "evidence": {}
+    },
+    "Brevo": {
+      "status": "PROVIDER_ACCEPTED_VERIFIED",
+      "evidence": {
+        "providerMessageId": "<202611180538.77136471888@smtp-relay.mailin.fr>",
+        "recipient": "E2E_TEST_EMAIL_RECIPIENT",
+        "inboxReceiptVerified": false
+      }
+    },
+    "FCM": {
+      "status": "SKIPPED_BY_OPT_IN",
+      "evidence": {}
+    },
+    "SePay": {
+      "status": "SKIPPED_BY_OPT_IN",
+      "evidence": {}
+    },
+    "Sepolia": {
+      "status": "SKIPPED_BY_OPT_IN",
+      "evidence": {}
+    }
+  }
+}

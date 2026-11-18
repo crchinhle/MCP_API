@@ -95,6 +95,18 @@ describe.skipIf(!enabled)('Real Gemini semantic understanding and catalog select
     expect(actual.productReference?.toLowerCase().replaceAll(' ', '')).toContain('clinicdesk');
   });
 
+  it.each([
+    ['Sản phẩm vừa nói có giá bao nhiêu?', 'PRICE'],
+    ['Cái mới nhất có hỗ trợ Windows không?', 'COMPATIBILITY'],
+    ['Nếu đổi sang gói năm thì sao?', 'DURATION'],
+  ])('resolves a current product across a new conversational question: %s', async (question, field) => {
+    const actual = await gateway.understandQuestion({ question, history: [{ role: 'assistant', content: 'ClinicDesk Pro là gói phần mềm quản lý phòng khám vừa được đề xuất.' }] });
+    expect(actual.intent).toBe('FOLLOW_UP');
+    expect(actual.reference).toEqual({ mode: 'LATEST', index: null });
+    expect(actual.requestedFields).toContain(field);
+    expect(actual.clarification).toBeNull();
+  });
+
   const sources: GroundingSource[] = [
     { id: 'class-basic', kind: 'CATALOG', productId: 'class', productCode: 'CLASSROOM', productName: 'Classroom Hub', planName: 'Basic', priceVnd: 100000, maxActiveDevices: 2, durationMonths: 1, content: 'Classroom Hub Basic: phần mềm quản lý lớp học, điểm danh và giao bài. Giá 100000 VND; 2 máy; 1 tháng. Alias: Classroom, CH.' },
     { id: 'class-pro', kind: 'CATALOG', productId: 'class', productCode: 'CLASSROOM', productName: 'Classroom Hub', planName: 'Pro', priceVnd: 500000, maxActiveDevices: 10, durationMonths: 12, content: 'Classroom Hub Pro: quản lý lớp học, điểm danh và giao bài. Giá 500000 VND; 10 máy; 12 tháng. Alias: Classroom, CH.' },

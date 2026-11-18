@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
@@ -16,11 +16,15 @@ import {
 } from './ai-advisor.service.js';
 
 interface GuestState {
+  tokenHash: string;
+  linkedUserId?: string;
+  linkedResult?: unknown;
   turns: AiTurn[];
   requests: Array<{ id: string; questionHash: string; answer: AdvisorAnswer }>;
 }
 export interface GuestAsk {
   sessionId?: string;
+  sessionToken?: string;
   question: string;
   clientMessageId: string;
 }
@@ -37,17 +41,21 @@ export class PublicAssistantService {
   async ask(
     input: GuestAsk,
     ip: string,
-  ): Promise<AdvisorAnswer & { sessionId: string }> {
+  ): Promise<AdvisorAnswer & { sessionId: string; sessionToken: string }> {
     if (!input.question.trim() || input.question.length > 4000)
       throw new BadRequestException({ code: 'AI_QUESTION_INVALID' });
     await this.limit(`ip:${digest(ip)}`, 20);
     let sessionId = input.sessionId;
+    let sessionToken = input.sessionToken;
     if (!sessionId) {
       // Initial request retries also reuse the issued conversation; the client never chooses its ID.
       const requestKey = `ai:guest:initial:${digest(`${ip}:${input.clientMessageId}`)}`;
-      const proposed = randomUUID();
-      await this.redis.set(requestKey, proposed, 'EX', ttl, 'NX');
-      sessionId = (await this.redis.get(requestKey)) ?? undefined;
+      const proposed = { sessionId: randomUUID(), sessionToken: randomBytes(32).toString('hex') };
+      await this.redis.set(requestKey, JSON.stringify(proposed), 'EX', ttl, 'NX');
+      const issued = await this.redis.get(requestKey);
+      const saved = issued?.startsWith('{') ? JSON.parse(issued) as typeof proposed : undefined;
+      sessionId = saved?.sessionId;
+      sessionToken = saved?.sessionToken;
       if (!sessionId)
         throw new ServiceUnavailableException({
           code: 'AI_SESSION_UNAVAILABLE',
@@ -65,7 +73,8 @@ export class PublicAssistantService {
         throw new NotFoundException({ code: 'AI_SESSION_EXPIRED' });
       const state: GuestState = serialized
         ? (JSON.parse(serialized) as GuestState)
-        : { turns: [], requests: [] };
+        : { turns: [], requests: [], tokenHash: digest(sessionToken!) };
+      if (!sessionToken || !state.tokenHash || digest(sessionToken) !== state.tokenHash || state.linkedUserId) throw new NotFoundException({ code: 'AI_SESSION_EXPIRED' });
       const questionHash = digest(input.question);
       const previous = state.requests.find(
         (request) => request.id === input.clientMessageId,
@@ -81,7 +90,7 @@ export class PublicAssistantService {
             message:
               'Thông tin nguồn đã thay đổi. Vui lòng gửi câu hỏi mới để tra cứu lại.',
           });
-        return { ...previous.answer, sessionId };
+        return { ...previous.answer, sessionId, sessionToken };
       }
       const answer = await this.advisor.answer({
         question: input.question,
@@ -103,7 +112,7 @@ export class PublicAssistantService {
           { id: input.clientMessageId, questionHash, answer },
         ].slice(-16);
       await this.redis.set(key, JSON.stringify(state), 'EX', ttl);
-      return { ...answer, sessionId };
+      return { ...answer, sessionId, sessionToken };
     } finally {
       await this.redis.eval(
         "if redis.call('get',KEYS[1]) == ARGV[1] then return redis.call('del',KEYS[1]) else return 0 end",
@@ -111,6 +120,29 @@ export class PublicAssistantService {
         lockKey,
         lockId,
       );
+    }
+  }
+
+  async link<T>(input: { sessionId: string; sessionToken: string; accepted: boolean }, userId: string, save: (turns: AiTurn[]) => Promise<T>): Promise<T> {
+    if (input.accepted !== true) throw new BadRequestException({ code: 'GUEST_HISTORY_CONSENT_REQUIRED' });
+    const key = `ai:guest:session:${digest(input.sessionId)}`;
+    const lockKey = `${key}:lock`;
+    const token = randomUUID();
+    if (!(await this.redis.set(lockKey, token, 'EX', 90, 'NX'))) throw new ConflictException({ code: 'AI_REQUEST_IN_PROGRESS' });
+    try {
+      const serialized = await this.redis.get(key);
+      const state = serialized ? JSON.parse(serialized) as GuestState : undefined;
+      if (!state?.tokenHash || digest(input.sessionToken) !== state.tokenHash || (state.linkedUserId && state.linkedUserId !== userId)) throw new NotFoundException({ code: 'AI_SESSION_EXPIRED' });
+      if (state.linkedResult) return state.linkedResult as T;
+      // Reserve this account before the durable transaction; retries may only use the same owner.
+      state.linkedUserId = userId;
+      await this.redis.set(key, JSON.stringify(state), 'EX', ttl);
+      const result = await save(boundedHistory(state.turns));
+      state.linkedResult = result;
+      await this.redis.set(key, JSON.stringify(state), 'EX', ttl);
+      return result;
+    } finally {
+      await this.redis.eval("if redis.call('get',KEYS[1]) == ARGV[1] then return redis.call('del',KEYS[1]) else return 0 end", 1, lockKey, token);
     }
   }
 

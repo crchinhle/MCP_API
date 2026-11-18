@@ -220,3 +220,149 @@ test('recovers a direct creation response lost across refresh without creating a
   await expect(page.getByRole('log', { name: 'Lịch sử tin nhắn' }).getByText('Nội dung yêu cầu được giữ nguyên.', { exact: true })).toHaveCount(1);
   await expect(page.getByRole('button', { name: 'Khôi phục yêu cầu sau refresh', exact: true })).toHaveCount(1);
 });
+
+test('pages a thousand-message real conversation while preserving the scroll anchor and draft', async ({ page, baseURL }) => {
+  await page.goto(`${baseURL}/auth`);
+  await page.getByLabel('Email', { exact: true }).fill('customer@support.example.test');
+  await page.getByLabel('Mật khẩu', { exact: true }).fill(process.env.SUPPORT_FIXTURE_PASSWORD!);
+  await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
+  await expect(page).not.toHaveURL(/\/auth/);
+  await page.goto(`${baseURL}/buyer/support?conversationId=${process.env.SUPPORT_PAGINATION_ID}`);
+  const log = page.getByRole('log', { name: 'Lịch sử tin nhắn' });
+  await expect(log.locator('article')).toHaveCount(50);
+  await expect(log.getByText('History fixture 1000', { exact: true })).toBeVisible();
+  await page.getByLabel('Tin nhắn hỗ trợ').fill('Draft survives history pagination');
+  const anchor = await log.evaluate(area => {
+    area.scrollTop = 120;
+    const top = area.getBoundingClientRect().top;
+    const node = [...area.querySelectorAll<HTMLElement>('[data-message-id]')].find(item => item.getBoundingClientRect().bottom >= top)!;
+    return { id: node.dataset.messageId, offset: node.getBoundingClientRect().top - top };
+  });
+  await page.getByRole('button', { name: 'Tải tin nhắn cũ', exact: true }).click();
+  await expect(log.locator('article')).toHaveCount(100);
+  const offset = await log.evaluate((area, id) => area.querySelector<HTMLElement>(`[data-message-id="${id}"]`)!.getBoundingClientRect().top - area.getBoundingClientRect().top, anchor.id);
+  expect(Math.abs(offset - anchor.offset)).toBeLessThan(3);
+  await expect(page.getByLabel('Tin nhắn hỗ trợ')).toHaveValue('Draft survives history pagination');
+  await page.context().setOffline(true);
+  await expect(page.getByRole('button', { name: 'Hỏi AI có nguồn', exact: true })).toBeDisabled();
+  await page.context().setOffline(false);
+  await expect(page.getByRole('button', { name: 'Hỏi AI có nguồn', exact: true })).toBeEnabled();
+  await page.reload();
+  await expect(log.locator('article')).toHaveCount(50);
+  await expect(page.getByLabel('Tin nhắn hỗ trợ')).toHaveValue('Draft survives history pagination');
+});
+
+test('links real guest history only after login and explicit confirmation', async ({ page, baseURL }) => {
+  await page.goto(`${baseURL}/products`);
+  await page.getByRole('button', { name: 'Mở trợ lý AI' }).click();
+  let panel = page.locator('#emukey-ai-assistant-panel');
+  const question = 'Tôi đã thanh toán nhưng chưa nhận được bản quyền, cần nhân viên hỗ trợ.';
+  await panel.getByRole('textbox').fill(question);
+  const guestReply = page.waitForResponse(response => response.url().endsWith('/public/assistant/ask'));
+  await panel.getByRole('button', { name: 'Gửi câu hỏi' }).click();
+  expect((await guestReply).status()).toBe(200);
+  await expect.poll(() => page.evaluate(() => Boolean(JSON.parse(sessionStorage.getItem('emukey-ai-guest-session:guest') ?? '{}').sessionToken))).toBe(true);
+  await page.goto(`${baseURL}/auth`);
+  await page.getByLabel('Email', { exact: true }).fill('customer@support.example.test');
+  await page.getByLabel('Mật khẩu', { exact: true }).fill(process.env.SUPPORT_FIXTURE_PASSWORD!);
+  let transfers = 0;
+  page.on('request', request => { if (request.url().endsWith('/conversations/link-guest-history')) transfers++; });
+  await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
+  await expect(page).not.toHaveURL(/\/auth/);
+  await page.getByRole('button', { name: 'Mở trợ lý AI' }).click();
+  panel = page.locator('#emukey-ai-assistant-panel');
+  const confirm = panel.getByRole('button', { name: 'Xác nhận lưu lịch sử khách' });
+  await expect(confirm).toBeVisible();
+  expect(transfers).toBe(0);
+  const linked = page.waitForResponse(response => response.url().endsWith('/conversations/link-guest-history'));
+  let releaseLink!: () => void;
+  let linkReached!: () => void;
+  const linkStarted = new Promise<void>(resolve => { linkReached = resolve; });
+  const linkGate = new Promise<void>(resolve => { releaseLink = resolve; });
+  await page.route('**/api/v1/conversations/link-guest-history', async route => {
+    const response = await route.fetch();
+    linkReached();
+    await linkGate;
+    await route.fulfill({ response });
+  });
+  await confirm.click();
+  await linkStarted;
+  try {
+    await expect(panel.getByRole('button', { name: 'Hội thoại mới' })).toBeDisabled();
+    await expect(panel.getByRole('textbox')).toBeDisabled();
+    await expect(panel.getByRole('button', { name: 'Không lưu lịch sử khách' })).toBeDisabled();
+  } finally { releaseLink(); }
+  expect((await linked).status()).toBe(201);
+  await expect(panel.getByText(question, { exact: true })).toHaveCount(1);
+  await expect(confirm).toHaveCount(0);
+  expect(await page.evaluate(() => sessionStorage.getItem('emukey-ai-guest-session:guest'))).toBeNull();
+  await page.reload();
+  await page.getByRole('button', { name: 'Mở trợ lý AI' }).click();
+  await expect(page.locator('#emukey-ai-assistant-panel').getByText(question, { exact: true })).toHaveCount(1);
+  expect(transfers).toBe(1);
+});
+
+test('recovers a lost AI creation response and preserves a reopened draft after a late AI reply', async ({ page, baseURL }) => {
+  await page.goto(`${baseURL}/auth`);
+  await page.getByLabel('Email', { exact: true }).fill('outsider@support.example.test');
+  await page.getByLabel('Mật khẩu', { exact: true }).fill(process.env.SUPPORT_FIXTURE_PASSWORD!);
+  await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
+  await expect(page).not.toHaveURL(/\/auth/);
+  let createdId = '';
+  let creationKey = '';
+  let attempts = 0;
+  await page.route('**/api/v1/conversations', async route => {
+    if (route.request().method() !== 'POST') return route.continue();
+    attempts++;
+    const body = route.request().postDataJSON();
+    const response = await route.fetch();
+    expect(response.status()).toBe(201);
+    if (attempts === 1) {
+      creationKey = body.clientRequestId;
+      expect(creationKey).toMatch(/^[0-9a-f-]{36}$/i);
+      createdId = (await response.json()).id;
+      await route.abort('failed');
+    } else {
+      expect(body.clientRequestId).toBe(creationKey);
+      expect((await response.json()).id).toBe(createdId);
+      await route.fulfill({ response });
+    }
+  });
+  await page.getByRole('button', { name: 'Mở trợ lý AI' }).click();
+  const panel = page.locator('#emukey-ai-assistant-panel');
+  await panel.getByRole('textbox').fill('Tôi đã thanh toán nhưng chưa nhận được bản quyền.');
+  await panel.getByRole('button', { name: 'Gửi câu hỏi' }).click();
+  await expect(panel.getByRole('button', { name: 'Thử gửi lại' })).toBeVisible();
+  await panel.getByRole('button', { name: 'Thử gửi lại' }).click();
+  await expect(panel.getByRole('textbox')).toHaveValue('');
+  expect(attempts).toBe(2);
+  await page.goto(`${baseURL}/buyer/licenses`);
+  await page.getByRole('navigation', { name: 'Điều hướng khách hàng' }).getByRole('link', { name: 'Hỗ trợ', exact: true }).click();
+  await expect(page.getByLabel('Tin nhắn hỗ trợ')).toBeVisible();
+  let releaseReply!: () => void;
+  let replyReached!: () => void;
+  const replyStarted = new Promise<void>(resolve => { replyReached = resolve; });
+  const replyGate = new Promise<void>(resolve => { releaseReply = resolve; });
+  await page.route(`**/api/v1/conversations/${createdId}/ai-ask`, async route => {
+    const response = await route.fetch();
+    expect(response.status()).toBe(200);
+    replyReached();
+    await replyGate;
+    await route.fulfill({ response });
+  });
+  await page.getByLabel('Tin nhắn hỗ trợ').fill('Tôi cần kiểm tra thanh toán lần nữa.');
+  const lateReply = page.waitForResponse(response => response.url().endsWith(`/${createdId}/ai-ask`));
+  await page.getByRole('button', { name: 'Hỏi AI có nguồn', exact: true }).click();
+  await replyStarted;
+  try {
+    // Browser Back remains available while the pending-request modal is open.
+    await page.goBack();
+    await expect(page).toHaveURL(/\/buyer\/licenses$/);
+    await page.getByRole('navigation', { name: 'Điều hướng khách hàng' }).getByRole('link', { name: 'Hỗ trợ', exact: true }).click();
+    await expect(page.getByLabel('Tin nhắn hỗ trợ')).toBeVisible();
+    await page.getByLabel('Tin nhắn hỗ trợ').fill('Bản nháp mới phải được giữ sau phản hồi cũ');
+  } finally { releaseReply(); }
+  await lateReply;
+  await page.reload();
+  await expect(page.getByLabel('Tin nhắn hỗ trợ')).toHaveValue('Bản nháp mới phải được giữ sau phản hồi cũ');
+});

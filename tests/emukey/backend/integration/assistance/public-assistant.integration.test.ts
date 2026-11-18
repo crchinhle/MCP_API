@@ -59,7 +59,11 @@ describe('Public AI HTTP boundary with real Redis sessions', () => {
     expect(outside.body.outcome).toBe('OUT_OF_SCOPE');
   });
   it('rate limits IPs even across newly issued guest sessions', async () => {
-    for (let i = 0; i < 20; i++) await ask({ question: 'Thời tiết?', clientMessageId: randomUUID() }).expect(200);
-    await ask({ question: 'Thời tiết?', clientMessageId: randomUUID() }).expect(429);
+    // This asserts one fixed-minute quota, including runs that straddle a wall-clock minute.
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now());
+    try {
+      for (let i = 0; i < 20; i++) await ask({ question: 'Thời tiết?', clientMessageId: randomUUID() }).expect(200);
+      await ask({ question: 'Thời tiết?', clientMessageId: randomUUID() }).expect(429);
+    } finally { clock.mockRestore(); }
   });
 });

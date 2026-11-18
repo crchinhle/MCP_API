@@ -1,5 +1,166 @@
 # EmuKey — execution results, 17/11/2026
 
+## Authorized operational follow-up — 18/11/2026
+
+User authorization now includes the remaining technical operations, except Gemini live. Production Terms and retention await the user's actual content/durations. Historical approval blockers below do not describe the current authorization.
+
+Fresh database evidence in `%TEMP%`:
+
+| Check | Result | Evidence |
+|---|---|---|
+| Actual configured database backup and disposable restore, PostgreSQL 18.7 | Exit 0, RESTORE_VERIFIED | `emukey-fullauth-backup-pg187.log`; durable backup `%LOCALAPPDATA%/EmuKey/backups/authorized-before-ledger-20261118-pg187/` |
+| Migration on that restored backup: rehearsal, apply, repeat, reversal, reapply | Exit 0, RESTORED_MIGRATION_VERIFIED | `emukey-fullauth-restored-migration.{log,json}` |
+| Configured database existing compiled migration with --apply | Exit 0, LEGACY_METADATA_ARCHIVED | `emukey-fullauth-db-apply.log` |
+| Configured database verification | Exit 0, matchesBaseline=true, 24 tables, no drift | `emukey-fullauth-db-verify.log` |
+| All business row counts and archived ledger OID/content compared before/after | Exit 0, CONFIGURED_DATABASE_VERIFIED | `emukey-fullauth-db-before.json`, `emukey-fullauth-db-after.json`; OID 24682, one ledger row, identical digest |
+| Repeat configured migration --apply | Exit 0, ALREADY_CURRENT | `emukey-fullauth-db-idempotent.log` |
+
+The initial restore with cached PostgreSQL 18.6 failed; retain `emukey-fullauth-backup.log` as failure evidence. Updating both image tags to their 18.7 image and repeating the unmodified dump/restore resolved the version mismatch. No business rows or canonical schema file were changed.
+
+Fresh backend verification: unit **542/542**, contract **23/23**, security **35/35**, integration **150 passed/62 skipped**, Solidity **7/7**, baseline and security scan exit 0. Logs: `emukey-fullauth-backend-{unit,contract,security,integration}.log`, `emukey-fullauth-contracts.log`, `emukey-fullauth-{baseline,verify-security-scan}.log`. Backend/frontend lint, typecheck, build, OpenAPI checks exit 0 (`emukey-fullauth-{backend,frontend}-*.log`); later chat review changes require their own follow-up results. Kotlin unit/lint/debug APK build exit 0: `emukey-fullauth-kotlin.log`.
+
+Native preparation: task-owned emulator booted, existing debug APK installed, real disposable API fixture ready (`emukey-fullauth-native-fixture.log`); built-in parser verification exit 0 (`emukey-fullauth-mobile-bootstrap.log`). **UI NOT_RUN**: automatic approval review rejected Metro startup as `blocked by policy`, without a detailed reason. Task emulator and fixture then stopped. Existing local API readiness 503 was independently traced to stopped project Redis; automatic approval review also rejected `docker start emukey-backend-redis-1` with the same reason. No equivalent workaround or volume change was attempted. User authorization is present; these are automatic execution blocks.
+
+Post-review evidence: web promise/cache race RED 1 failed/3 passed (`emukey-fullauth-history-race-red.log`); final contract 5/5 (`emukey-fullauth-history-race-final.log`), combined affected/regression checks 8 passed/41 filtered (`emukey-fullauth-frontend-current-regressions.log`). Mobile full 56/56 (`emukey-fullauth-mobile-unit-final.log`), Node security verifier/audit tests 10/10 (`emukey-fullauth-mobile-security-node.log`), mobile live audit PASS_WITH_LOCAL_MITIGATION (`emukey-fullauth-mobile-audit-final.log`, 200 exact finding paths). Frontend/mobile final lint/typecheck exit 0. Backend/frontend raw production-high audit exit 0. Support browser final output 5/5 (`emukey-fullauth-support-browser-final.log`, evidence `emukey-support-chat-D55DJw/`). One earlier browser wrapper returned exit 1 despite 5/5 test output; do not conceal that wrapper result. No tests were skipped to hide a failure.
+
+First full frontend run overlapped source edits and several resource-intensive checks: 313 passed/5 failed. Two failures used the pre-fix imported chat hook; two unrelated cases timed out at 30 seconds and a subsequent detail assertion failed. All three non-chat cases passed isolated (3 passed/41 filtered), then the combined current regression run passed 8/8. Full immutable-source rerun is recorded separately when complete; focused results are not a full PASS claim.
+
+External probes: `emukey-fullauth-external-probes.log` gives Cloudinary real upload/read/delete PASS, FCM authentication PASS with device receipt unverified, SePay sandbox checkout redirect 302 with callback BLOCKED_EXTERNAL. Brevo 401 first (`emukey-fullauth-brevo.log`), user-authorized IP then provider accepted (`emukey-fullauth-brevo-authorized.log`); GET message-specific events confirms hard bounce / Gmail NoSuchUser (`emukey-fullauth-brevo-events.json`). Inbox delivery is NOT verified. No Gemini live calls in this operational continuation.
+
+## Residual remediation verified — 18/11/2026
+
+Snapshot này supersede dependency/Gemini status trong các snapshot lịch sử phía dưới. Không đổi schema/database hiện hữu, auth/business flow hoặc external billing. New test owner `tests/emukey/mobile/unit/fingerprint-toolchain.test.ts` được mobile Jest runner gọi; các production edits mới chỉ ở hai workspace override files và lockfiles.
+
+| Check | Result | Evidence trong OS TEMP |
+|---|---|---|
+| Production audit trước sửa | Backend 2 moderate; mobile 1 moderate + 1 high mới | `emukey-residual-backend-audit.json`, `emukey-residual-mobile-audit.json` |
+| Minimatch RED | 1 fail / 2 pass; 256 nhánh vượt giới hạn 64 | `emukey-residual-fingerprint-red-bounded.log` |
+| Backend unit sau sửa dependency | **542 pass / 0 fail / 0 skip**, 47 files, 16.55s; actual loopback metadata caller included | `emukey-residual-backend-unit.log` |
+| Backend security | **35 pass / 0 fail / 0 skip**, 4 files, 19.04s | `emukey-residual-backend-security.log` |
+| Mobile unit sau sửa dependency | **50 pass / 0 fail / 0 skip**, 6 suites, final 13.484s; explicit tool cwd để chạy được cả từ IDE | `emukey-residual-mobile-unit-final.log`; lượt trước `emukey-residual-mobile-unit.log` 24.305s |
+| Backend security | **35 pass / 0 fail / 0 skip**, 4 files, 19.04s | `emukey-residual-backend-security.log` |
+| Backend production audit sau sửa | **0 advisory**, exit 0 | `emukey-residual-backend-audit-after.json` |
+| Mobile production audit sau sửa | **0 moderate / 1 high**, exit 1; picomatch chưa có patched version | `emukey-residual-mobile-audit-after.json` |
+| Frozen install, lint, typecheck, build | Exit 0 cho backend và mobile | `emukey-residual-{backend,mobile}-{install,lint,typecheck,build}-final.log` |
+| Expo compatibility | Dependencies up to date, exit 0 | `emukey-residual-expo-check.log` |
+| Actual Expo fingerprint generation | Android, exit 0; output chỉ lưu TEMP | `emukey-residual-fingerprint-cli.log` |
+| Picomatch isolated probe | `+(*a)` trên 37 ký tự timeout/kill 1500ms, không gây treo process kiểm thử chính | `emukey-residual-picomatch-probe.json` |
+| Gemini live pilot | 1 pass / 211 filtered-or-skipped, không coi các skip là acceptance | `emukey-residual-ai-pilot.log` |
+| Gemini bounded follow-up | **2 pass / 2 fail / 208 filtered-or-skipped**; fail 429 free-tier day quota, dừng mở thêm run | `emukey-residual-ai-bounded.log` |
+
+Không gọi mobile security gate PASS: cả workspace và standalone CI vẫn có `audit --prod --audit-level high`, picomatch làm gate này fail; không ignore advisory hoặc giảm severity threshold. Frontend/full integration/browser/native APK không được chạy lại trong snapshot dependency này. Build/export và controlled metadata không chứng minh native UI hoặc GCP live acceptance.
+
+Final provenance: sáu dependency/test owners và SHA-256 của raw logs nằm ở `T/emukey-residual-evidence.json`. `workspace_guard.py check` và `git diff --check` exit 0. Một file test mới hợp lệ có owner rõ ràng; không có screenshot/dump/log mới trong source. Inline review đã đối chiếu lockfile scope, matcher breaking changes và HTTP consumer; không có independent reviewer. Schema và configured database không bị sửa.
+
+Giữ lượt fingerprint test đầu (`emukey-residual-fingerprint-red.log`): assertion ban đầu về matching của chuỗi `**/../` không chứng minh vulnerability. Đã thay bằng reproducer theo upstream preprocessing-limit test, RED 256>64 trước upgrade. Không dùng lượt đầu làm bằng chứng security. Gemini pilot qua không thay thế bounded failures hoặc chứng minh dịch vụ ổn định. Source mới/test mới được review inline; không có independent reviewer.
+
+## Continuation verified — 18/11/2026
+
+Scope: hai component frontend (`ConversationPanel`, `AiAssistantLauncher`), existing frontend/browser tests và bốn báo cáo/kế hoạch hiện có. HEAD vẫn `4af3fb3`; không commit/push, không đổi configured database/schema/dependencies. Giữ 51 thay đổi đầu lượt, thêm sửa một test owner đã tracked; working diff tổng 52 file. Không chạy lại full backend/mobile/311-case frontend/70-case browser suite trong lượt scoped này; các kết quả đó bên dưới thuộc snapshot 17/11.
+
+| Check | Result | Evidence trong OS TEMP |
+|---|---|---|
+| Ba regression lifecycle/concurrency trước sửa | 3 fail đúng nguyên nhân | `emukey-continuation-red.log` |
+| Ba regression sau sửa | 3 pass, 48 filtered | `emukey-continuation-green.log` |
+| Lost AI creation response trước sửa | 1 fail: thiếu clientRequestId | `emukey-continuation-creation-red.log` |
+| Full assistant chat unit | 32 pass / 0 fail | `emukey-continuation-ai-final.log` |
+| Ba suite frontend liên quan, chạy riêng sau các tác vụ nặng | **56 pass / 0 fail / 0 skip**, 180.09s; buyer-hub, ai-assistant-chat, assistance-contract | `emukey-continuation-sequential.log` |
+| Real local support browser | **5 pass / 0 fail / 0 skip**, 1.8m; actual HTTP/auth/PostgreSQL/Redis, AI adapter controlled | `emukey-continuation-support-final.log`; `emukey-support-chat-bcRPuA/` |
+| Frontend lint/typecheck/build | Native exit 0 cho cả ba | `emukey-continuation-lint.log`, `emukey-continuation-typecheck.log`, `emukey-continuation-build.log` |
+
+Source fingerprint sáu owners được kiểm tra không drift trong lượt cuối: `emukey-continuation-source.json`; evidence SHA-256 manifest `emukey-continuation-evidence.json`. Inline review đã kiểm tra lifecycle, synchronous lock, account-scoped storage và existing server idempotency contract; không có independent reviewer. Workspace guard và diff whitespace check exit 0, không có untracked source mới.
+
+> Historical baseline `562bbc6` results are retained below. Current follow-up evidence for baseline `4af3fb3` is recorded in the acceptance section immediately below; historical counts are not aggregated into a final-tree PASS.
+
+## Continuation — 18/11/2026
+
+HEAD vẫn `4af3fb3`. Giữ 51 file đã thay đổi đầu lượt; bổ sung test trong tracked owner `buyer-hub.test.tsx`, tổng 52 modified tracked owners, không thêm source file. Production delta mới chỉ gồm `ConversationPanel.tsx` và `AiAssistantLauncher.tsx`: chặn stale completion xóa draft/storage, khóa guest transfer chung với send/new-chat, bỏ qua transfer completion sau account unmount, truyền request UUID khi tạo hội thoại AI. Không đổi schema/backend/dependency và không chạy lại live Gemini hay mutation trên database cấu hình.
+
+`T` là OS TEMP. Kết quả cũ dưới đây thuộc snapshot ngày 17/11; không coi fingerprint cũ là fingerprint source mới. Hash của hai component và bốn test owners liên quan nằm tại `T/emukey-continuation-source.json`.
+
+| Kiểm tra | Kết quả | Evidence dưới T |
+|---|---|---|
+| Regression RED: draft sau unmount, transfer cạnh tranh, transfer sau account unmount | 3 fail đúng nguyên nhân trước sửa | emukey-continuation-red.log |
+| Cùng ba regression sau sửa | 3 pass, 48 filtered | emukey-continuation-green.log |
+| AI creation lost response RED | 1 fail vì clientRequestId undefined, 30 filtered | emukey-continuation-creation-red.log |
+| Full assistant chat unit, sau sửa assertions animation | 32 pass / 0 fail, exit 0 | emukey-continuation-ai-final.log |
+| Full real local support browser | 5 pass / 0 fail, 1.8m, exit 0 | emukey-continuation-support-final.log; emukey-support-chat-bcRPuA/ |
+| Frontend lint / typecheck / build | Từng lệnh exit 0 | emukey-continuation-lint.log; emukey-continuation-typecheck.log; emukey-continuation-build.log |
+
+Browser dùng API/auth/PostgreSQL/Redis thật trong môi trường disposable; external AI vẫn là controlled adapter, không chứng minh Gemini availability. Ca guest transfer giữ response sau backend commit để kiểm tra composer/new-chat/decline đều bị khóa. Ca mới dùng tài khoản test riêng, mất response sau creation commit, kiểm tra hai POST cùng request ID và cùng conversation ID, rồi giữ AI response để Browser Back/unmount → quay lại soạn draft mới → response cũ → reload; draft mới còn nguyên.
+
+Giữ nguyên các lượt thất bại: `emukey-continuation-focused.log` 55 pass/1 fail do locator retry không tính tên loading icon của Ant Design; `emukey-continuation-link-retry.log` tái hiện riêng locator đó; `emukey-continuation-focused-final.log` 54 pass/2 fail (cùng locator đang được cache trước sửa và buyer key-read test timeout 30s khi nhiều tác vụ chạy đồng thời). Sửa locator thành match nhãn chữ trong tên accessible có thể chứa icon; giữ nguyên kiểm tra proof, draft, unlock, retry thành công. Không đổi production behavior hoặc tăng timeout để che lỗi test. Lượt browser đầu `emukey-continuation-support.log` 4 pass/1 fail vì test kỳ vọng ai-ask HTTP 201, trong khi contract trả 200; sửa expectation về đúng contract. Điều hướng khỏi modal pending dùng Browser Back, không ép click xuyên modal.
+
+Build giữ cảnh báo chunk >500 kB có sẵn. jsdom giữ cảnh báo pseudo-element getComputedStyle chưa hỗ trợ; các warning không được gọi là test failures. Các blocker Gemini/remote CI/approval/dependency moderate ở snapshot trước vẫn chưa được nghiệm thu thêm.
+
+## Acceptance follow-up — 4af3fb3
+
+Windows/PowerShell, Node 22.21.0, pnpm 11.25.0; PostgreSQL 15/pgvector và Redis disposable cho integration. `T` là OS temporary directory. Native exit code được đọc riêng; PowerShell có thể ghi NativeCommandError khi công cụ ghi stderr dù native exit=0. Source sửa trong đợt này chưa commit. Bộ kiểm tra sau các sửa cuối dùng prefix `emukey-acceptance-verified-`; các lượt trước giữ nguyên và được phân biệt phía dưới. Fingerprint 525 tracked product/workflow/test/tooling files nằm trong `T/emukey-acceptance-frozen-source.json`; không đổi source sau khi chốt, tài liệu được cập nhật độc lập.
+
+| Test group | Command | PASS | FAIL | SKIP | Environment | Evidence dưới T |
+|---|---|---:|---:|---:|---|---|
+| P0 regression trước build | Clean disposable source snapshot, Vitest baseline-schema filter `archives only` và `requires explicit consent` | 0 | 2 | 199 filtered | Không có dist: MODULE_NOT_FOUND cho initialize/migrate | emukey-acceptance-ci-red.log |
+| P0 regression sau build | Installed tsc `--project <snapshot>/EmuKey/backend/tsconfig.build.json`, cùng hai test từ cwd snapshot/backend | 2 | 0 | 17 filtered | Disposable snapshot; cả hai CLI artifacts tồn tại | emukey-acceptance-ci-focused.log |
+| Backend unit | `node tooling/emukey/run.mjs backend:unit` | 541 | 0 | 0 | Sau recommendation-card fix và security patches, 47 files | emukey-acceptance-verified-backend-unit.log |
+| Backend contracts | `node tooling/emukey/run.mjs backend:contract` | 23 | 0 | 0 | Controlled HTTP dependencies | emukey-acceptance-verified-backend-contract.log |
+| Backend security | `node tooling/emukey/run.mjs backend:security` | 35 | 0 | 0 | Authorization, isolation, untrusted-input assertions | emukey-acceptance-verified-backend-security.log |
+| Backend integration | `node tooling/emukey/run.mjs backend:integration` | 150 | 0 | 62 | Disposable PostgreSQL/Redis; migration, provider crash recovery, notifications, pagination và guest transfer; 263.16s | emukey-acceptance-verified-backend-integration.log |
+| Frontend unit | `node tooling/emukey/run.mjs frontend:unit` | 311 | 0 | 0 | jsdom + controlled HTTP, tuần tự sau integration/native builds; 23 files, 990.66s | emukey-acceptance-verified-frontend-unit.log |
+| Mobile unit | `node tooling/emukey/run.mjs mobile:unit` | 47 | 0 | 0 | Jest/React Native, sau patches và draft/retry/handoff fixes; 5 suites | emukey-acceptance-verified-mobile-unit.log |
+| OpenAPI/lint/types/build | `corepack pnpm --dir EmuKey/<component> <gate>` | All exit 0 | 0 | 0 | Backend/mobile verified prefix sau fixes; frontend final prefix; OpenAPI generated từ backend, từng component exit 0; filenames đổi colon thành dash trên Windows | emukey-acceptance-{verified,final}-*.log |
+| Frozen install | `corepack pnpm --dir EmuKey/<component> install --frozen-lockfile` | 3 components | 0 | 0 | Cả ba chạy trên source/lockfiles đã chốt | emukey-acceptance-verified-{backend,frontend,mobile}-frozen.log |
+| Dependency high gate | `corepack pnpm --dir EmuKey/<component> audit --prod --audit-level high` | 3 components | 0 high/critical | 0 | Sau patches: backend 2 moderate, frontend 0, mobile 1 moderate; đây không phải zero-advisory claim | emukey-acceptance-*-security-patches-audit.log; emukey-acceptance-frontend-audit.log |
+| Expo | `EXPO_NO_CACHE=1 corepack pnpm --dir EmuKey/mobile exec expo install --check` | PASS | 0 | 0 | Chạy sau security patches, đúng SDK | emukey-acceptance-expo-verified.log |
+| Chat real local service | `node tooling/emukey/verification/run-support-chat.mjs` | 4 | 0 | 0 | Frontend/API/auth/DB/Redis thật, AI controlled; 1.000 messages/scroll anchor/draft/reconnect và guest opt-in transfer; 1.5 minutes | emukey-acceptance-verified-support.log; emukey-support-chat-zRWMLu/ |
+| Browser UI regression | `E2E_WEB_ONLY=true node tooling/emukey/run.mjs frontend:e2e buyer-ui-recovery payment-status-flow workspace-navigation ai-assistant --workers=1 --reporter=list --output <T>/emukey-acceptance-browser-final` | 70 | 0 | 0 | Chromium/frontend thật; business API fixtures; 8.5 minutes | emukey-acceptance-browser-final.log |
+| Solidity | `node tooling/emukey/run.mjs contracts` | 7 | 0 | 0 | Hardhat/local, không external transaction; 4.23s | emukey-acceptance-verified-contracts.log |
+| Backup/restore | Existing backup-restore.mjs `--disposable` từ fixture runner trong T | RESTORE_VERIFIED | 0 | 0 | Chạy lại trên source đã chốt; source/target đều disposable; cùng counts 4 users/1 order/0 licenses/0 commands/0 events; reconcile NOT_REQUESTED | emukey-acceptance-verified-backup.log; emukey-acceptance-backup-K7xxeS/ |
+| Migration rehearsal | Included in `backend:integration`, owner database/baseline-schema.integration.test.ts | Included in 150 | 0 | 0 | Disposable archive/rehearsal rollback/OID/rows/no-op/reversal/unknown-drift guards; không apply configured database | emukey-acceptance-verified-backend-integration.log |
+| Provider delivery E2E | Included in `backend:integration`, owner licensing/provider-delivery.integration.test.ts | 3, included in 150 | 0 | 0 | Real HTTP/independent provider DB + worker/API restart; payment and chain events controlled | emukey-acceptance-verified-backend-integration.log |
+| Notifications | Included in `backend:integration`, owner operations/phase7-notification.integration.test.ts | Included in 150 | 0 | External opt-in separate | Durable SQL/queue/retry/dead letter, controlled HTTP providers; Brevo/FCM live NOT_RUN | emukey-acceptance-verified-backend-integration.log |
+| Configured DB | cwd backend: `node --env-file-if-exists=.env dist/entrypoints/database/verify.js` | Read-only inspection | Expected drift | 0 | Có thêm đúng public.schema_versions; không apply | emukey-acceptance-configured-db-verify.log |
+| AI references live round 1 | EMUKEY_TEST_REAL_AI=1, Vitest ai-understanding-provider.integration, maxWorkers=1 | 41 | 0 | 0 | Real Gemini, controlled history; before later independent remediation | emukey-acceptance-ai-live-1.log |
+| AI references live round 2 | Cùng command, không đổi gateway/dataset | 41 | 0 | 0 | Real Gemini; provider retries bounded | emukey-acceptance-ai-live-2.log |
+| AI catalog live | EMUKEY_TEST_REAL_CATALOG=1, Vitest ai-semantic-catalog.integration, maxWorkers=1 | 8 | 0 | 0 | Real Gemini/embeddings/current public DB views, inference read-only; before 3 additional capability cases | emukey-acceptance-catalog-live.log |
+| AI expanded capability pilot | Both opt-in flags, ai-semantic-catalog.integration + ai-provider.integration | 11 | 2 | 0 | 1 invalid test budget assumption and 1 provider 503; controlled-doc generation 3/3 | emukey-acceptance-ai-capabilities-live.log |
+| AI broad pre-card-fix run | Both opt-in flags, ai-understanding-provider.integration + ai-semantic-catalog.integration + ai-provider.integration, maxWorkers=1 | 45 | 10 | 0 | 9 provider/timeout failures và 1 recommendation-card bug; không phải final PASS | emukey-acceptance-ai-final-live.log |
+| AI recommendation after fix | EMUKEY_TEST_REAL_CATALOG=1, ai-semantic-catalog.integration, filter `recommends only current plans` | 1 | 0 | 10 filtered | Real inference + current public DB; thẻ đề xuất đúng constraints; 30.60s | emukey-acceptance-recommendation-live-fixed.log |
+| AI orchestration after fix | Both opt-in flags, ai-semantic-catalog.integration + ai-provider.integration, maxWorkers=1 | 2 | 12 | 0 | BLOCKED_EXTERNAL: 429/503; giữ nguyên assertions; 190.28s. Đã dừng mở thêm live runs | emukey-acceptance-ai-orchestration-verified.log |
+| Read-only boundaries | Native Node/SDK script, BEGIN READ ONLY + SET LOCAL ROLE, read-only RPC methods | PASS | 0 | 0 | Reader 0 mutation grants, 33 plans/33 embeddings/46 chunks; Sepolia chain 11155111, head 12155243, code 4233 bytes, transactionsSent=0 | emukey-acceptance-readonly-boundaries.log |
+| Native Expo build | Isolated current source snapshot, expo prebuild + Gradle :app:assembleDebug | PASS | 0 | Native UI NOT_RUN | Current snapshot source updated before warm rebuild, exit 0, 1m20s; debug APK không chứng minh native interaction | emukey-acceptance-native-current-build.log; emn-qh38s1bs/android/app/build/outputs/apk/debug/app-debug.apk |
+| Kotlin | `gradlew.bat :app:testDebugUnitTest :app:lintDebug :app:assembleDebug -PemukeyTestSources=<workspace>/tests/emukey/license-client-demo --console=plain`; thêm lượt unit `--rerun-tasks --max-workers=1` | 3 unit + lint/APK | 0 | Native UI NOT_RUN | SDK env configured; build/lint exit 0, 48s; fresh unit 1m9s, XML timestamp 2026-11-17T15:58:49.091Z, 3/0/0/0 | emukey-acceptance-kotlin-final.log; emukey-acceptance-kotlin-fresh-unit.log |
+
+### Phân biệt failure và revision
+
+- Clean snapshot P0 có RED thực trước build. Một thử pnpm trong snapshot có node_modules junction không chạy được vì shim/install metadata, sau đó dùng chính tsc đã cài. Một lượt Vitest gọi sai cwd cũng bị ENOENT; các lượt đó được giữ, không tính vào PASS.
+- Phân trang: hai integration cases đỏ khi endpoint còn trả toàn lịch sử; xanh sau bounded SQL. HTTP DTO, claim/release, CLOSED, duplicate và guest tests bổ sung vào existing owner. Full default integration có 62 skips external opt-in/child fixtures; không phải 62 acceptance PASS.
+- Lượt frontend đầu đang chạy trong lúc source/test thay đổi: 308 pass/3 fail, gồm test guest mới nhưng launcher module cũ đã được cache và hai ca provider timeout. Không gọi đây là baseline bất biến hoặc final-tree result. Các lượt sau ghi riêng, không cộng focused PASS vào full suite.
+- Lượt integration dưới resource contention: 149 pass/1 fail/61 skip; child worker chưa ready trong 30s ở restart drill. Lượt kế tiếp trên source tương ứng: 150 pass/0 fail/62 skip. Không tăng timeout hay bỏ worker recovery assertion để đạt xanh.
+- Browser mở rộng ban đầu: 67 pass/3 fail vì assertion cũ đòi excerpt không tồn tại, trong khi KnowledgeCitations hiện chứa excerpt trong details đóng. Sửa assertion thành không visible, giữ kiểm tra source link, nội dung nhạy cảm và responsive. Lượt final chạy toàn bộ 70 cases riêng.
+- Fixture long-history ban đầu làm hỏng điều kiện queue trống của test khác; đổi fixture sang AI_ACTIVE, không sửa business assertion. Pagination browser sau đó chỉ sai locator nút gửi ở AI_ACTIVE; dùng đúng Hỏi AI có nguồn. Lượt hoàn chỉnh 3/3 vẫn kiểm tra scroll delta <3px, draft, offline/reconnect và refresh.
+- AI live pilot capability ban đầu yêu cầu trả lời gói lớp học 5 thiết bị dưới 2 triệu trong khi public catalog chỉ có gói 10 thiết bị giá 2.322.000 đồng. NO_SOURCES là đúng; giữ riêng negative case dưới 2 triệu và thêm positive case 3 triệu. Facts được đối chiếu qua read-only role, không sửa giá/database. Ca guidance trả PROVIDER_UNAVAILABLE có HTTP 503 từ Gemini; không phân loại là semantic regression hoặc đổi assertion chấp nhận outage để đạt PASS.
+- Native build đầu thiếu cấu hình SDK ở Kotlin và có flag PowerShell chưa quote đúng ở Expo. Không sửa source sản phẩm cho lỗi môi trường; native build chạy lại với SDK env/quoted arguments và tối đa 2 workers, không khởi động Metro để lách auto-review rejection trước đó.
+- Expanded live run trước recommendation-card fix: **45 pass / 10 fail / 0 skip**, 55 ca, 967.54s (`emukey-acceptance-ai-final-live.log`). 7 understanding failures là AbortError/TimeoutError hoặc HTTP 503, 2 catalog failures là PROVIDER_UNAVAILABLE; 1 catalog failure là recommendations rỗng dù ANSWERED. Lỗi logic cuối đã có unit RED/GREEN và live focused 1/1 sau fix (`emukey-acceptance-recommendation-live-fixed.log`); không cộng chúng để gọi lượt 55 ca là PASS.
+- Lượt integration sau patches có 1 suite fail khi Docker chưa bind port trong 10s và 1 rate-limit test fail vì 20+1 requests qua ranh giới phút thật: 139 pass/1 fail/72 skip. Cố định clock của đúng fixed-window regression, không thay quota và không skip test. Chạy lại full suite sau khi native compile hoàn tất.
+- Mobile pending-send draft-loss có RED trước fix, GREEN 45/45. Hai ca bổ sung AI-outage retry/handoff RED trước sửa; GREEN 47/47 trong `emukey-acceptance-mobile-final-tests.log`. Không dùng APK build để suy native interaction PASS.
+- Lượt frontend dưới contention sau đó: 309 pass/2 fail trong 311 ca. Cả hai cùng owner provider UI; một test quá 30s làm state async của test kế tiếp lệch. Focused isolated 2/2 rồi **full sequential 311/311** trên source đã chốt, không tăng timeout và không đổi assertions của provider tests.
+- Guest continuity có thêm focused browser thật 1/1 (`emukey-acceptance-guest-browser.log`, `emukey-support-chat-e84m1W/`): public ask cấp proof → đăng nhập → chưa tự POST transfer → explicit confirmation → history được lưu → refresh giữ đúng một bản; full support suite mới gồm 4 ca chạy riêng.
+
+### Dependency residuals
+
+Patch cùng major đã áp dụng cho qs 6.17.1, brace-expansion 1.1.21/5.0.12 và node-forge 1.4.3. Lockfile diff chỉ theo các transitive này, không thêm dependency production. Hai moderate backend là glob/minimatch qua OpenTelemetry GCP detector → gcp-metadata → gaxios → rimraf; mobile còn minimatch trong toolchain. `pnpm why --prod` lưu trong emukey-acceptance-transitive-reachability.log và emukey-acceptance-mobile-transitive-reachability.log. Không ép các consumer CommonJS lên major glob 14/minimatch 11; cần upstream compatible fix hoặc migration được kiểm chứng. Chưa xác nhận toàn bộ attack reachability, nên giữ residual P2, không tuyên bố hết vulnerabilities.
+
+### Final verification provenance
+
+All default local suites and required builds/checks completed with native exit 0. External opt-in failures remain failures, with provider/quota classification; no full external PASS is claimed. The source freeze covers 525 tracked product/workflow/test/tooling files; the final fingerprint comparison found no drift. Documentation-only updates were made separately. Both database CLI artifacts exist; workspace CI YAML build ordering and both workflow files parse correctly. Remote Actions was not triggered.
+
+`git diff --check` and workspace hygiene guard passed; HEAD remains `4af3fb334f976d4b4467e9358b42b8250832f7b6`, no commit/push, no new untracked source files, and no schema.sql diff. All 51 modified existing owners have reasons in system-audit; all 34 inventory test paths resolve. Inline diff/abuse-case review completed; independent-agent review was not performed.
+
+Raw logs, including RED/failed/intermediate runs, and the two APK artifacts are indexed with SHA-256 in `T/emukey-acceptance-evidence-manifest.json`. The manifest records commands/scopes/results per boundary and the frozen source hashes. Temporary dumps, traces, APKs and scripts remain outside source. Native snapshot App/client hashes match current source; native UI remains NOT_RUN because the earlier Metro startup was rejected by automatic approval review as `blocked by policy` without a more specific reason. No equivalent Metro command was used to bypass that rejection.
+
+## Historical execution — baseline 562bbc6
+
+
 Baseline `562bbc6`; Windows, Node 22.21.0, pnpm 11.25.0, Docker Desktop/Linux containers. Commands dưới đây chạy từ workspace root, trừ khi ghi cwd khác. `T` là `C:/Users/thong/AppData/Local/Temp/`. Exit code là của chương trình native, không suy từ PowerShell `NativeCommandError` khi công cụ ghi stderr. Không in credential hoặc database URL thật trong báo cáo.
 
 ## Các suite và boundary

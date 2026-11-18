@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { replaceEqualDeep, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { requestJson, useOptionalAuth } from '../auth/authContext';
 import type {
@@ -116,20 +116,60 @@ export function useConversation(conversationId: string | undefined) {
   });
 }
 
-export function useConversationMessages(conversationId: string | undefined) {
+interface MessageHistory {
+  items: MessageDto[];
+  hasOlder: boolean;
+}
+
+function mergeMessages(current: MessageDto[], incoming: MessageDto[]) {
+  return [...new Map([...current, ...incoming].map(message => [message.id, message])).values()]
+    .sort((a, b) => a.serverSequence - b.serverSequence);
+}
+
+export function useConversationMessages(conversationId: string | undefined, preview = false) {
   const account = useOptionalAuth()?.user?.id;
-  return useQuery({
+  const client = useQueryClient();
+  const queryKey = ['assistance', preview ? 'queue-preview' : 'messages', conversationId, account] as const;
+  const endpoint = `/conversations/${encodeURIComponent(conversationId!)}/messages`;
+  const query = useQuery({
     enabled: Boolean(conversationId),
-    queryKey: ['assistance', 'messages', conversationId, account],
-    queryFn: () =>
-      requestJson<MessageDto[]>(
-        `/conversations/${encodeURIComponent(conversationId!)}/messages`,
-      ),
+    queryKey,
+    queryFn: async (): Promise<MessageHistory> => {
+      const previous = client.getQueryData<MessageHistory>(queryKey);
+      const after = previous?.items.at(-1)?.serverSequence;
+      const incoming = await requestJson<MessageDto[]>(preview ? `${endpoint}/queue-preview` : `${endpoint}${after ? `?after=${after}&limit=100` : ''}`);
+      if (preview) return { items: incoming, hasOlder: false };
+      return { items: incoming, hasOlder: previous?.hasOlder ?? incoming.length === 50 };
+    },
+    // Merge at QueryClient's synchronous cache write, not before its promise
+    // continuation. An older-page mutation can commit in that interval.
+    structuralSharing: (oldData, newData) => {
+      const current = oldData as MessageHistory | undefined;
+      const incoming = newData as MessageHistory;
+      return preview ? incoming : replaceEqualDeep(current, {
+        items: mergeMessages(current?.items ?? [], incoming.items),
+        // Reaching the beginning is monotonic, even across concurrent polls.
+        hasOlder: (current?.hasOlder ?? true) && incoming.hasOlder,
+      });
+    },
     refetchInterval: 2_000,
     refetchOnWindowFocus: 'always',
     refetchOnReconnect: 'always',
     refetchIntervalInBackground: false,
   });
+  const older = useMutation({
+    mutationFn: async () => {
+      const key = queryKey;
+      const first = client.getQueryData<MessageHistory>(key)?.items[0]?.serverSequence;
+      const items = first && !preview ? await requestJson<MessageDto[]>(`${endpoint}?before=${first}&limit=50`) : [];
+      return { key, items };
+    },
+    onSuccess: ({ key, items }) => client.setQueryData<MessageHistory>(key, current => ({
+      items: mergeMessages(current?.items ?? [], items), hasOlder: items.length === 50,
+    })),
+  });
+  return { ...query, data: query.data?.items, hasOlder: !preview && (query.data?.hasOlder ?? false),
+    loadOlder: older.mutateAsync, isLoadingOlder: older.isPending, olderError: older.isError };
 }
 
 export function useAppendConversationMessage() {
@@ -197,10 +237,19 @@ export function useAskPublicAi() {
       question: string;
       clientMessageId: string;
       sessionId?: string;
+      sessionToken?: string;
     }) =>
-      requestJson<AssistantAnswer & { sessionId: string }>(
+      requestJson<AssistantAnswer & { sessionId: string; sessionToken: string }>(
         '/public/assistant/ask',
         { method: 'POST', body: JSON.stringify(input) },
       ),
+  });
+}
+
+export function useLinkGuestHistory() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { sessionId: string; sessionToken: string; accepted: true }) => requestJson<ConversationDto>('/conversations/link-guest-history', { method: 'POST', body: JSON.stringify(input) }),
+    onSuccess: () => { void client.invalidateQueries({ queryKey: ['assistance', 'conversations'] }); },
   });
 }

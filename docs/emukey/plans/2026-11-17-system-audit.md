@@ -1,5 +1,7 @@
 # EmuKey system audit and remediation plan
 
+Operational continuation 18/11/2026: user grants full authority to resolve remaining technical work, excluding Gemini live. Terms/retention for production await user-supplied content/durations. Configured database backup/restore/rehearsal/apply/verify/counts/identity/idempotency are complete; see current operational follow-up in the audit/results. Remaining sequence: verify constrained mobile dependency mitigation, run real Android UI against the disposable support fixture, verify local gates, push the reviewed remediation and observe remote CI. Historical restrictions below remain as execution history.
+
 Baseline: `562bbc6`; clean working tree. Request: full-system audit, fixes and truthful end-to-end evidence, 17 November 2026.
 
 Constraints: preserve existing data and nested repository; no commits, pushes, deployments, paid transactions or real-user notifications. Use disposable databases for writes. Keep `backend/database/schema.sql` authoritative. Do not equate fixtures with external acceptance.
@@ -23,3 +25,20 @@ Design decisions: mixed or provider-managed device totals are unknown rather tha
 Verified expansion: read-only verification of the configured database found only the legacy `schema_versions` table beyond the 24-table baseline. Add an explicit `db:migrate` owner to rehearse/transactionally archive that table into `emukey_maintenance`, preserving its OID and rows, rejecting all other drift. Test rehearsal rollback, archival, idempotency, unknown drift and reversal on a disposable database. Do not apply this to the configured database as part of the audit; review external consumers of that historical ledger first.
 
 Execution note: checkboxes record work performed, not a blanket PASS. External/native approvals, configured DB ledger archival, remaining P2 support design and remote CI are unqualified or pending as detailed in the audit report. Final gate results retain every failed run.
+
+## Final acceptance follow-up — baseline 4af3fb3
+
+Residual remediation 18 November: remove the old backend glob/minimatch chain with a scoped `gcp-metadata > gaxios` patch upgrade, preserving telemetry and validating the real metadata HTTP caller on loopback. For mobile, scope minimatch 11 to Expo fingerprint only after checking its documented breaking changes against the installed consumer and adding path-ignore/security compatibility tests; leave older Jest glob consumers alone. Re-run frozen installs, audit, backend/mobile tests, lint/types/build and Expo compatibility. New picomatch advisory has no published fix: inspect actual reachability and keep CI audit truthful. Run a bounded Gemini pilot before any wider live reevaluation. No configured DB write, legal/retention approval, paid transaction, remote push or native Metro launch is authorized by this plan.
+
+Continuation 18 November: preserve the 51 pre-existing changed owners. Extend only `ConversationPanel.tsx`, `AiAssistantLauncher.tsx` and their existing unit/browser tests for reproduced late-response races and missing AI creation idempotency. Ignore completions after unmount, share the launcher action lock with guest transfer, retain guest proof/draft on failure, and reuse the existing creation request ID contract. Verify RED/GREEN, focused frontend suites, frontend lint/typecheck/build, real disposable support browser flows and workspace hygiene. No database/schema/dependency changes are needed for this continuation.
+
+The follow-up request explicitly authorizes safe implementation and local/external read-only tests. No commit, push, deployment, existing-database mutation, paid transaction or real-user notification. Preserve the preceding audit as historical evidence; final counts must come from this working tree.
+
+- [x] P0: reproduce missing CLI artifacts in a clean disposable source snapshot; build backend once before integration in workspace CI, retain standalone product workflow ordering, verify initialize/migrate outputs, run both failing tests and full integration.
+- [x] P1 AI: diagnose live reference failures; reuse the existing gateway/advisor/context boundary, require reliable reference evidence or clarification, keep history out of product facts, cover semantic and provider failures separately, then evaluate live credentialed runs.
+- [x] P2 chat: extend existing messages endpoint with bounded sequence cursors; latest history + older pages + forward polling, stable merge/scroll/drafts across web and mobile. Reuse the existing unique conversation/sequence index. Test 100/1000 messages, inserts, retries, invalid cursors and authorization.
+- [x] Classify guest continuity from actual public-assistant implementation; keep retention deletion disabled without approved policy. Verify Terms technical guards and migration rehearsal/preflight/recovery without applying to the configured database.
+- [x] Re-run notification, purchase/license/blockchain/provider, AI read-only/vector, support browser and mobile boundaries; mark external/paid/native approval restrictions explicitly.
+- [x] On final source, run frozen installs, SDK/security checks, lint/types/build/OpenAPI, all default suites, Solidity/Kotlin/browser/support/provider/backup/migration checks; update the 34-capability and acceptance matrices with commands, exit codes and evidence.
+
+Owners: existing workflows; assistance-support gateway/advisor/repository/service/controller/DTO; frontend assistanceQueries and existing chat components/screens; mobile client/chat screen; existing OpenAPI generation; existing test owners. No new authentication system, queue architecture, ORM or copied schema. Cursor contract will be additive and every maintained client will be updated together.

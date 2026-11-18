@@ -84,6 +84,13 @@ function service(repository: Partial<CommerceRepository>) {
 }
 
 describe('CommerceService service terms snapshot', () => {
+  it('returns a recoverable readiness error before writing an order when terms are missing', async () => {
+    const createOrder = vi.fn();
+    const target = new CommerceService({ createOrder } as never, {} as never, {} as never, {} as never, {} as never,
+      new ServiceTermsContent(join(tmpdir(), 'emukey-absent-terms', 'missing.md'), { nodeEnvironment: 'test' }));
+    await expect(target.createOrder(customer, '11111111-2222-4333-8444-555555555555', undefined, { planId: order().planId })).rejects.toMatchObject({ status: 503, response: { code: 'SERVICE_TERMS_NOT_READY' } });
+    expect(createOrder).not.toHaveBeenCalled();
+  });
   it('serves the order snapshot instead of the currently published document', async () => {
     const findOrder = vi.fn().mockResolvedValue(order({
       serviceTermsContentSnapshot: 'terms shown at checkout',

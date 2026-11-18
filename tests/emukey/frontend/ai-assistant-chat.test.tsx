@@ -82,6 +82,101 @@ afterEach(() => {
 });
 
 describe("AI assistant chat", () => {
+  it('keeps guest proof and unlocks the composer after a failed history link', async () => {
+    const saved = JSON.stringify({ sessionId, sessionToken: 'a'.repeat(64), messages: [{ id: 'guest-message', senderType: 'CUSTOMER', content: 'Private guest history' }] });
+    sessionStorage.setItem('emukey-ai-guest-session:guest', saved);
+    let attempts = 0;
+    respond = path => {
+      if (path === '/conversations/link-guest-history') {
+        attempts++;
+        return attempts === 1 ? Response.json({}, { status: 503 }) : Response.json({ id: 'linked-conversation', status: 'AI_ACTIVE' });
+      }
+      return path.includes('/messages') ? Response.json([]) : Response.json({ status: 'AI_ACTIVE' });
+    };
+    mount(customer as AuthUser);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Unsent question' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận lưu lịch sử khách' }));
+    await screen.findByRole('alert');
+    expect(sessionStorage.getItem('emukey-ai-guest-session:guest')).toBe(saved);
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).disabled).toBe(false);
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Unsent question');
+    // The loading icon can remain during its exit animation in jsdom.
+    fireEvent.click(screen.getByRole('button', { name: /Xác nhận lưu lịch sử khách/ }));
+    await waitFor(() => expect(sessionStorage.getItem('emukey-ai-conversation:buyer')).toBe('linked-conversation'));
+    expect(attempts).toBe(2);
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+  });
+
+  it('reuses a customer creation intent when its response is lost', async () => {
+    let creations = 0;
+    respond = path => {
+      if (path === '/conversations') {
+        creations++;
+        return creations === 1
+          ? Promise.reject(new TypeError('Response lost after server commit'))
+          : Response.json({ id: sessionId, status: 'AI_ACTIVE' });
+      }
+      if (path.includes('/messages')) return Response.json([]);
+      if (path.endsWith('/ai-ask')) return Response.json(answer());
+      return Response.json({ id: sessionId, status: 'AI_ACTIVE' });
+    };
+    mount(customer as AuthUser);
+    send('Question after a lost creation response');
+    await screen.findByRole('alert');
+    fireEvent.click(screen.getByRole('button', { name: 'Thử gửi lại' }));
+    await screen.findByText('Câu trả lời có căn cứ');
+    const requests = calls.filter(call => call.path === '/conversations');
+    expect(requests).toHaveLength(2);
+    expect(requests[0].body.clientRequestId).toEqual(expect.any(String));
+    expect(requests[1].body.clientRequestId).toBe(requests[0].body.clientRequestId);
+  });
+
+  it('locks chat actions while guest history is being linked', async () => {
+    sessionStorage.setItem('emukey-ai-guest-session:guest', JSON.stringify({ sessionId, sessionToken: 'a'.repeat(64), messages: [{ id: 'guest-message', senderType: 'CUSTOMER', content: 'Private guest history' }] }));
+    let finish!: (value: Response) => void;
+    respond = path => path === '/conversations/link-guest-history'
+      ? new Promise<Response>(resolve => { finish = resolve; })
+      : path.includes('/messages') ? Response.json([]) : Response.json({ id: 'other', status: 'AI_ACTIVE' });
+    mount(customer as AuthUser);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Unsent question' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận lưu lịch sử khách' }));
+    await waitFor(() => expect(finish).toBeDefined());
+    expect((screen.getByRole('button', { name: 'Hội thoại mới' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Gửi câu hỏi' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.submit(screen.getByRole('textbox').closest('form')!);
+    expect(calls.filter(call => call.path === '/conversations')).toHaveLength(0);
+    await act(async () => { finish(Response.json({ id: 'linked-conversation', status: 'AI_ACTIVE' })); });
+    await waitFor(() => expect((screen.getByRole('textbox') as HTMLTextAreaElement).disabled).toBe(false));
+    expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Unsent question');
+  });
+
+  it('ignores a guest link response after its account session has unmounted', async () => {
+    const saved = JSON.stringify({ sessionId, sessionToken: 'a'.repeat(64), messages: [{ id: 'guest-message', senderType: 'CUSTOMER', content: 'Private guest history' }] });
+    sessionStorage.setItem('emukey-ai-guest-session:guest', saved);
+    let finish!: (value: Response) => void;
+    respond = () => new Promise<Response>(resolve => { finish = resolve; });
+    const view = mount(customer as AuthUser);
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận lưu lịch sử khách' }));
+    await waitFor(() => expect(finish).toBeDefined());
+    view.unmount();
+    await act(async () => { finish(Response.json({ id: 'old-account-conversation', status: 'AI_ACTIVE' })); });
+    expect(sessionStorage.getItem('emukey-ai-guest-session:guest')).toBe(saved);
+    expect(sessionStorage.getItem('emukey-ai-conversation:buyer')).toBeNull();
+  });
+
+  it('saves guest history only after explicit confirmation by the signed-in customer', async () => {
+    const sessionToken = 'a'.repeat(64);
+    sessionStorage.setItem('emukey-ai-guest-session:guest', JSON.stringify({ sessionId, sessionToken, messages: [{ id: 'guest-message', senderType: 'CUSTOMER', content: 'Guest private history' }] }));
+    respond = path => path === '/conversations/link-guest-history'
+      ? Response.json({ id: 'linked-conversation', status: 'AI_ACTIVE' })
+      : path.includes('/messages') ? Response.json([]) : Response.json({ status: 'AI_ACTIVE' });
+    mount(customer as AuthUser);
+    expect(calls.filter(call => call.path === '/conversations/link-guest-history')).toHaveLength(0);
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Xác nhận lưu lịch sử khách' })));
+    await waitFor(() => expect(sessionStorage.getItem('emukey-ai-conversation:buyer')).toBe('linked-conversation'));
+    expect(calls.find(call => call.path === '/conversations/link-guest-history')?.body).toEqual({ sessionId, sessionToken, accepted: true });
+    expect(sessionStorage.getItem('emukey-ai-guest-session:guest')).toBeNull();
+  });
   it.each([null, customer])(
     "retries an in-progress AI request with the same intent for %j",
     async (user) => {

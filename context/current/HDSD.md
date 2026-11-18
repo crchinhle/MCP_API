@@ -1,5 +1,9 @@
 # Import dữ liệu demo
 
+> Hỗ trợ hội thoại (17/11/2026): mở hội thoại để xem 50 tin mới nhất, chọn **Tải tin nhắn cũ** để đọc tiếp mà vẫn giữ bản nháp/vị trí đọc. Khi kết nối lại, client lấy tin mới theo cursor. Trên mobile có **Đồng bộ tin nhắn** và tự đồng bộ khi quay lại ứng dụng. Sau đăng nhập, phiên khách còn hiệu lực trên trình duyệt chỉ được lưu khi chọn **Xác nhận lưu lịch sử khách**; chọn **Không lưu lịch sử khách** để bỏ liên kết. Lịch sử không tự chuyển sang tài khoản khác.
+
+> Mobile: khi AI tạm thời không khả dụng, câu hỏi được giữ để thử lại. Chọn **Liên hệ nhân viên hỗ trợ** để chuyển hội thoại sang hàng đợi; sau đó mới có nút **Gửi tin nhắn** cho nhân viên. Bạn vẫn có thể soạn tin tiếp theo trong lúc gửi, nội dung mới không bị response cũ xóa.
+
 > Cập nhật 17/11/2026: schema gồm 24 bảng, cần pgvector. Database có dữ liệu không được nâng cấp bằng initializer/reset. `db:migrate` chỉ diễn tập rồi rollback việc archive ledger cũ `schema_versions`; operator chỉ thêm `--apply` sau khi kiểm tra backup/phụ thuộc. Các thay đổi schema khác cần SQL tăng dần và kiểm thử disposable riêng. `db:initialize --allow-destructive` chỉ dành database phát triển có thể bỏ dữ liệu; production bị chặn. Xem `EmuKey/README.md`.
 
 > Giao diện hiện hành dùng mục **Bản quyền**. Với bản quyền mới, theo dõi lần lượt **Đang xác nhận blockchain → Đang bàn giao cho nhà cung cấp → Nhà cung cấp đã nhận bản quyền → Mã bản quyền đã được nhận**. Chỉ bấm **Tôi đã lưu mã** sau khi đã lưu an toàn. Sau xác nhận, trang đơn hàng và danh sách bản quyền cập nhật cùng trạng thái; tải lại không cấp key lần nữa. Quota thiết bị trong gói do nhà cung cấp quản lý; điều khiển thiết bị của EmuKey chỉ còn cho dữ liệu legacy.

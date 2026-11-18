@@ -10,6 +10,8 @@
   "abiPath": "../../src/modules/blockchain/infrastructure/generated/license-registry.abi.json",
   "deploymentVersion": 3,
   "protocolVersion": 2,
+  "runtimeCodeHash": "0xc6b6cdada91fc3b1c5bf328992bb88bc45bacbf22b51c7696971f469db07ebb9",
+  "sourceReference": "b16f109bc59b5bbe15d428dd5bca459300b6d46a:EmuKey/backend/contracts/solidity/LicenseRegistry.sol",
   "domain": "DOMAIN_PLAN_V2",
   "deviceAggregateSync": true,
   "ignitionDeploymentId": "sepolia-v3",

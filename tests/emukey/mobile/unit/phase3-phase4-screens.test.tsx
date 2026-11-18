@@ -19,6 +19,8 @@ it('recognizes only the configured checkout return origin and exact order', () =
 });
 import {
   askConversationAi,
+  appendConversationMessage,
+  requestConversationSupport,
   listConversations,
   listConversationMessages,
   acceptServiceTerms,
@@ -35,11 +37,14 @@ getOrder,
   listNotifications,
   listProducts,
   updateProfile,
+  type MobileConversationMessage,
   type MobileOrderDetail,
 } from '../../../../EmuKey/mobile/src/infrastructure/api/client';
 
 jest.mock('../../../../EmuKey/mobile/src/infrastructure/api/client', () => ({
   askConversationAi: jest.fn(),
+  appendConversationMessage: jest.fn(),
+  requestConversationSupport: jest.fn(),
   listConversations: jest.fn(),
   listConversationMessages: jest.fn(),
   acceptServiceTerms: jest.fn(),
@@ -99,6 +104,122 @@ describe('mobile Phase 3 and Phase 4 screens', () => {
     jest.clearAllMocks();
     jest.mocked(getPaymentRetryDecision).mockResolvedValue({ allowed: true, canResume: false, reason: 'READY' });
     listNotificationsMock.mockResolvedValue([]);
+  });
+
+  it.each(['older-first', 'poll-first'])('keeps contiguous history when initial windows overlap (%s)', async completionOrder => {
+    const conversation = { id: 'overlapping-support', status: 'WAITING_SUPPORT', title: 'Overlapping support' };
+    const pending: Array<{
+      query: Parameters<typeof listConversationMessages>[1];
+      resolve: (items: MobileConversationMessage[]) => void;
+    }> = [];
+    const page = (from: number, to: number): MobileConversationMessage[] => Array.from({ length: to - from + 1 }, (_, index) => ({
+      id: `message-${from + index}`, conversationId: conversation.id, clientMessageId: `intent-${from + index}`,
+      serverSequence: from + index, content: `Message ${from + index}`, senderType: 'CUSTOMER',
+    }));
+    jest.mocked(listConversations).mockResolvedValue([conversation] as never);
+    jest.mocked(listConversationMessages).mockImplementation((_id, query) => new Promise(resolve => pending.push({ query, resolve })));
+    await render(<AssistanceScreen />);
+    await act(async () => fireEvent.press(await screen.findByText('Đồng bộ tin nhắn')));
+    expect(pending).toHaveLength(2);
+    await act(async () => pending[0]!.resolve(page(51, 100)));
+    await act(async () => fireEvent.changeText(screen.getByLabelText('Tin nhắn hỗ trợ'), 'Keep this draft'));
+    await act(async () => fireEvent.press(screen.getByText('Tải tin nhắn cũ')));
+    await act(async () => fireEvent.press(screen.getByText('Đồng bộ tin nhắn')));
+    const older = pending.find(request => request.query?.before === 51)!;
+    const poll = pending.find(request => request.query?.after === 100)!;
+    // This late unanchored page must not advance the cursor past unseen 111–150.
+    await act(async () => pending[1]!.resolve(page(151, 200)));
+    if (completionOrder === 'older-first') {
+      await act(async () => older.resolve(page(1, 50)));
+      await act(async () => poll.resolve(page(101, 110)));
+    } else {
+      await act(async () => poll.resolve(page(101, 110)));
+      await act(async () => older.resolve(page(1, 50)));
+    }
+    for (const request of pending.filter(request => request.query?.after !== undefined && request !== poll)) {
+      await act(async () => request.resolve(page(request.query!.after! + 1, 200)));
+    }
+    const items = screen.root!.props.data as MobileConversationMessage[];
+    expect(items.map(item => item.serverSequence)).toEqual(Array.from({ length: 200 }, (_, index) => index + 1));
+    expect(new Set(items.map(item => item.id)).size).toBe(200);
+    expect(screen.getByLabelText('Tin nhắn hỗ trợ').props.value).toBe('Keep this draft');
+  }, 15_000);
+
+  it('offers older history when the first populated window follows an empty result', async () => {
+    jest.mocked(listConversations).mockResolvedValue([{ id: 'empty-support', status: 'WAITING_SUPPORT', title: 'Empty support' }] as never);
+    let finish!: (items: MobileConversationMessage[]) => void;
+    jest.mocked(listConversationMessages).mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    await render(<AssistanceScreen />);
+    await screen.findByLabelText('Tin nhắn hỗ trợ');
+    await act(async () => finish([]));
+    await act(async () => fireEvent.press(screen.getByText('Đồng bộ tin nhắn')));
+    await act(async () => finish(Array.from({ length: 50 }, (_, index) => ({
+      id: `message-${index + 51}`, conversationId: 'empty-support', clientMessageId: `intent-${index + 51}`,
+      serverSequence: index + 51, content: `Message ${index + 51}`, senderType: 'CUSTOMER',
+    }))));
+    expect(screen.getByText('Tải tin nhắn cũ')).toBeOnTheScreen();
+  });
+
+  it('loads older messages without losing the draft and resumes from the last sequence', async () => {
+    const conversation = { id: 'paged-support', status: 'WAITING_SUPPORT', title: 'Paged support' };
+    const page = (from: number, to: number) => Array.from({ length: to - from + 1 }, (_, index) => ({
+      id: `message-${from + index}`, serverSequence: from + index, content: `Message ${from + index}`, senderType: 'CUSTOMER',
+    }));
+    jest.mocked(listConversations).mockResolvedValue([conversation] as never);
+    jest.mocked(listConversationMessages).mockImplementation(async (_id, query) => {
+      if (query?.before === 51) return page(1, 50) as never;
+      if (query?.after === 100) return page(101, 101) as never;
+      return page(51, 100) as never;
+    });
+    await render(<AssistanceScreen />);
+    await screen.findByText('Tải tin nhắn cũ');
+    await act(async () => fireEvent.changeText(screen.getByLabelText('Tin nhắn hỗ trợ'), 'Keep my draft'));
+    await act(async () => fireEvent.press(screen.getByText('Tải tin nhắn cũ')));
+    expect(listConversationMessages).toHaveBeenCalledWith(conversation.id, { before: 51, limit: 50 });
+    expect(screen.getByLabelText('Tin nhắn hỗ trợ').props.value).toBe('Keep my draft');
+    await act(async () => fireEvent.press(screen.getByText('Đồng bộ tin nhắn')));
+    expect(listConversationMessages).toHaveBeenCalledWith(conversation.id, { after: 100, limit: 100 });
+    expect(screen.getByLabelText('Tin nhắn hỗ trợ').props.value).toBe('Keep my draft');
+  });
+  it('keeps text composed during a pending send and uses a new intent for the next message', async () => {
+    jest.mocked(listConversations).mockResolvedValue([{ id: 'draft-race', status: 'WAITING_SUPPORT', title: 'Draft race' }] as never);
+    jest.mocked(listConversationMessages).mockResolvedValue([]);
+    let finish!: () => void;
+    jest.mocked(appendConversationMessage).mockImplementationOnce(() => new Promise(resolve => { finish = () => resolve({ serverSequence: 1, content: 'First message' }); })).mockResolvedValue({ serverSequence: 2, content: 'Next draft' });
+    await render(<AssistanceScreen />);
+    const input = await screen.findByLabelText('Tin nhắn hỗ trợ');
+    await act(async () => fireEvent.changeText(input, 'First message'));
+    await act(async () => fireEvent.press(screen.getByText('Gửi tin nhắn')));
+    await act(async () => fireEvent.changeText(input, 'Next draft'));
+    await act(async () => finish());
+    expect(screen.getByLabelText('Tin nhắn hỗ trợ').props.value).toBe('Next draft');
+    await act(async () => fireEvent.press(screen.getByText('Gửi tin nhắn')));
+    expect(appendConversationMessage).toHaveBeenCalledTimes(2);
+    expect(jest.mocked(appendConversationMessage).mock.calls[0]?.[1]).not.toBe(jest.mocked(appendConversationMessage).mock.calls[1]?.[1]);
+  });
+  it('preserves the question and request ID when the AI provider is unavailable', async () => {
+    jest.mocked(listConversations).mockResolvedValue([{ id: 'ai-retry', status: 'AI_ACTIVE', title: 'AI retry' }] as never);
+    jest.mocked(listConversationMessages).mockResolvedValue([]);
+    jest.mocked(askConversationAi).mockResolvedValueOnce({ answer: 'Unavailable', outcome: 'PROVIDER_UNAVAILABLE', grounded: false } as never).mockResolvedValueOnce({ answer: 'Recovered', outcome: 'ANSWERED', grounded: true } as never);
+    await render(<AssistanceScreen />);
+    await act(async () => fireEvent.changeText(await screen.findByLabelText('Tin nhắn hỗ trợ'), 'My question'));
+    await act(async () => fireEvent.press(screen.getByText('Hỏi AI có nguồn')));
+    expect(screen.getByLabelText('Tin nhắn hỗ trợ').props.value).toBe('My question');
+    await act(async () => fireEvent.press(screen.getByText('Hỏi AI có nguồn')));
+    expect(askConversationAi).toHaveBeenCalledTimes(2);
+    expect(jest.mocked(askConversationAi).mock.calls[0]?.[2]).toEqual(expect.any(String));
+    expect(jest.mocked(askConversationAi).mock.calls[0]?.[2]).toBe(jest.mocked(askConversationAi).mock.calls[1]?.[2]);
+  });
+  it('hands an AI conversation to human support before enabling human messages', async () => {
+    jest.mocked(listConversations).mockResolvedValue([{ id: 'mobile-handoff', status: 'AI_ACTIVE', title: 'Handoff' }] as never);
+    jest.mocked(listConversationMessages).mockResolvedValue([]);
+    jest.mocked(requestConversationSupport).mockResolvedValue({ id: 'mobile-handoff', status: 'WAITING_SUPPORT', title: 'Handoff' } as never);
+    await render(<AssistanceScreen />);
+    await screen.findByLabelText('Tin nhắn hỗ trợ');
+    expect(screen.queryByText('Gửi tin nhắn')).toBeNull();
+    await act(async () => fireEvent.press(screen.getByText('Liên hệ nhân viên hỗ trợ')));
+    expect(requestConversationSupport).toHaveBeenCalledWith('mobile-handoff', expect.any(String));
+    expect(await screen.findByText('Gửi tin nhắn')).toBeOnTheScreen();
   });
 
   it('keeps order details available and retries a failed support request', async () => {

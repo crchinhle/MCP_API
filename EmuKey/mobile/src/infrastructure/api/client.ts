@@ -523,8 +523,12 @@ export async function listConversations(): Promise<MobileConversation[]> {
   return json(await request('/conversations'));
 }
 
-export async function listConversationMessages(conversationId: string): Promise<MobileConversationMessage[]> {
-  return json(await request(`/conversations/${encodeURIComponent(conversationId)}/messages`));
+export async function listConversationMessages(conversationId: string, page?: { before?: number; after?: number; limit?: number }): Promise<MobileConversationMessage[]> {
+  const params = new URLSearchParams();
+  if (page?.before !== undefined) params.set('before', String(page.before));
+  if (page?.after !== undefined) params.set('after', String(page.after));
+  if (page?.limit !== undefined) params.set('limit', String(page.limit));
+  return json(await request(`/conversations/${encodeURIComponent(conversationId)}/messages${params.size ? `?${params}` : ''}`));
 }
 
 export async function closeConversation(conversationId: string): Promise<MobileConversation> {
@@ -533,6 +537,10 @@ export async function closeConversation(conversationId: string): Promise<MobileC
       method: 'POST',
     }),
   );
+}
+
+export async function requestConversationSupport(conversationId: string, reason: string): Promise<MobileConversation> {
+  return json(await request(`/conversations/${encodeURIComponent(conversationId)}/request-support`, { method: 'POST', body: JSON.stringify({ reason }) }));
 }
 
 export async function createConversation(title = 'Hội thoại hỗ trợ', orderId?: string): Promise<MobileConversation> {

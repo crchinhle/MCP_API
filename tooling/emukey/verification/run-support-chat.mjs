@@ -1,7 +1,9 @@
 // Runs the real API/frontend against disposable services. No operational .env,
 // database reset, paid provider call, blockchain worker or persistent volume.
 import { createRequire } from 'node:module';
-import { readFile, mkdtemp, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { access, readFile, mkdtemp, writeFile } from 'node:fs/promises';
+import { setTimeout } from 'node:timers/promises';
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -29,6 +31,11 @@ try {
     await pool.query(`INSERT INTO users(email,password_hash,display_name,role,status,customer_type,email_verified_at)
       VALUES ($1,$2,$3,$4::varchar,'ACTIVE',CASE WHEN $4::varchar='CUSTOMER' THEN 'INDIVIDUAL' END,now())`, [`${name}@support.example.test`, passwordHash, name, role]);
   }
+  const paginationId = randomUUID();
+  const owner = (await pool.query("SELECT id FROM users WHERE email='customer@support.example.test'")).rows[0].id;
+  await pool.query("INSERT INTO conversations(id,customer_user_id,title,status) VALUES ($1,$2,'Long history fixture','AI_ACTIVE')", [paginationId, owner]);
+  await pool.query(`INSERT INTO messages(conversation_id,sender_user_id,sender_type,client_message_id,server_sequence,content)
+    SELECT $1,$2,'CUSTOMER',gen_random_uuid(),n,'History fixture '||n FROM generate_series(1,1000) n`, [paginationId, owner]);
   Object.assign(process.env, {
     NODE_ENV: 'test', DATABASE_URL: postgres.getConnectionUri(), AI_RETRIEVAL_DATABASE_URL: postgres.getConnectionUri(), REDIS_URL: redis.getConnectionUrl(),
     PORT: '3317', CORS_ORIGINS: 'http://127.0.0.1:5317', LOG_LEVEL: 'error', OTEL_ENABLED: 'false',
@@ -49,10 +56,22 @@ try {
   await writeFile(join(evidence, 'environment.json'), JSON.stringify({ database: 'emukey_support_e2e', api: 'http://127.0.0.1:3317', frontend: 'http://127.0.0.1:5317', externalAdapters: 'test-only fake; no Gemini qualification' }, null, 2));
   console.log(`Support evidence: ${evidence}`);
   const specifications = process.argv.slice(2);
+  // Native acceptance uses the same disposable fixture and real API. Creating
+  // the printed stop file ends the session and releases every owned service.
+  if (specifications.includes('--hold')) {
+    const stopFile = join(evidence, 'stop');
+    console.log(`Native fixture ready; create ${stopFile} to stop (maximum 60 minutes).`);
+    const deadline = Date.now() + 60 * 60 * 1000;
+    while (Date.now() < deadline) {
+      if (await access(stopFile).then(() => true, () => false)) break;
+      await setTimeout(1000);
+    }
+  } else {
   const child = spawn(process.execPath, [requireFrontend.resolve('@playwright/test/cli'), 'test', '--config', join(workspace, 'tooling/emukey/verification/playwright.frontend.config.mjs'), ...(specifications.length ? specifications : ['support-chat.spec.ts']), '--workers=1', '--reporter=list', '--output', join(evidence, 'results')], {
-    cwd: frontend, windowsHide: true, stdio: 'inherit', env: { ...process.env, BASE_URL: 'http://127.0.0.1:5317', E2E_EXTERNAL: 'true', EMUKEY_SUPPORT_E2E: '1', SUPPORT_EVIDENCE_DIR: evidence, SUPPORT_FIXTURE_PASSWORD: password },
+    cwd: frontend, windowsHide: true, stdio: 'inherit', env: { ...process.env, BASE_URL: 'http://127.0.0.1:5317', E2E_EXTERNAL: 'true', EMUKEY_SUPPORT_E2E: '1', SUPPORT_EVIDENCE_DIR: evidence, SUPPORT_FIXTURE_PASSWORD: password, SUPPORT_PAGINATION_ID: paginationId },
   });
   process.exitCode = await new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', code => resolve(code ?? 1)); });
+  }
 } finally {
   await vite?.close(); await app?.close(); await pool?.end(); await redis?.stop(); await postgres?.stop();
   console.log(`Retained disposable test evidence: ${evidence}`);

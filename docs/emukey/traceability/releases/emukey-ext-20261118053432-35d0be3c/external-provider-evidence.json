@@ -1,0 +1,32 @@
+{
+  "runId": "emukey-ext-20261118053432-35d0be3c",
+  "generatedAt": "2026-11-18T05:34:32.617Z",
+  "providers": {
+    "Gemini": {
+      "status": "SKIPPED_BY_OPT_IN",
+      "evidence": {}
+    },
+    "Cloudinary": {
+      "status": "SKIPPED_BY_OPT_IN",
+      "evidence": {}
+    },
+    "Brevo": {
+      "status": "FAIL",
+      "evidence": {
+        "error": "Status code: 401\nBody: {\n  \"message\": \"We have detected you are using an unrecognised IP address [REDACTED_IP]. If you performed this action make sure to add the new IP address in this link: [REDACTED_RPC_URL]\n  \"code\": \"unauthorized\"\n}"
+      }
+    },
+    "FCM": {
+      "status": "SKIPPED_BY_OPT_IN",
+      "evidence": {}
+    },
+    "SePay": {
+      "status": "SKIPPED_BY_OPT_IN",
+      "evidence": {}
+    },
+    "Sepolia": {
+      "status": "SKIPPED_BY_OPT_IN",
+      "evidence": {}
+    }
+  }
+}

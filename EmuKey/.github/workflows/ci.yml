@@ -98,19 +98,22 @@ jobs:
       - name: Enable Corepack
         run: corepack enable
       - name: Install frozen dependencies
-        run: corepack pnpm install --frozen-lockfile
+        run: corepack pnpm install --frozen-lockfile --ignore-scripts
+      - name: Verify all mobile parser copies before Expo
+        run: node scripts/verify-patches.mjs
       - name: Check Expo SDK compatibility
         env:
           # Validate against current recommendations, without a stale local cache.
           EXPO_NO_CACHE: '1'
-        run: corepack pnpm exec expo install --check
+        run: corepack pnpm expo:check
       - name: Verify mobile
         run: |
-          corepack pnpm audit --prod --audit-level high
           corepack pnpm lint
           corepack pnpm typecheck
           corepack pnpm openapi:check
           corepack pnpm build
+      - name: Audit mobile with verified finding-scoped local mitigation
+        run: node scripts/audit-dependencies.mjs
       - name: Build mobile delivery image
         run: docker build -t emukey-mobile:ci .
 

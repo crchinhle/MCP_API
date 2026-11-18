@@ -1,5 +1,7 @@
 # Audit và kiểm chứng chat hỗ trợ EmuKey — 16/11/2026
 
+> Follow-up 17/11/2026, baseline `4af3fb3`: các ghi chú lịch sử “polling toàn lịch sử” và “chưa chuyển guest history” bên dưới đã được thay bằng cursor pagination đồng bộ web/mobile và liên kết guest có token sở hữu + xác nhận. Xem current acceptance matrix trong `audits/2026-11-17-test-results.md`; browser thật đã thêm ca 1.000 tin nhắn. Retention PostgreSQL vẫn chờ phê duyệt, không thêm deletion job.
+
 ## Kết luận theo phạm vi
 
 Các luồng chat chính đã được kiểm chứng với frontend/API/Identity thật, PostgreSQL/Redis disposable và ba browser context độc lập. Bao gồm tạo yêu cầu trực tiếp, tranh claim, trao đổi hai chiều, refresh, offline/reconnect, mất response sau commit, retry không trùng, đóng hội thoại và AI → Support. Đây là nghiệm thu luồng chat trong môi trường thử nghiệm, chưa phải xác nhận toàn repository hoặc môi trường production đều xanh.

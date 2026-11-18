@@ -1,0 +1,47 @@
+{
+  "runId": "emukey-ext-20261118052641-1bdd365c",
+  "generatedAt": "2026-11-18T05:26:41.719Z",
+  "providers": {
+    "Gemini": {
+      "status": "SKIPPED_BY_OPT_IN",
+      "evidence": {}
+    },
+    "Cloudinary": {
+      "status": "REAL_EXTERNAL_VERIFIED",
+      "evidence": {
+        "key": "e2e/emukey-ext-20261118052641-1bdd365c/probe-txt",
+        "uploaded": true,
+        "retrieved": true,
+        "cleanedUp": true
+      }
+    },
+    "Brevo": {
+      "status": "BLOCKED_EXTERNAL",
+      "evidence": {},
+      "blocker": "BLOCKED_EXTERNAL_SAFE_RECIPIENT"
+    },
+    "FCM": {
+      "status": "PROVIDER_ACCEPTED_VERIFIED",
+      "evidence": {
+        "providerAuthentication": true,
+        "deviceReceiptVerified": false
+      },
+      "blocker": "BLOCKED_EXTERNAL_DEVICE_TOKEN"
+    },
+    "SePay": {
+      "status": "BLOCKED_EXTERNAL",
+      "evidence": {
+        "checkoutGenerated": true,
+        "checkoutUrlHost": "pay-sandbox.sepay.vn",
+        "providerHttpStatus": 302,
+        "sandbox": true,
+        "requiredCallbackPath": "/api/v1/payments/ipn"
+      },
+      "blocker": "BLOCKED_EXTERNAL_PUBLIC_CALLBACK:configure public HTTPS tunnel or staging URL for /api/v1/payments/ipn"
+    },
+    "Sepolia": {
+      "status": "SKIPPED_BY_OPT_IN",
+      "evidence": {}
+    }
+  }
+}

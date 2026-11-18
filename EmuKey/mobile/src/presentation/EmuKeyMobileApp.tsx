@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Button,
+  FlatList,
   AppState,
   Linking,
   Pressable,
@@ -46,6 +47,7 @@ import {
   createConversation,
   appendConversationMessage,
   askConversationAi,
+  requestConversationSupport,
   login,
   logout,
   restoreSession,
@@ -182,13 +184,46 @@ export function AssistanceScreen({ route }: { readonly route?: NativeStackScreen
   const [error, setError] = useState<string | null>(null);
   const [aiAnswer, setAiAnswer] = useState<Awaited<ReturnType<typeof askConversationAi>> | null>(null);
   const requestGeneration = useRef(0);
-  const outgoingIds = useRef<Record<string, string>>({});
+  const outgoingIds = useRef<Record<string, { id: string; body: string; kind: 'message' | 'ai' }>>({});
+  const sending = useRef(new Set<string>());
+  const [pendingIds, setPendingIds] = useState<string[]>([]);
+  const history = useRef<Record<string, { items: MobileConversationMessage[]; hasOlder: boolean }>>({});
+  const [hasOlder, setHasOlder] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const list = useRef<FlatList<MobileConversationMessage>>(null);
+  const atBottom = useRef(true);
   const draft = selected ? drafts[selected.id] ?? '' : '';
   const setDraft = (value: string) => { if (selected) setDrafts((current) => ({ ...current, [selected.id]: value })); };
 
-  const loadMessages = async (conversationId: string, generation = requestGeneration.current) => {
-    const items = await listConversationMessages(conversationId);
-    if (generation === requestGeneration.current) setMessages(items);
+  const loadMessages = async (conversationId: string, generation = requestGeneration.current): Promise<void> => {
+    const after = history.current[conversationId]?.items.at(-1)?.serverSequence;
+    const items = await (after === undefined ? listConversationMessages(conversationId) : listConversationMessages(conversationId, { after, limit: 100 }));
+    const previous = history.current[conversationId];
+    // An overlapping latest-page response cannot bridge the established cursor.
+    // Fetch forward instead so concurrent inserts cannot leave an interior gap.
+    if (after === undefined && previous?.items.length) return loadMessages(conversationId, generation);
+    const merged = [...new Map([...(previous?.items ?? []), ...items].map(item => [item.id, item])).values()].sort((a, b) => a.serverSequence - b.serverSequence);
+    history.current[conversationId] = { items: merged, hasOlder: previous?.items.length ? previous.hasOlder : items.length === 50 };
+    if (generation === requestGeneration.current) {
+      setMessages(merged); setHasOlder(history.current[conversationId].hasOlder); setSyncError(null);
+    }
+  };
+  const loadOlder = async () => {
+    if (!selected || loadingOlder) return;
+    const id = selected.id;
+    const generation = requestGeneration.current;
+    const before = history.current[id]?.items[0]?.serverSequence;
+    if (before === undefined) return;
+    setLoadingOlder(true); atBottom.current = false;
+    try {
+      const items = await listConversationMessages(id, { before, limit: 50 });
+      const current = history.current[id];
+      const merged = [...new Map([...items, ...(current?.items ?? [])].map(item => [item.id, item])).values()].sort((a, b) => a.serverSequence - b.serverSequence);
+      history.current[id] = { items: merged, hasOlder: items.length === 50 };
+      if (generation === requestGeneration.current) { setMessages(merged); setHasOlder(items.length === 50); setSyncError(null); }
+    } catch { if (generation === requestGeneration.current) setSyncError('Không thể tải lịch sử cũ. Nội dung hiện tại được giữ lại.'); }
+    finally { if (generation === requestGeneration.current) setLoadingOlder(false); }
   };
   useEffect(() => {
     let active = true;
@@ -205,7 +240,7 @@ export function AssistanceScreen({ route }: { readonly route?: NativeStackScreen
       setError(requestedId && !target ? 'Không tìm thấy hội thoại được yêu cầu.' : null);
       if (target) {
         setSelected(target);
-        return listConversationMessages(target.id).then((loaded) => { if (active && generation === requestGeneration.current) setMessages(loaded); });
+        return loadMessages(target.id, generation);
       }
       return undefined;
     }).catch(() => { if (active && generation === requestGeneration.current) setError('Không thể tải hội thoại hỗ trợ.'); });
@@ -216,20 +251,24 @@ export function AssistanceScreen({ route }: { readonly route?: NativeStackScreen
     const conversationId = selected.id;
     const generation = requestGeneration.current;
     let active = true;
-    const timer = setInterval(() => { void Promise.all([listConversationMessages(conversationId), listConversations()]).then(([items, conversations]) => {
+    const sync = () => { void Promise.all([loadMessages(conversationId, generation), listConversations()]).then(([, conversations]) => {
       if (active && generation === requestGeneration.current) {
-        setMessages(items); setConversations(conversations);
+        setConversations(conversations);
         const latest=conversations.find((item)=>item.id===conversationId);
         if (latest) setSelected(latest);
       }
-    }).catch(() => undefined); }, 5_000);
-    return () => { active = false; clearInterval(timer); };
+    }).catch(() => { if (active && generation === requestGeneration.current) setSyncError('Chưa đồng bộ được tin nhắn. Kiểm tra kết nối và thử lại.'); }); };
+    const timer = setInterval(() => { if (AppState.currentState === 'active') sync(); }, 5_000);
+    const subscription = AppState.addEventListener('change', state => { if (state === 'active') sync(); });
+    return () => { active = false; clearInterval(timer); subscription.remove(); };
   }, [selected?.id]);
 
   const selectConversation = async (conversation: MobileConversation) => {
     const generation = ++requestGeneration.current;
     setSelected(conversation);
-    setMessages([]);
+    setMessages(history.current[conversation.id]?.items ?? []);
+    setHasOlder(history.current[conversation.id]?.hasOlder ?? false);
+    setLoadingOlder(false); setSyncError(null); atBottom.current = true;
     setError(null);
     setAiAnswer(null);
     try { await loadMessages(conversation.id, generation); }
@@ -239,30 +278,59 @@ export function AssistanceScreen({ route }: { readonly route?: NativeStackScreen
     const content = draft.trim();
     const conversation = selected;
     const generation = requestGeneration.current;
-    if (!content || !conversation || conversation.status === 'CLOSED' || content.length > 8000) return;
-    const clientMessageId = outgoingIds.current[conversation.id] ?? crypto.randomUUID();
-    outgoingIds.current[conversation.id] = clientMessageId;
+    if (!content || !conversation || conversation.status === 'CLOSED' || content.length > 8000 || sending.current.has(conversation.id)) return;
+    const previous = outgoingIds.current[conversation.id];
+    const clientMessageId = previous?.body === content && previous.kind === 'message' ? previous.id : crypto.randomUUID();
+    outgoingIds.current[conversation.id] = { id: clientMessageId, body: content, kind: 'message' };
+    sending.current.add(conversation.id); setPendingIds([...sending.current]);
+    setError(null);
     try {
       await appendConversationMessage(conversation.id, clientMessageId, content);
+      atBottom.current = true;
       delete outgoingIds.current[conversation.id];
-      setDrafts((current) => ({ ...current, [conversation.id]: '' }));
-      await loadMessages(conversation.id, generation);
-    } catch { setError('Không thể gửi tin nhắn. Có thể thử lại.'); }
+      setDrafts((current) => current[conversation.id]?.trim() === content ? { ...current, [conversation.id]: '' } : current);
+      await loadMessages(conversation.id, generation).catch(() => { if (generation === requestGeneration.current) setSyncError('Tin nhắn đã gửi. Chưa tải được nội dung mới; hãy đồng bộ lại.'); });
+    } catch { if (generation === requestGeneration.current) setError('Không thể gửi tin nhắn. Có thể thử lại.'); }
+    finally { sending.current.delete(conversation.id); setPendingIds([...sending.current]); }
   };
   const ask = async () => {
     const question = draft.trim();
     const conversation = selected;
     const generation = requestGeneration.current;
-    if (!question || !conversation || conversation.status !== 'AI_ACTIVE' || question.length > 4000) return;
-    const clientMessageId = outgoingIds.current[conversation.id] ?? crypto.randomUUID();
-    outgoingIds.current[conversation.id] = clientMessageId;
+    if (!question || !conversation || conversation.status !== 'AI_ACTIVE' || question.length > 4000 || sending.current.has(conversation.id)) return;
+    const previous = outgoingIds.current[conversation.id];
+    const clientMessageId = previous?.body === question && previous.kind === 'ai' ? previous.id : crypto.randomUUID();
+    outgoingIds.current[conversation.id] = { id: clientMessageId, body: question, kind: 'ai' };
+    sending.current.add(conversation.id); setPendingIds([...sending.current]);
+    setError(null);
     try {
       const answer = await askConversationAi(conversation.id, question, clientMessageId);
-      delete outgoingIds.current[conversation.id];
+      atBottom.current = true;
       if (generation === requestGeneration.current) setAiAnswer(answer);
-      setDrafts((current) => ({ ...current, [conversation.id]: '' }));
-      await loadMessages(conversation.id, generation);
-    } catch { setError('Không thể hỏi AI lúc này. Có thể thử lại.'); }
+      if (answer.outcome === 'PROVIDER_UNAVAILABLE') {
+        if (generation === requestGeneration.current) setError('Dịch vụ AI tạm thời không khả dụng. Bạn có thể thử lại hoặc liên hệ nhân viên hỗ trợ.');
+        return;
+      }
+      delete outgoingIds.current[conversation.id];
+      setDrafts((current) => current[conversation.id]?.trim() === question ? { ...current, [conversation.id]: '' } : current);
+      await loadMessages(conversation.id, generation).catch(() => { if (generation === requestGeneration.current) setSyncError('AI đã phản hồi. Chưa tải được lịch sử mới; hãy đồng bộ lại.'); });
+    } catch { if (generation === requestGeneration.current) setError('Không thể hỏi AI lúc này. Có thể thử lại.'); }
+    finally { sending.current.delete(conversation.id); setPendingIds([...sending.current]); }
+  };
+  const handoff = async () => {
+    const conversation = selected;
+    const generation = requestGeneration.current;
+    if (!conversation || conversation.status !== 'AI_ACTIVE' || sending.current.has(conversation.id)) return;
+    sending.current.add(conversation.id); setPendingIds([...sending.current]); setError(null);
+    try {
+      const updated = await requestConversationSupport(conversation.id, (draft.trim() || 'Yêu cầu nhân viên hỗ trợ từ ứng dụng.').slice(0, 1000));
+      if (generation === requestGeneration.current) {
+        setSelected(updated); setAiAnswer(null);
+        setConversations(items => items.map(item => item.id === updated.id ? updated : item));
+      }
+      await loadMessages(conversation.id, generation).catch(() => { if (generation === requestGeneration.current) setSyncError('Đã chuyển yêu cầu. Chưa tải được lịch sử mới; hãy đồng bộ lại.'); });
+    } catch { if (generation === requestGeneration.current) setError('Chưa chuyển được yêu cầu hỗ trợ. Bạn có thể thử lại.'); }
+    finally { sending.current.delete(conversation.id); setPendingIds([...sending.current]); }
   };
   const close = async () => {
     if (!selected) return;
@@ -273,25 +341,47 @@ export function AssistanceScreen({ route }: { readonly route?: NativeStackScreen
     } catch { setError('Không thể đóng hội thoại.'); }
   };
   const start = async () => {
-    try { const conversation = await createConversation(); requestGeneration.current += 1; setAiAnswer(null); setError(null); setConversations((items) => [conversation, ...items]); setSelected(conversation); setMessages([]); }
+    try { const conversation = await createConversation(); requestGeneration.current += 1; setAiAnswer(null); setError(null); setSyncError(null); setHasOlder(false); setLoadingOlder(false); atBottom.current = true; setConversations((items) => [conversation, ...items]); setSelected(conversation); setMessages([]); }
     catch { setError('Không thể tạo hội thoại mới.'); }
   };
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <FlatList
+      key={selected?.id ?? 'no-conversation'}
+      ref={list}
+      contentContainerStyle={styles.content}
+      data={messages}
+      keyExtractor={message => message.id}
+      initialNumToRender={50}
+      maintainVisibleContentPosition={{ minIndexForVisible: 1 }}
+      onScroll={({ nativeEvent }) => { atBottom.current = nativeEvent.contentSize.height - nativeEvent.contentOffset.y - nativeEvent.layoutMeasurement.height < 64; }}
+      scrollEventThrottle={100}
+      onContentSizeChange={() => { if (atBottom.current && !loadingOlder) list.current?.scrollToEnd({ animated: false }); }}
+      renderItem={({ item: message }) => <View style={styles.messageRow}><Text style={styles.muted}>{message.senderType === 'CUSTOMER' ? 'Bạn' : message.senderType === 'AI' ? 'AI' : 'Hỗ trợ'}</Text><Text>{message.content}</Text>{message.senderType === 'AI' ? <MobileKnowledgeCitations citations={message.citationDetails ?? []} /> : null}</View>}
+      ListHeaderComponent={<>
       <Text accessibilityRole="header" style={styles.heading}>Hỗ trợ</Text>
+      {selected ? <Button title="Đồng bộ tin nhắn" onPress={() => void loadMessages(selected.id).catch(() => setSyncError('Chưa đồng bộ được tin nhắn. Kiểm tra kết nối và thử lại.'))} /> : null}
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+      {syncError ? <View><Text accessibilityRole="alert" style={styles.error}>{syncError}</Text><Button title="Thử đồng bộ lại" onPress={() => { if (selected) void loadMessages(selected.id).catch(() => setSyncError('Chưa đồng bộ được tin nhắn. Kiểm tra kết nối và thử lại.')); }} /></View> : null}
       <Button onPress={() => void start()} title="Hội thoại mới" />
       {conversations.map((conversation) => <Pressable accessibilityRole="button" accessibilityState={{ selected: selected?.id === conversation.id }} key={conversation.id} onPress={() => void selectConversation(conversation)} style={[styles.card, selected?.id === conversation.id ? styles.selectedCard : null]}><Text style={styles.cardTitle}>{conversation.title ?? 'Hội thoại hỗ trợ'}</Text><Text style={styles.muted}>{conversation.status === 'CLOSED' ? 'Đã đóng' : 'Đang mở'}</Text></Pressable>)}
-      {!selected ? <Text>Chưa có hội thoại hỗ trợ.</Text> : <View style={styles.card}>
-        {messages.map((message) => <View key={message.id} style={styles.messageRow}><Text style={styles.muted}>{message.senderType === 'CUSTOMER' ? 'Bạn' : message.senderType === 'AI' ? 'AI' : 'Hỗ trợ'}</Text><Text>{message.content}</Text>{message.senderType === 'AI' ? <MobileKnowledgeCitations citations={message.citationDetails ?? []} /> : null}</View>)}
+      {hasOlder ? <Button disabled={loadingOlder} onPress={() => void loadOlder()} title={loadingOlder ? 'Đang tải lịch sử…' : 'Tải tin nhắn cũ'} /> : null}
+      {!selected ? <Text>Chưa có hội thoại hỗ trợ.</Text> : null}
+      </>}
+      ListFooterComponent={selected ? <View style={styles.card}>
         {aiAnswer ? <View style={styles.aiNotice}><Text>{aiAnswer.answer}</Text><MobileKnowledgeCitations citations={aiAnswer.citationDetails ?? []} />{!aiAnswer.grounded?<Text style={styles.muted}>AI không đủ nguồn chính thức.</Text>:null}</View> : null}
         {selected.status === 'CLOSED' ? <><Text style={styles.muted}>Hội thoại đã đóng.</Text><Button onPress={() => void start()} title="Tạo yêu cầu tiếp theo" /></> : <>
           <TextInput accessibilityLabel="Tin nhắn hỗ trợ" maxLength={8000} onChangeText={setDraft} placeholder="Nhập câu hỏi hoặc tin nhắn" style={styles.input} value={draft} />
           <Text style={styles.muted}>{draft.length}/8000 ký tự hỗ trợ · Hỏi AI tối đa 4000</Text>
-          <View style={styles.actions}><Button disabled={!draft.trim() || draft.trim().length > 8000} onPress={() => void send()} title="Gửi tin nhắn" />{selected.status === 'AI_ACTIVE' ? <Button disabled={!draft.trim() || draft.trim().length > 4000} onPress={() => void ask()} title="Hỏi AI có nguồn" /> : null}<Button onPress={() => void close()} title="Đã giải quyết" /></View>
+          <View style={styles.actions}>
+            {selected.status === 'AI_ACTIVE' ? <>
+              <Button disabled={pendingIds.includes(selected.id) || !draft.trim() || draft.trim().length > 4000} onPress={() => void ask()} title="Hỏi AI có nguồn" />
+              <Button disabled={pendingIds.includes(selected.id)} onPress={() => void handoff()} title="Liên hệ nhân viên hỗ trợ" />
+            </> : <Button disabled={pendingIds.includes(selected.id) || !draft.trim() || draft.trim().length > 8000} onPress={() => void send()} title="Gửi tin nhắn" />}
+            <Button onPress={() => void close()} title="Đã giải quyết" />
+          </View>
         </>}
-      </View>}
-    </ScrollView>
+      </View> : null}
+    />
   );
 }
 

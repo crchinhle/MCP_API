@@ -118,6 +118,10 @@ export function BuyerAssistanceScreen() {
           {messages.isLoading ? <LoadingOverlay label="Đang tải tin nhắn" /> : null}
           {messages.isFetching && messages.data ? <small role="status">Đang đồng bộ tin nhắn…</small> : null}
           <ConversationPanel
+            hasOlder={messages.hasOlder}
+            loadingOlder={messages.isLoadingOlder}
+            olderError={messages.olderError}
+            onLoadOlder={() => messages.loadOlder()}
             author="Buyer"
             draftKey={`support-draft:${auth?.user?.id}:${conversation.id}`}
             initialMessages={(messages.data ?? []).map((message) => ({

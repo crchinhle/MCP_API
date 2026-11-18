@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, ThinkingLevel } from '@google/genai';
 import { Logger } from '@nestjs/common';
 
 import type {
@@ -56,6 +56,11 @@ const selectionSchema = objectSchema({
   sourceIds: { type: 'array', items: { type: 'string', minLength: 1, maxLength: 200 }, maxItems: 100, uniqueItems: true },
   ambiguous: { type: 'boolean' },
   clarification: nullableText(500),
+});
+const referenceSchema = objectSchema({
+  mode: { type: 'string', enum: ['NONE', 'LATEST', 'ORDINAL', 'ALL', 'COMPARE'] },
+  index: nullableInteger(0, 9999),
+  ambiguous: { type: 'boolean' },
 });
 
 function matchesSchema(value: unknown, schema: OutputSchema): boolean {
@@ -163,6 +168,33 @@ export class GeminiAiGateway implements AiGatewayPort {
       });
       const value = parseOutput<QuestionUnderstanding>(response.text, understandingSchema);
       if ((value.reference.mode === 'ORDINAL') !== (value.reference.index !== null)) throw new Error('GEMINI_INVALID_RESPONSE');
+      if (input.history?.some(turn => turn.role === 'assistant')) {
+        // Resolve this smaller semantic task independently of fact extraction.
+        // Both calls share the same deadline; history supplies identity, not facts.
+        const resolved = await this.client.models.generateContent({
+          model: this.options.model,
+          contents: JSON.stringify({ question: input.question, history: input.history }),
+          config: {
+            abortSignal: signal,
+            maxOutputTokens: 1024,
+            httpOptions: { retryOptions: { attempts: 1 } },
+            responseMimeType: 'application/json', responseJsonSchema: referenceSchema,
+            ...(/^gemini-3[.-]/.test(this.options.model) ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {}),
+            systemInstruction: [dataInstructions,
+              'Resolve ONLY the conversational reference in the CURRENT question. Do not answer, extract prices, or choose a catalog product.',
+              'NONE: a self-contained new subject. LATEST: a singular recent/previous reference or an indirect description of a previously mentioned application, even if its name can be recovered from history. ORDINAL: the CURRENT question explicitly gives an item position; index is zero-based. Never infer position from a numbered history. ALL: explicitly all previous candidates or a ranking among them. COMPARE: asks to compare previous candidates.',
+              'A singular recent reference stays LATEST even if history lists several items. In that case set ambiguous=true unless exactly one target is identifiable. Do not silently pick first/last or switch to ALL. A reference with no identifiable target is ambiguous. If meaning is uncertain, set ambiguous=true.',
+              'Technical instructions keep their reference: installation of the second item is ORDINAL index=1. Changing a term/package while referring to the previous application is LATEST; this is not an ordinal. index must be null except for ORDINAL.',
+            ].join('\n'),
+          },
+        });
+        const reference = parseOutput<{ mode: QuestionUnderstanding['reference']['mode']; index: number | null; ambiguous: boolean }>(resolved.text, referenceSchema);
+        if ((reference.mode === 'ORDINAL') !== (reference.index !== null)) throw new Error('GEMINI_INVALID_RESPONSE');
+        value.reference = { mode: reference.mode, index: reference.index };
+        if (reference.ambiguous && !['SUPPORT_REQUIRED', 'OUT_OF_SCOPE'].includes(value.intent)) {
+          value.clarification = 'Bạn đang nhắc đến sản phẩm hoặc gói nào? Vui lòng cho biết tên để tôi tra cứu đúng thông tin hiện tại.';
+        }
+      }
       // A validated conversational reference must reach the context resolver,
       // even when the model labels the requested facts as PRODUCT_QA.
       // Technical/support intents retain their own routing.

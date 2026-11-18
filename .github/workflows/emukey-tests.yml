@@ -27,17 +27,28 @@ jobs:
         run: |
           pnpm --dir EmuKey/backend install --frozen-lockfile
           pnpm --dir EmuKey/frontend install --frozen-lockfile
-          pnpm --dir EmuKey/mobile install --frozen-lockfile
+          pnpm --dir EmuKey/mobile install --frozen-lockfile --ignore-scripts
+      - name: Verify every installed mobile parser before Expo or Jest
+        run: |
+          node EmuKey/mobile/scripts/verify-patches.mjs
+          node --test tests/emukey/mobile/unit/picomatch-verifier.test.mjs tests/emukey/mobile/unit/picomatch-audit.test.mjs
       - name: Check Expo SDK compatibility
         env:
           # Validate against current recommendations, without a stale local cache.
           EXPO_NO_CACHE: '1'
-        run: pnpm --dir EmuKey/mobile exec expo install --check
+        run: pnpm --dir EmuKey/mobile expo:check
       - name: Audit runtime dependencies
         run: |
-          for component in backend frontend mobile; do
+          for component in backend frontend; do
             pnpm --dir EmuKey/$component audit --prod --audit-level high
           done
+      - name: Audit mobile with verified finding-scoped local mitigation
+        run: node EmuKey/mobile/scripts/audit-dependencies.mjs
+      - name: Build backend CLI artifacts
+        run: |
+          pnpm --dir EmuKey/backend build
+          test -f EmuKey/backend/dist/entrypoints/database/initialize.js
+          test -f EmuKey/backend/dist/entrypoints/database/migrate.js
       - name: Workspace verification
         run: |
           node tooling/emukey/run.mjs baseline
@@ -52,9 +63,12 @@ jobs:
         run: |
           pnpm --dir EmuKey/backend contracts:build
           for component in backend frontend mobile; do
-            for check in lint typecheck build openapi:check; do
+            for check in lint typecheck openapi:check; do
               pnpm --dir EmuKey/$component $check
             done
+            if [ "$component" != backend ]; then
+              pnpm --dir EmuKey/$component build
+            fi
           done
       - name: Install browser
         run: pnpm --dir EmuKey/frontend exec playwright install --with-deps chromium

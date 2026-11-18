@@ -37,3 +37,9 @@ export interface ConversationActor {
   role: Role;
   sub: string;
 }
+
+export interface MessagePageQuery {
+  before?: number;
+  after?: number;
+  limit?: number;
+}

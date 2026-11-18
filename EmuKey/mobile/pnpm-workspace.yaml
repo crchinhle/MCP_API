@@ -9,9 +9,11 @@ strictDepBuilds: true
 overrides:
   '@hey-api/json-schema-ref-parser>js-yaml': 4.3.2
   # Security fixes; the decoder's CommonJS export compatibility is patched below.
-  'brace-expansion@<2.0.0': 1.1.20
-  'brace-expansion@>=5.0.0 <6.0.0': 5.0.11
-  node-forge: 1.4.1
+  'brace-expansion@<2.0.0': 1.1.21
+  'brace-expansion@>=5.0.0 <6.0.0': 5.0.12
+  node-forge: 1.4.3
+  # Fingerprint uses Minimatch.match/pattern/negate, not v11's removed RegExp API.
+  '@expo/fingerprint>minimatch': 11.0.4
   source-map-js: 1.2.2
   compression: 1.8.2
   shell-quote: 1.11.0
@@ -45,3 +47,5 @@ minimumReleaseAgeExclude:
   - expo-notifications@57.0.25
 patchedDependencies:
   decode-uri-component@0.5.1: patches/decode-uri-component@0.5.1.patch
+  picomatch@2.3.2: patches/picomatch@2.3.2.patch
+  picomatch@4.0.7: patches/picomatch@4.0.7.patch

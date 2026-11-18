@@ -7,11 +7,14 @@
   },
   "type": "module",
   "scripts": {
-    "build": "expo export --platform android --output-dir dist",
+    "verify-patches": "node scripts/verify-patches.mjs",
+    "audit:security": "node scripts/audit-dependencies.mjs",
+    "expo:check": "node scripts/verify-patches.mjs && expo install --check",
+    "build": "node scripts/verify-patches.mjs && expo export --platform android --output-dir dist",
     "lint": "eslint .",
     "openapi:check": "node scripts/generate-openapi.mjs --check",
     "openapi:generate": "node scripts/generate-openapi.mjs",
-    "start": "expo start",
+    "start": "node scripts/verify-patches.mjs && expo start",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

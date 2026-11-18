@@ -1,5 +1,15 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsString, IsUUID, Length, MaxLength, IsInt, Min } from 'class-validator';
+import { IsIn, IsOptional, IsString, IsUUID, Length, MaxLength, IsInt, Min, Max, Equals, Matches } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class MessagePageQueryDto {
+  @ApiPropertyOptional({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER, description: 'Exclusive server_sequence cursor for older messages.' })
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(Number.MAX_SAFE_INTEGER) before?: number;
+  @ApiPropertyOptional({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER, description: 'Exclusive server_sequence cursor for new messages; cannot combine with before.' })
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(Number.MAX_SAFE_INTEGER) after?: number;
+  @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 50 })
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(100) limit?: number;
+}
 
 export class SupportClaimDto {
   @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) claimVersion!: number;
@@ -61,6 +71,8 @@ export class AiAskDto {
 }
 
 export class PublicAiAskDto extends AiAskDto {
+  @ApiPropertyOptional({ description: 'Independent proof issued with the guest session.' })
+  @IsOptional() @IsString() @Matches(/^[a-f0-9]{64}$/) sessionToken?: string;
   @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() sessionId?: string;
 }
 
@@ -89,6 +101,13 @@ export class AiAnswerDto {
 
 export class PublicAiAnswerDto extends AiAnswerDto {
   @ApiProperty({ format: 'uuid' }) sessionId!: string;
+  @ApiProperty() sessionToken!: string;
+}
+
+export class LinkGuestHistoryDto {
+  @ApiProperty({ format: 'uuid' }) @IsUUID() sessionId!: string;
+  @ApiProperty() @IsString() @Matches(/^[a-f0-9]{64}$/) sessionToken!: string;
+  @ApiProperty({ enum: [true], description: 'Explicit consent to save this guest history to the signed-in account.' }) @Equals(true) accepted!: boolean;
 }
 
 export class CatalogSourceDto {

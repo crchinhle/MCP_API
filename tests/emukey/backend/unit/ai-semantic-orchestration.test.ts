@@ -30,6 +30,12 @@ describe('Semantic question understanding drives production orchestration', () =
     const { ai } = setup({ intent: 'PRODUCT_RECOMMENDATION', requirements: { maxPriceVnd: 100000, minDevices: null, durationMonths: null } });
     expect(await ai.answer({ question: 'tầm một trăm nghìn đổ lại' })).toMatchObject({ outcome: 'NO_SOURCES', recommendations: [] });
   });
+  it('returns recommendation cards when the semantic intent uses the default overview field', async () => {
+    const { ai } = setup({ intent: 'PRODUCT_RECOMMENDATION', requirements: { maxPriceVnd: 3000000, minDevices: 5, durationMonths: null }, requestedFields: ['OVERVIEW'] });
+    const result = await ai.answer({ question: 'Tôi cần phần mềm quản lý phòng khám cho 5 thiết bị, tối đa 3 triệu.' });
+    expect(result).toMatchObject({ intent: 'PRODUCT_RECOMMENDATION', outcome: 'ANSWERED', recommendations: [expect.objectContaining({ planId: 'p1', priceVnd: 300000, maxActiveDevices: 10 })] });
+    expect(result.answer).toContain('300.000');
+  });
   it('allows an explicit new budget instead of retaining an obsolete lower budget from history', async () => {
     const { ai, catalog } = setup({ intent: 'PRODUCT_RECOMMENDATION', requirements: { maxPriceVnd: 1000000, minDevices: null, durationMonths: null } });
     await ai.answer({ question: 'Tăng ngân sách lên một triệu', history: [{ role: 'user', content: 'Ngân sách 200.000 đồng' }] });
@@ -39,6 +45,15 @@ describe('Semantic question understanding drives production orchestration', () =
     const { ai, gateway, catalog } = setup(); gateway.understandQuestion.mockRejectedValue(new Error('timeout'));
     expect(await ai.answer({ question: 'ClinicDesk' })).toMatchObject({ outcome: 'PROVIDER_UNAVAILABLE' });
     expect(catalog.search).not.toHaveBeenCalled();
+  });
+  it('looks up the current product plans again when a follow-up changes the term', async () => {
+    const { ai, catalog } = setup({ intent: 'FOLLOW_UP', reference: { mode: 'LATEST', index: null }, requirements: { maxPriceVnd: null, minDevices: null, durationMonths: 12 }, requestedFields: ['PRICE', 'DURATION'] });
+    const oldPlan = { ...source, id: 'catalog:monthly', planId: 'monthly', durationMonths: 1 };
+    const result = await ai.answer({ question: 'Nếu đổi sang gói năm thì sao?', history: [{ role: 'assistant', content: 'Gói tháng', catalogSources: [oldPlan] }] });
+    expect(catalog.search).toHaveBeenCalledWith(expect.objectContaining({ productIds: ['product1'], durationMonths: 12 }));
+    expect(catalog.search.mock.calls[0]?.[0]).not.toHaveProperty('planIds');
+    expect(result).toMatchObject({ outcome: 'ANSWERED', grounded: true });
+    expect(result.catalogSources).toEqual(expect.arrayContaining([expect.objectContaining({ planId: 'p1' })]));
   });
   it('answers requested provider and prices using backend facts rather than model text', async () => {
     const { ai } = setup({ requestedFields: ['PROVIDER', 'PRICE', 'PLANS'] });

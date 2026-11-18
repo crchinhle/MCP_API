@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from '../../../EmuKey/frontend/src/presentation/app/App';
@@ -12,6 +12,24 @@ afterEach(() => {
 });
 
 describe('Customer hub', () => {
+  it('keeps a reopened conversation draft when an unmounted send finishes late', async () => {
+    const draftKey = 'support-draft:buyer:late-response';
+    let finish!: () => void;
+    const send = vi.fn(() => new Promise<void>(resolve => { finish = resolve; }));
+    const props = { author: 'Buyer' as const, initialMessages: [], inputLabel: 'Tin nhắn', submitLabel: 'Gửi', draftKey, onSubmit: send };
+    const previous = render(<ConversationPanel {...props} />);
+    fireEvent.change(screen.getByLabelText('Tin nhắn'), { target: { value: 'First message' } });
+    fireEvent.click(screen.getByRole('button', { name: /Gửi$/ }));
+    previous.unmount();
+    const current = render(<ConversationPanel {...props} />);
+    fireEvent.change(screen.getByLabelText('Tin nhắn'), { target: { value: 'Next draft' } });
+    await act(async () => { finish(); });
+    expect(sessionStorage.getItem(draftKey)).toBe('Next draft');
+    current.unmount();
+    render(<ConversationPanel {...props} />);
+    expect(screen.getByLabelText<HTMLTextAreaElement>('Tin nhắn').value).toBe('Next draft');
+  });
+
   it('preserves the cited document version and excerpt in the shared AI timeline', () => {
     render(<ConversationPanel author="Support" initialMessages={[
       { id: 'ai', author: 'AI', body: 'Hướng dẫn', citationDetails: [{ documentId: 'guide', chunkId: 'chunk', documentTitle: 'Hướng dẫn gốc', documentVersion: 3, chunkIndex: 0, excerpt: 'Nội dung nguồn khi AI trả lời.' }] },

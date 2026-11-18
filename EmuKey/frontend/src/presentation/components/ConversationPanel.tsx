@@ -1,6 +1,6 @@
 import { LoadingOverlay } from './WorkspacePrimitives';
 import { Alert, Button, Input } from 'antd';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import type { ConversationMessage } from '../../domain/workspace';
 import type { CatalogSourceDto, CitationDetailDto } from '../../infrastructure/api/generated';
@@ -17,6 +17,10 @@ interface ConversationPanelProps {
   readonly onAskAi?: (question: string, clientMessageId: string) => Promise<unknown>;
   readonly readOnly?: boolean;
   readonly readOnlyReason?: string | undefined;
+  readonly hasOlder?: boolean;
+  readonly loadingOlder?: boolean;
+  readonly olderError?: boolean;
+  readonly onLoadOlder?: () => Promise<unknown>;
 }
 
 export function ConversationPanel({
@@ -29,6 +33,10 @@ export function ConversationPanel({
   readOnly = false,
   readOnlyReason = 'Hội thoại đã hoàn tất. Không thể gửi thêm tin nhắn ở trạng thái này.',
   draftKey,
+  hasOlder = false,
+  loadingOlder = false,
+  olderError = false,
+  onLoadOlder,
 }: ConversationPanelProps) {
   const [draft, setDraft] = useState(() => {
     try { return draftKey ? sessionStorage.getItem(draftKey) ?? '' : ''; } catch { return ''; }
@@ -37,11 +45,31 @@ export function ConversationPanel({
   const [error, setError] = useState('');
   const draftRequest = useRef<{ askAi: boolean; body: string; id: string } | undefined>(undefined);
   const lock = useRef(false);
+  const active = useRef(true);
+  useEffect(() => {
+    active.current = true;
+    return () => { active.current = false; };
+  }, []);
   const area = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
   const previousLast = useRef<string | undefined>(undefined);
   const [newMessages, setNewMessages] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
+  const anchor = useRef<{ id: string; top: number } | undefined>(undefined);
+  useLayoutEffect(() => {
+    if (!anchor.current || !area.current) return;
+    const node = [...area.current.querySelectorAll<HTMLElement>('[data-message-id]')].find(item => item.dataset.messageId === anchor.current?.id);
+    if (node) area.current.scrollTop += node.getBoundingClientRect().top - anchor.current.top;
+    anchor.current = undefined;
+  }, [initialMessages[0]?.id]);
+  const loadOlder = async () => {
+    if (!area.current || !onLoadOlder || loadingOlder) return;
+    const top = area.current.getBoundingClientRect().top;
+    const node = [...area.current.querySelectorAll<HTMLElement>('[data-message-id]')].find(item => item.getBoundingClientRect().bottom >= top);
+    if (node?.dataset.messageId) anchor.current = { id: node.dataset.messageId, top: node.getBoundingClientRect().top };
+    atBottom.current = false;
+    try { await onLoadOlder(); } catch { anchor.current = undefined; }
+  };
   useEffect(() => {
     const update = () => setOnline(navigator.onLine);
     window.addEventListener('online', update);
@@ -82,18 +110,23 @@ export function ConversationPanel({
     try {
       if (askAi) await onAskAi?.(body, clientMessageId);
       else await onSubmit?.(body, clientMessageId);
+      // A reopened thread owns its own draft and request intent. A response
+      // from the previous panel must not clear that session storage.
+      if (!active.current) return;
       updateDraft('');
       draftRequest.current = undefined;
       try { if (draftKey) sessionStorage.removeItem(`${draftKey}:request`); } catch { /* Storage is optional. */ }
       atBottom.current = true;
     } catch {
-      setError('Chưa gửi được yêu cầu. Nội dung được giữ lại để bạn thử lại.');
-    } finally { lock.current = false; setPending(false); }
+      if (active.current) setError('Chưa gửi được yêu cầu. Nội dung được giữ lại để bạn thử lại.');
+    } finally { lock.current = false; if (active.current) setPending(false); }
   };
 
   return (
     <section className="conversation-panel" aria-label="Nội dung hội thoại">
       {!online ? <Alert type="warning" title="Bạn đang ngoại tuyến. Tin nhắn nháp được giữ lại; kết nối lại để tiếp tục." /> : null}
+      {hasOlder ? <Button disabled={!online || loadingOlder} loading={loadingOlder} onClick={() => void loadOlder()}>Tải tin nhắn cũ</Button> : null}
+      {olderError ? <Alert type="error" title="Chưa tải được lịch sử cũ. Nội dung hiện tại được giữ lại; bạn có thể thử lại." /> : null}
       <div className="message-list" role="log" aria-label="Lịch sử tin nhắn" aria-live="polite" ref={area} onScroll={() => {
         const element = area.current;
         if (element) atBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 64;
@@ -103,6 +136,7 @@ export function ConversationPanel({
           <article
             className={`message message--${message.author.toLowerCase()}`}
             key={message.id}
+            data-message-id={message.id}
           >
             <small>{message.author === 'Buyer' ? 'Người mua' : message.author === 'Support' ? 'Nhân viên hỗ trợ' : message.author === 'System' ? 'Thông báo hệ thống' : 'Trợ lý AI'}</small>
             <p>{message.body}</p>

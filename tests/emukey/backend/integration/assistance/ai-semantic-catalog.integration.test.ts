@@ -42,4 +42,42 @@ describe.skipIf(process.env.EMUKEY_TEST_REAL_CATALOG !== '1')('Real semantic adv
     expect(actual.outcome).toBe('NO_SOURCES');
     expect(actual.grounded).toBe(false);
   });
+  it('recommends only current plans that satisfy an explicit budget and device limit', async () => {
+    const result = await advisor.answer({ question: 'Tôi cần phần mềm quản lý lớp học, ngân sách tối đa 3 triệu đồng, cho 5 thiết bị.' });
+    expect(result.outcome).toBe('ANSWERED');
+    expect(result.recommendations.length).toBeGreaterThan(0);
+    expect(result.recommendations.every(source => source.priceVnd! <= 3000000 && source.maxActiveDevices! >= 5)).toBe(true);
+  });
+  it('does not exceed a budget when no classroom plan supports five devices below two million', async () => {
+    const result = await advisor.answer({ question: 'Tôi cần phần mềm quản lý lớp học, ngân sách tối đa 2 triệu đồng, cho 5 thiết bị.' });
+    expect(result.outcome).toBe('NO_SOURCES');
+    expect(result.recommendations).toEqual([]);
+  });
+  it('grounds installation guidance in currently published public Knowledge', async () => {
+    const result = await advisor.answer({ question: 'Hướng dẫn cài đặt Classroom Hub' });
+    expect(result.outcome).toBe('ANSWERED');
+    expect(result.grounded).toBe(true);
+    expect(result.citationDetails.length).toBeGreaterThan(0);
+    expect(result.citationDetails.every(source => source.documentVersion > 0 && Boolean(source.excerpt.trim()))).toBe(true);
+  });
+  it('resolves ordinal and latest references against current catalog facts and clarifies ambiguous targets', async () => {
+    const family = await advisor.answer({ question: 'ClinicDesk có những gói nào và giá bao nhiêu?' });
+    expect(family.outcome).toBe('ANSWERED');
+    expect(family.catalogSources.length).toBeGreaterThanOrEqual(2);
+    const history = [{ role: 'assistant' as const, content: family.answer, catalogSources: family.catalogSources }];
+    const ambiguous = await advisor.answer({ question: 'Cái đó giá bao nhiêu?', history });
+    expect(ambiguous.outcome).toBe('CLARIFICATION');
+    const second = await advisor.answer({ question: 'Cái thứ hai giá bao nhiêu?', history });
+    expect(second.outcome).toBe('ANSWERED');
+    expect(second.catalogSources).toHaveLength(1);
+    expect(second.catalogSources[0]?.planId).toBe(family.catalogSources[1]?.planId);
+    const latest = await advisor.answer({ question: 'Sản phẩm vừa nói hỗ trợ bao nhiêu thiết bị?', history: [...history, { role: 'assistant', content: second.answer, catalogSources: second.catalogSources }] });
+    expect(latest.outcome).toBe('ANSWERED');
+    expect(latest.catalogSources[0]?.planId).toBe(second.catalogSources[0]?.planId);
+    expect(latest.answer).toContain(String(latest.catalogSources[0]?.maxActiveDevices));
+    const yearly = await advisor.answer({ question: 'Nếu đổi sang gói năm thì sao?', history: [{ role: 'assistant', content: second.answer, catalogSources: second.catalogSources }] });
+    expect(yearly.outcome).toBe('ANSWERED');
+    expect(yearly.catalogSources.length).toBeGreaterThan(0);
+    expect(yearly.catalogSources.every(source => source.productId === second.catalogSources[0]?.productId && source.durationMonths === 12)).toBe(true);
+  });
 });

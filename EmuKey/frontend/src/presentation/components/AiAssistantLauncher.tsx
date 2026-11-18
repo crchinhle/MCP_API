@@ -5,7 +5,7 @@
   SendOutlined,
 } from '@ant-design/icons';
 import { Button, FloatButton } from 'antd';
-import { useEffect, useRef, useState, type ComponentRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
   useAskAi,
@@ -13,6 +13,7 @@ import {
   useConversation,
   useConversationMessages,
   useCreateConversation,
+  useLinkGuestHistory,
   type AssistantMetadata,
   type CatalogSource,
   type MessageDto,
@@ -32,7 +33,7 @@ type ChatMessage = Pick<
   'id' | 'clientMessageId' | 'senderType' | 'content' | 'citationDetails' | 'createdAt'
 > &
   Partial<AssistantMetadata>;
-type GuestSession = { sessionId?: string | undefined; messages: ChatMessage[] };
+type GuestSession = { sessionId?: string | undefined; sessionToken?: string | undefined; messages: ChatMessage[] };
 type FailedIntent = { question: string; id: string };
 
 function readStorage(key: string) {
@@ -60,6 +61,7 @@ function restoreGuest(key: string): GuestSession {
     ) {
       return {
         sessionId: saved.sessionId,
+        sessionToken: saved.sessionToken,
         messages: saved.messages.slice(-40),
       };
     }
@@ -116,10 +118,11 @@ function CatalogSources({ sources }: { sources: CatalogSource[] }) {
 
 function MessageBubble({ message }: { message: ChatMessage }) {
   const ai = message.senderType === 'AI';
-  if (message.senderType === 'SYSTEM') return <article className="emu-ai-system"><small>Thông báo hệ thống</small><p>{message.content}</p>{message.createdAt ? <time dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time> : null}</article>;
+  if (message.senderType === 'SYSTEM') return <article className="emu-ai-system" data-message-id={message.id}><small>Thông báo hệ thống</small><p>{message.content}</p>{message.createdAt ? <time dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</time> : null}</article>;
   return (
     <article
       className={`emu-ai-message ${message.senderType === 'CUSTOMER' ? 'emu-ai-message-user' : ''}`}
+      data-message-id={message.id}
     >
       <span className="emu-ai-speaker">
         {message.senderType === 'CUSTOMER'
@@ -165,6 +168,8 @@ function AssistantSession() {
   const conversationKey = `emukey-ai-conversation:${account}`;
   const guestKey = `emukey-ai-guest-session:${account}`;
   const [guest, setGuest] = useState(() => restoreGuest(guestKey));
+  const [guestToLink, setGuestToLink] = useState(() => customer ? restoreGuest('emukey-ai-guest-session:guest') : undefined);
+  const linkGuest = useLinkGuestHistory();
   const [conversationId, setConversationId] = useState<string | undefined>(
     () => (customer ? (readStorage(conversationKey) ?? undefined) : undefined),
   );
@@ -183,6 +188,8 @@ function AssistantSession() {
   const input = useRef<HTMLTextAreaElement>(null);
   const launcher = useRef<ComponentRef<typeof FloatButton>>(null);
   const messageArea = useRef<HTMLDivElement>(null);
+  const atBottom = useRef(true);
+  const scrollAnchor = useRef<{ id: string; top: number } | undefined>(undefined);
   const composing = useRef(false);
   const create = useCreateConversation();
   const askCustomer = useAskAi();
@@ -229,9 +236,25 @@ function AssistantSession() {
   useEffect(() => {
     if (open && !busy) input.current?.focus();
   }, [open, busy]);
+  useLayoutEffect(() => {
+    const anchor = scrollAnchor.current;
+    if (!anchor || !messageArea.current) return;
+    const node = [...messageArea.current.querySelectorAll<HTMLElement>('[data-message-id]')].find(item => item.dataset.messageId === anchor.id);
+    if (node) messageArea.current.scrollTop += node.getBoundingClientRect().top - anchor.top;
+    scrollAnchor.current = undefined;
+  }, [messages[0]?.id]);
+  const loadOlder = async () => {
+    const area = messageArea.current;
+    if (!area || history.isLoadingOlder) return;
+    const top = area.getBoundingClientRect().top;
+    const node = [...area.querySelectorAll<HTMLElement>('[data-message-id]')].find(item => item.getBoundingClientRect().bottom >= top);
+    if (node?.dataset.messageId) scrollAnchor.current = { id: node.dataset.messageId, top: node.getBoundingClientRect().top };
+    atBottom.current = false;
+    try { await history.loadOlder(); } catch { scrollAnchor.current = undefined; }
+  };
   useEffect(() => {
     const area = messageArea.current;
-    if (area) area.scrollTop = area.scrollHeight;
+    if (area && atBottom.current) area.scrollTop = area.scrollHeight;
   }, [messages.length, busy, open]);
   useEffect(() => {
     if (!open || !window.visualViewport) return;
@@ -259,6 +282,8 @@ function AssistantSession() {
   };
   const newChat = () => {
     if (lock.current) return;
+    atBottom.current = true;
+    scrollAnchor.current = undefined;
     store(customer ? conversationKey : guestKey);
     setConversationId(undefined);
     setGuest({ messages: [] });
@@ -284,6 +309,7 @@ function AssistantSession() {
     )
       return;
     lock.current = true;
+    atBottom.current = true;
     setBusy(true);
     setError('');
     const intent =
@@ -314,6 +340,7 @@ function AssistantSession() {
           conversationId ??
           (
             await create.mutateAsync({
+              clientRequestId: intent.id,
               contextType: 'GENERAL',
               title: 'Hỏi trợ lý AI',
             })
@@ -331,6 +358,7 @@ function AssistantSession() {
           question: text,
           clientMessageId: intent.id,
           ...(guest.sessionId ? { sessionId: guest.sessionId } : {}),
+          ...(guest.sessionToken ? { sessionToken: guest.sessionToken } : {}),
         });
       }
       if (!active.current) return;
@@ -352,6 +380,7 @@ function AssistantSession() {
         setGuest((current) => {
           const next = {
             sessionId,
+            sessionToken: 'sessionToken' in result && typeof result.sessionToken === 'string' ? result.sessionToken : guest.sessionToken,
             messages: [
               ...current.messages.filter(
                 (message) => message.id !== response.id,
@@ -458,6 +487,34 @@ function AssistantSession() {
     }
   };
 
+  const confirmGuestHistory = async () => {
+    if (!customer || !guestToLink?.sessionId || !guestToLink.sessionToken || lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      const linked = await linkGuest.mutateAsync({
+        sessionId: guestToLink.sessionId,
+        sessionToken: guestToLink.sessionToken,
+        accepted: true,
+      });
+      if (!active.current) return;
+      setConversationId(linked.id);
+      store(conversationKey, linked.id);
+      store('emukey-ai-guest-session:guest');
+      setGuestToLink(undefined);
+      setLocalMessages([]);
+      setFailed(undefined);
+      setBlocked(false);
+      setHandedOff(false);
+    } catch {
+      if (active.current) setError('Không thể liên kết phiên khách. Phiên có thể đã hết hạn hoặc thuộc tài khoản khác.');
+    } finally {
+      lock.current = false;
+      if (active.current) setBusy(false);
+    }
+  };
+
   return (
     <>
       <FloatButton
@@ -507,12 +564,18 @@ function AssistantSession() {
           <div
             className="emu-ai-messages"
             ref={messageArea}
+            onScroll={() => {
+              const area = messageArea.current;
+              if (area) atBottom.current = area.scrollHeight - area.scrollTop - area.clientHeight < 64;
+            }}
             role="log"
             aria-label="Tin nhắn hội thoại"
             aria-live="polite"
             aria-relevant="additions"
             aria-busy={busy || restoring}
           >
+            {customer && history.hasOlder ? <Button loading={history.isLoadingOlder} onClick={() => void loadOlder()}>Tải tin nhắn cũ</Button> : null}
+            {history.olderError ? <p role="alert">Chưa tải được lịch sử cũ. Bạn có thể thử lại.</p> : null}
             {!messages.length && !restoring ? (
               <div className="emu-ai-welcome">
                 <CustomerServiceOutlined aria-hidden="true" />
@@ -535,11 +598,18 @@ function AssistantSession() {
               <p className="emu-ai-working" role="status">
                 {support.isPending
                   ? 'Đang chuyển yêu cầu hỗ trợ…'
+                  : linkGuest.isPending
+                    ? 'Đang lưu lịch sử khách…'
                   : 'Trợ lý đang xử lý…'}
               </p>
             ) : null}
           </div>
           <footer className="emu-ai-footer">
+            {customer && guestToLink?.sessionId && guestToLink.sessionToken && guestToLink.messages.length ? <div>
+              <p>Bạn có muốn lưu lịch sử trò chuyện khách trên trình duyệt này vào tài khoản hiện tại? Thông tin cũ sẽ được tra cứu lại khi hỏi tiếp.</p>
+              <Button loading={linkGuest.isPending} disabled={busy} onClick={() => void confirmGuestHistory()}>Xác nhận lưu lịch sử khách</Button>
+              <Button disabled={busy} onClick={() => { store('emukey-ai-guest-session:guest'); setGuestToLink(undefined); }}>Không lưu lịch sử khách</Button>
+            </div> : null}
             {historyFailed ? (
               <div role="alert">
                 <p>

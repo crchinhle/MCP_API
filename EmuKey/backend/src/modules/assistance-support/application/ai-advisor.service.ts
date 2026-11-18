@@ -420,6 +420,9 @@ export class AiAdvisorService {
           'Bạn đang hỏi sản phẩm hoặc gói nào? Vui lòng cho biết tên để tôi kiểm tra chính xác.',
         );
       planIds = selected.flatMap((p) => (p.planId ? [p.planId] : []));
+      // A different term selects a current plan in the referenced product family.
+      // Historical plan IDs must not exclude that family's annual/monthly alternatives.
+      if (requirements.durationMonths !== undefined && selected.some(p => p.durationMonths !== requirements.durationMonths)) planIds = undefined;
       productIds = [
         ...new Set(selected.flatMap((p) => (p.productId ? [p.productId] : []))),
       ];
@@ -589,12 +592,13 @@ export class AiAdvisorService {
     }
     if (!guidance && catalog.length) {
       if (
-        understanding
+        intent !== 'PRODUCT_RECOMMENDATION' &&
+        (understanding
           ? understanding.requestedFields.length === 1 &&
             understanding.requestedFields.includes('OVERVIEW')
           : /dung de lam gi|la gi|mo ta|chuc nang chinh/.test(
               normalize(question),
-            )
+            ))
       ) {
         const descriptions = catalog.flatMap((p) => {
           try {

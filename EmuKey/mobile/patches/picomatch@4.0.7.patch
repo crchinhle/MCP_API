@@ -1,0 +1,27 @@
+diff --git a/lib/parse.js b/lib/parse.js
+index 29207512c60183b4bb9bf5112be3b9b5f4a9a9fd..710eb410baa23fb1ce784c99615f128605017c63 100644
+--- a/lib/parse.js
++++ b/lib/parse.js
+@@ -521,6 +521,11 @@ const parse = (input, options) => {
+   };
+ 
+   const extglobOpen = (type, value) => {
++    // EmuKey build profile: repeated extglobs are deliberately unsupported.
++    // Reject before parsing their body, including nested/composed repetitions.
++    if (type === 'plus' || type === 'star') {
++      throw new SyntaxError('EMUKEY_UNSAFE_REPEATED_EXTGLOB: use ordinary globs or brace alternatives');
++    }
+     const token = { ...EXTGLOB_CHARS[value], conditions: 1, inner: '' };
+ 
+     token.prev = prev;
+@@ -539,7 +544,9 @@ const parse = (input, options) => {
+   const extglobClose = token => {
+     const literal = input.slice(token.startIndex, state.index + 1);
+     const body = input.slice(token.startIndex + 2, state.index);
+-    const analysis = analyzeRepeatedExtglob(body, opts);
++    const analysis = (token.type === 'plus' || token.type === 'star')
++      ? analyzeRepeatedExtglob(body, opts)
++      : { risky: false };
+ 
+     if ((token.type === 'plus' || token.type === 'star') && analysis.risky) {
+       const safeOutput = analysis.safeOutput

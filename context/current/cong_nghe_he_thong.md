@@ -53,6 +53,8 @@ Mode LEGACY_DEVICE giữ dữ liệu/quy trình trước cutover. Mode PROVIDER_
 
 Web và mobile quản lý dùng OpenAPI sinh từ backend. Bản OpenAPI đầu vào của mỗi client phải khớp backend, generated types do script sinh, HTTP wrapper/auth store/query cache tái sử dụng owner hiện hành.
 
+Chat dùng cursor server_sequence: mặc định 50 tin mới nhất, limit tối đa 100, before để lấy lịch sử và after để đồng bộ tin mới; hai cursor không dùng cùng request. Array response giữ nguyên. Web/mobile merge theo ID, giữ draft theo conversation; mobile dùng FlatList. Guest chỉ có lịch sử Redis tạm thời, cần token sở hữu phiên độc lập và xác nhận sau đăng nhập để lưu vào một tài khoản; không tự ghép lịch sử. Chưa có retention policy được duyệt cho lịch sử PostgreSQL nên chưa có tác vụ tự xóa.
+
 Trang provider có tab Tích hợp và lịch sử bàn giao. Buyer thấy payment, issuance và provider delivery riêng, nhận mã một lần và quay về đơn hàng. System/support xem metadata theo role. Máy chủ của bên bán, không phải client EmuKey, nhận token kết nối.
 
 ## 6. Kiểm thử và giới hạn bằng chứng
