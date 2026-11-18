@@ -4,6 +4,8 @@
 
 User authorization now includes the remaining technical operations, except Gemini live. Production Terms and retention await the user's actual content/durations. Historical approval blockers below do not describe the current authorization.
 
+**Final code snapshot 241f8db: REMOTE_CI_PASS**, [Actions run 44251790917](https://github.com/crchinhle/MCP_API/actions/runs/44251790917), both `test` and `license-client` jobs SUCCESS. This single clean Linux checkout includes all payment/RPC/chat/dependency follow-ups: backend **544 unit, 23 contract, 35 security, 152 integration passed/62 skipped**; frontend **318**, mobile **56**, Node parser/audit regressions **10**, Solidity **7**, browser **65**. Frozen installs, Expo compatibility, dependency gates, lint/typecheck/build/OpenAPI and Android job all succeeded in that run. Raw complete remote log: `%TEMP%/emukey-fullauth-ci-241f8db.log`. The later handoff changes only the four existing audit/plan documents; do not confuse documentation CI with a new product revision. External/native/operational limitations below remain unresolved.
+
 Fresh database evidence in `%TEMP%`:
 
 | Check | Result | Evidence |
@@ -38,6 +40,8 @@ Fresh mobile Docker image build **exit 0**, `emukey-fullauth-mobile-docker.log`;
 Remote CI **1613ead FAIL**, [run 44250505148](https://github.com/crchinhle/MCP_API/actions/runs/44250505148): Android SUCCESS; integration 149 pass/1 fail/62 skipped. Exact failure: delayed-payment fixture hit sub-millisecond checkout boundary; JS preflight differed from unchanged PostgreSQL fulfillment trigger. Raw `emukey-fullauth-ci-1613ead-failed.log`. New precision regression (after fixing its SQL parameter cast) RED 2/2, `emukey-fullauth-payment-precision-red.log`; post-fix full commerce **18/18 exit 0**, `emukey-fullauth-payment-precision-green.log`; backend unit **544/544**, `emukey-fullauth-backend-unit-payment-final.log`; lint/typecheck/build exit 0, `emukey-fullauth-backend-payment-*.log`. No gate/assertion removed. Full integration rerun and new CI result must be assessed separately.
 
 Backend/frontend Docker builds of snapshot 1613ead **exit 0**, `emukey-fullauth-{backend,frontend}-docker.log`. Backend image predates the precision follow-up and is not evidence for that later source.
+
+Payment follow-up snapshot **241f8db**: full backend integration **152 passed/0 failed/62 skipped, exit 0**, 12 files passed/5 files skipped, `emukey-fullauth-backend-integration-payment-final.log`. Conditional child-worker fixture files and opt-in external-AI cases account for skipped files; real embedding tests also remain opt-in. No Gemini live calls were made. Rebuilt backend Docker image **exit 0**, `emukey-fullauth-backend-docker-final.log`, manifest list `sha256:6ec538bb2054916e85fc25dc48568b555507f9db9b6451e9b31af6fd376a39db`. Handoff security scan **PASS, exit 0**, 362 product files, local environment excluded (`emukey-fullauth-security-scan-handoff.log`). Canonical SQL schema unchanged. Current 34-capability matrix has 34 unique IDs and all referenced test owners exist; PARTIAL describes boundary coverage, not an independent defect count.
 
 ## Residual remediation verified — 18/11/2026
 
