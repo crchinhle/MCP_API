@@ -11,11 +11,11 @@
       "evidence": {}
     },
     "Brevo": {
-      "status": "PROVIDER_ACCEPTED_VERIFIED",
+      "status": "REAL_EXTERNAL_VERIFIED",
       "evidence": {
         "providerMessageId": "<202611180913.60733112005@smtp-relay.mailin.fr>",
         "recipient": "E2E_TEST_EMAIL_RECIPIENT",
-        "inboxReceiptVerified": false,
+        "inboxReceiptVerified": true,
         "eventReport": {
           "checkedAt": "2026-11-18T09:15:13.243Z",
           "httpStatus": 200,
@@ -29,7 +29,13 @@
               "event": "requests"
             }
           ]
-        }
+        },
+        "inboxReceiptConfirmation": {
+          "source": "USER_CONFIRMATION_IN_CHAT",
+          "folder": "INBOX",
+          "recordedAt": "2026-11-18T09:18:06Z"
+        },
+        "scope": "Authorized verification-template smoke delivery; does not qualify account verification or every notification workflow"
       }
     },
     "FCM": {
