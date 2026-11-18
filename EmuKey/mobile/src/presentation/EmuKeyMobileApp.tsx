@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import * as Crypto from 'expo-crypto';
 import {
   Button,
   FlatList,
@@ -280,7 +281,7 @@ export function AssistanceScreen({ route }: { readonly route?: NativeStackScreen
     const generation = requestGeneration.current;
     if (!content || !conversation || conversation.status === 'CLOSED' || content.length > 8000 || sending.current.has(conversation.id)) return;
     const previous = outgoingIds.current[conversation.id];
-    const clientMessageId = previous?.body === content && previous.kind === 'message' ? previous.id : crypto.randomUUID();
+    const clientMessageId = previous?.body === content && previous.kind === 'message' ? previous.id : Crypto.randomUUID();
     outgoingIds.current[conversation.id] = { id: clientMessageId, body: content, kind: 'message' };
     sending.current.add(conversation.id); setPendingIds([...sending.current]);
     setError(null);
@@ -299,7 +300,7 @@ export function AssistanceScreen({ route }: { readonly route?: NativeStackScreen
     const generation = requestGeneration.current;
     if (!question || !conversation || conversation.status !== 'AI_ACTIVE' || question.length > 4000 || sending.current.has(conversation.id)) return;
     const previous = outgoingIds.current[conversation.id];
-    const clientMessageId = previous?.body === question && previous.kind === 'ai' ? previous.id : crypto.randomUUID();
+    const clientMessageId = previous?.body === question && previous.kind === 'ai' ? previous.id : Crypto.randomUUID();
     outgoingIds.current[conversation.id] = { id: clientMessageId, body: question, kind: 'ai' };
     sending.current.add(conversation.id); setPendingIds([...sending.current]);
     setError(null);
@@ -1110,16 +1111,29 @@ export function VerifyLicenseScreen() {
   const [code, setCode] = useState('');
   const [result, setResult] = useState<MobileLicenseVerification | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const verify = async () => {
+  const verificationGeneration = useRef(0);
+  const changeCode = (value: string) => {
+    verificationGeneration.current += 1;
+    setCode(value);
+    setResult(null);
     setError(null);
-    try { setResult(await verifyPublicLicense(code.trim())); }
-    catch { setError('Không thể xác minh License lúc này.'); }
+  };
+  const verify = async () => {
+    const generation = ++verificationGeneration.current;
+    setError(null);
+    setResult(null);
+    try {
+      const verified = await verifyPublicLicense(code.trim());
+      if (generation === verificationGeneration.current) setResult(verified);
+    } catch {
+      if (generation === verificationGeneration.current) setError('Không thể xác minh License lúc này.');
+    }
   };
   return (
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Text accessibilityRole="header" style={styles.heading}>Xác minh Blockchain</Text>
       <Text>Chỉ dùng mã License công khai; kết quả không chứa danh tính người mua.</Text>
-      <TextInput accessibilityLabel="Mã License công khai" autoCapitalize="characters" onChangeText={setCode} placeholder="EMU-..." style={styles.input} value={code} />
+      <TextInput accessibilityLabel="Mã License công khai" autoCapitalize="characters" onChangeText={changeCode} placeholder="EMU-..." style={styles.input} value={code} />
       <Button disabled={!code.trim()} onPress={() => void verify()} title="Xác minh" />
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
       {result ? <View style={styles.card}><Text style={styles.cardTitle}>{result.productName ?? result.licenseId}</Text><Text>{result.state}</Text><Text>{result.licenseId}</Text></View> : null}

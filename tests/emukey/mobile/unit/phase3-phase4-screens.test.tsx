@@ -1,5 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
+jest.mock('expo-crypto', () => ({ randomUUID: () => jest.requireActual('node:crypto').randomUUID() }));
+
 import {
   AssistanceScreen,
   CatalogScreen,
@@ -9,6 +11,7 @@ import {
   OrderDetailScreen,
   ProfileScreen,
   RenewalScreen,
+  VerifyLicenseScreen,
   matchesPaymentReturn,
 } from '../../../../EmuKey/mobile/src/presentation/EmuKeyMobileApp';
 
@@ -37,6 +40,7 @@ getOrder,
   listNotifications,
   listProducts,
   updateProfile,
+  verifyPublicLicense,
   type MobileConversationMessage,
   type MobileOrderDetail,
 } from '../../../../EmuKey/mobile/src/infrastructure/api/client';
@@ -62,6 +66,7 @@ jest.mock('../../../../EmuKey/mobile/src/infrastructure/api/client', () => ({
   listNotifications: jest.fn(),
   listProducts: jest.fn(),
   updateProfile: jest.fn(),
+  verifyPublicLicense: jest.fn(),
 }));
 
 const listProductsMock = listProducts as jest.MockedFunction<typeof listProducts>;
@@ -102,8 +107,50 @@ const order: MobileOrderDetail = {
 describe('mobile Phase 3 and Phase 4 screens', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.mocked(verifyPublicLicense).mockReset();
     jest.mocked(getPaymentRetryDecision).mockResolvedValue({ allowed: true, canResume: false, reason: 'READY' });
     listNotificationsMock.mockResolvedValue([]);
+  });
+
+  it('clears a previous verification when the code changes and the next request fails', async () => {
+    jest.mocked(verifyPublicLicense).mockResolvedValueOnce({ licenseId: 'EMU-VALID', productName: 'Verified product', state: 'CHAIN_CONFIRMED' } as never)
+      .mockRejectedValueOnce(new Error('LICENSE_NOT_FOUND'));
+    await render(<VerifyLicenseScreen />);
+    await fireEvent.changeText(screen.getByLabelText('Mã License công khai'), 'EMU-VALID');
+    await fireEvent.press(screen.getByText('Xác minh'));
+    expect(await screen.findByText('Verified product')).toBeOnTheScreen();
+    await fireEvent.changeText(screen.getByLabelText('Mã License công khai'), 'EMU-MISSING');
+    expect(screen.queryByText('Verified product')).toBeNull();
+    await fireEvent.press(screen.getByText('Xác minh'));
+    expect(await screen.findByText('Không thể xác minh License lúc này.')).toBeOnTheScreen();
+    expect(screen.queryByText('CHAIN_CONFIRMED')).toBeNull();
+  });
+
+  it('ignores a verification response after its input has changed', async () => {
+    let finish!: (value: Awaited<ReturnType<typeof verifyPublicLicense>>) => void;
+    jest.mocked(verifyPublicLicense).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    await render(<VerifyLicenseScreen />);
+    await fireEvent.changeText(screen.getByLabelText('Mã License công khai'), 'EMU-OLD');
+    await fireEvent.press(screen.getByText('Xác minh'));
+    await fireEvent.changeText(screen.getByLabelText('Mã License công khai'), 'EMU-CURRENT');
+    await act(async () => finish({ licenseId: 'EMU-OLD', productName: 'Stale product', state: 'CHAIN_CONFIRMED' } as never));
+    expect(screen.queryByText('Stale product')).toBeNull();
+    expect(screen.queryByText('CHAIN_CONFIRMED')).toBeNull();
+  });
+
+  it('preserves the newest verification when an older request fails later', async () => {
+    let fail!: (reason: Error) => void;
+    jest.mocked(verifyPublicLicense).mockImplementationOnce(() => new Promise((_, reject) => { fail = reject; }))
+      .mockResolvedValueOnce({ licenseId: 'EMU-CURRENT', productName: 'Current product', state: 'CHAIN_CONFIRMED' } as never);
+    await render(<VerifyLicenseScreen />);
+    await fireEvent.changeText(screen.getByLabelText('Mã License công khai'), 'EMU-OLD');
+    await fireEvent.press(screen.getByText('Xác minh'));
+    await fireEvent.changeText(screen.getByLabelText('Mã License công khai'), 'EMU-CURRENT');
+    await fireEvent.press(screen.getByText('Xác minh'));
+    expect(await screen.findByText('Current product')).toBeOnTheScreen();
+    await act(async () => fail(new Error('old request failed')));
+    expect(screen.getByText('Current product')).toBeOnTheScreen();
+    expect(screen.queryByText('Không thể xác minh License lúc này.')).toBeNull();
   });
 
   it.each(['older-first', 'poll-first'])('keeps contiguous history when initial windows overlap (%s)', async completionOrder => {
@@ -196,6 +243,24 @@ describe('mobile Phase 3 and Phase 4 screens', () => {
     await act(async () => fireEvent.press(screen.getByText('Gửi tin nhắn')));
     expect(appendConversationMessage).toHaveBeenCalledTimes(2);
     expect(jest.mocked(appendConversationMessage).mock.calls[0]?.[1]).not.toBe(jest.mocked(appendConversationMessage).mock.calls[1]?.[1]);
+  });
+  it.each(['WAITING_SUPPORT', 'AI_ACTIVE'])('creates native support intents without browser crypto (%s)', async status => {
+    const browserCrypto = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+    Object.defineProperty(globalThis, 'crypto', { configurable: true, value: undefined });
+    try {
+      jest.mocked(listConversations).mockResolvedValue([{ id: 'native-intent', status, title: 'Native intent' }] as never);
+      jest.mocked(listConversationMessages).mockResolvedValue([]);
+      jest.mocked(appendConversationMessage).mockReset().mockResolvedValue({ serverSequence: 1, content: 'Native message' });
+      jest.mocked(askConversationAi).mockReset().mockResolvedValue({ answer: 'Unavailable', outcome: 'PROVIDER_UNAVAILABLE', grounded: false } as never);
+      await render(<AssistanceScreen />);
+      await fireEvent.changeText(await screen.findByLabelText('Tin nhắn hỗ trợ'), 'Native message');
+      await fireEvent.press(screen.getByText(status === 'AI_ACTIVE' ? 'Hỏi AI có nguồn' : 'Gửi tin nhắn'));
+      if (status === 'AI_ACTIVE') expect(askConversationAi).toHaveBeenCalledWith('native-intent', 'Native message', expect.stringMatching(/^[0-9a-f-]{36}$/));
+      else expect(appendConversationMessage).toHaveBeenCalledWith('native-intent', expect.stringMatching(/^[0-9a-f-]{36}$/), 'Native message');
+    } finally {
+      if (browserCrypto) Object.defineProperty(globalThis, 'crypto', browserCrypto);
+      else Reflect.deleteProperty(globalThis, 'crypto');
+    }
   });
   it('preserves the question and request ID when the AI provider is unavailable', async () => {
     jest.mocked(listConversations).mockResolvedValue([{ id: 'ai-retry', status: 'AI_ACTIVE', title: 'AI retry' }] as never);
