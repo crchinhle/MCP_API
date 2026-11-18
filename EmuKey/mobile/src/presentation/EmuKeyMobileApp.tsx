@@ -122,11 +122,11 @@ export function LoginScreen({
     }
   };
   if (forgotMode) return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Text accessibilityRole="header" style={styles.brand}>Emukey</Text>
       <Text accessibilityRole="header" style={styles.heading}>Quên mật khẩu</Text>
       <Text style={styles.subtitle}>Nhập email tài khoản. Nếu email hợp lệ, hướng dẫn đặt lại mật khẩu sẽ được gửi qua email.</Text>
-      <TextInput accessibilityLabel="Email" autoCapitalize="none" onChangeText={setForgotEmail} style={styles.input} value={forgotEmail} />
+      <TextInput accessibilityLabel="Email" autoCapitalize="none" keyboardType="email-address" placeholder="Email" onChangeText={setForgotEmail} style={styles.input} value={forgotEmail} />
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
       {forgotSent ? <Text accessibilityLiveRegion="polite" style={styles.success}>Nếu email hợp lệ, hướng dẫn đặt lại mật khẩu đã được gửi.</Text> : null}
       <Button disabled={!forgotEmail.trim() || forgotPending} onPress={() => { void (async () => { setForgotPending(true); setError(null); try { await forgotPassword(forgotEmail); setForgotSent(true); } catch { setError('Không thể gửi yêu cầu. Vui lòng thử lại sau.'); } finally { setForgotPending(false); } })(); }} title={forgotPending ? 'Đang gửi...' : 'Gửi hướng dẫn'} />
@@ -134,11 +134,11 @@ export function LoginScreen({
     </ScrollView>
   );
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Text accessibilityRole="header" style={styles.brand}>Emukey</Text>
       <Text style={styles.subtitle}>Đăng nhập để quản lý đơn hàng và license của bạn</Text>
-      <TextInput accessibilityLabel="Email" autoCapitalize="none" onChangeText={setEmail} style={styles.input} value={email} />
-      <TextInput accessibilityLabel="Mật khẩu" onChangeText={setPassword} secureTextEntry style={styles.input} value={password} />
+      <TextInput accessibilityLabel="Email" autoCapitalize="none" keyboardType="email-address" placeholder="Email" onChangeText={setEmail} style={styles.input} value={email} />
+      <TextInput accessibilityLabel="Mật khẩu" placeholder="Mật khẩu" onChangeText={setPassword} secureTextEntry style={styles.input} value={password} />
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
       <Button disabled={!email.trim() || password.length < 8} onPress={() => void submit()} title="Đăng nhập" />
       <Button onPress={() => { setForgotMode(true); setError(null); }} title="Quên mật khẩu" />
@@ -346,6 +346,7 @@ export function AssistanceScreen({ route }: { readonly route?: NativeStackScreen
   };
   return (
     <FlatList
+      keyboardShouldPersistTaps="handled"
       key={selected?.id ?? 'no-conversation'}
       ref={list}
       contentContainerStyle={styles.content}
@@ -474,7 +475,7 @@ export function CatalogScreen({ navigation }: NativeStackScreenProps<RootStackPa
     ? products.filter((product) => product.name.toLocaleLowerCase('vi-VN').includes(needle) || product.summary.toLocaleLowerCase('vi-VN').includes(needle) || product.plans.some((plan) => plan.name.toLocaleLowerCase('vi-VN').includes(needle)))
     : products;
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Text accessibilityRole="header" style={styles.heading}>Danh mục sản phẩm</Text>
       <Text style={styles.subtitle}>Chọn gói đã công bố hoặc so sánh từ hai đến bốn gói.</Text>
       <CustomerNavigation navigation={navigation} />
@@ -637,7 +638,7 @@ export function ProfileScreen({
     }
   };
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Text accessibilityRole="header" style={styles.heading}>Hồ sơ tài khoản</Text>
       <Text style={styles.subtitle}>{profile?.email ?? 'Đang tải thông tin tài khoản...'}</Text>
       <TextInput accessibilityLabel="Tên hiển thị" onChangeText={setDisplayName} style={styles.input} value={displayName} />
@@ -954,6 +955,7 @@ export function LicensesScreen({
   };
   return (
     <ScrollView
+      keyboardShouldPersistTaps="handled"
       contentContainerStyle={styles.content}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void loadLicenses(true)} />}
     >
@@ -1098,7 +1100,7 @@ export function RenewalScreen({ navigation, route }: NativeStackScreenProps<Root
           <Button disabled={!accepted || !terms || termsState !== 'ready' || pending} onPress={() => void continueToPayment()} title="Tiếp tục thanh toán" />
         </View>
       )}
-      <Text style={styles.muted}>Trạng thái thiết bị được lưu ngay trong PostgreSQL; blockchain chỉ đồng bộ số lượng tổng hợp bất đồng bộ.</Text>
+      <Text style={styles.muted}>Gia hạn kéo dài thời hạn sử dụng và giữ nguyên mã bản quyền, thiết bị đã liên kết.</Text>
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
     </ScrollView>
   );
@@ -1114,7 +1116,7 @@ export function VerifyLicenseScreen() {
     catch { setError('Không thể xác minh License lúc này.'); }
   };
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <Text accessibilityRole="header" style={styles.heading}>Xác minh Blockchain</Text>
       <Text>Chỉ dùng mã License công khai; kết quả không chứa danh tính người mua.</Text>
       <TextInput accessibilityLabel="Mã License công khai" autoCapitalize="characters" onChangeText={setCode} placeholder="EMU-..." style={styles.input} value={code} />

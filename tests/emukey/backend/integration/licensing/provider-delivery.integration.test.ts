@@ -111,10 +111,19 @@ describe('durable provider handoff storage', () => {
       const terms=await commerce.getServiceTerms(customer,order.id);
       await commerce.acceptServiceTerms(customer,order.id,{accepted:true,version:terms.version,hash:terms.hash});
       const checkout=await commerce.checkout(customer,order.id);
+      // Keep a paid-flow fixture inside PostgreSQL's microsecond checkout
+      // bounds, independently of the host clock and Date truncation.
+      const paymentOccurrence=async(attemptId:string)=>{
+        const result=await pool.query<{at:Date}>(`SELECT date_trunc('milliseconds',
+          greatest(pa.created_at,o.service_terms_accepted_at))+interval '1 millisecond' AS at
+          FROM payment_attempts pa JOIN orders o ON o.id=pa.order_id WHERE pa.id=$1`,[attemptId]);
+        return result.rows[0]!.at.toISOString();
+      };
       await integration.state(providerId,1,false);
       await expect(commerce.createOrder(customer,randomUUID(),undefined,{planId:'00000000-0000-4000-8000-000000000301'})).rejects.toMatchObject({response:{code:'PROVIDER_INTEGRATION_NOT_READY'}});
-      const payment={amountVnd:order.priceVndSnapshot,eventId:randomUUID(),occurredAt:new Date().toISOString(),providerReference:checkout.checkoutReference};
+      const payment={amountVnd:order.priceVndSnapshot,eventId:randomUUID(),occurredAt:await paymentOccurrence(checkout.attemptId),providerReference:checkout.checkoutReference};
       const issued=await commerce.ingestIpn(payment,token);
+      expect(issued).toMatchObject({classification:'MATCHED',commandId:expect.any(String)});
       expect((await commerce.ingestIpn(payment,token)).classification).toBe('DUPLICATE');
       await integration.state(providerId,1,true);
       const command=(await pool.query('SELECT * FROM chain_commands WHERE id=$1',[issued.commandId])).rows[0];
@@ -268,7 +277,8 @@ describe('durable provider handoff storage', () => {
       const renewalTerms=await commerce.getServiceTerms(customer,renewal.id);
       await commerce.acceptServiceTerms(customer,renewal.id,{accepted:true,version:renewalTerms.version,hash:renewalTerms.hash});
       const renewalCheckout=await commerce.checkout(customer,renewal.id);
-      const paidRenewal=await commerce.ingestIpn({amountVnd:renewal.priceVndSnapshot,eventId:randomUUID(),occurredAt:new Date().toISOString(),providerReference:renewalCheckout.checkoutReference},token);
+      const paidRenewal=await commerce.ingestIpn({amountVnd:renewal.priceVndSnapshot,eventId:randomUUID(),occurredAt:await paymentOccurrence(renewalCheckout.attemptId),providerReference:renewalCheckout.checkoutReference},token);
+      expect(paidRenewal).toMatchObject({classification:'MATCHED',commandId:expect.any(String)});
       await confirm(paidRenewal.commandId!,'LICENSE_RENEWED');
       receiver.setFault('DROP_AFTER_COMMIT');await handoff.runOne();
       const expiryBeforeRetry=(await verify(nextKey)).expiresAt;
