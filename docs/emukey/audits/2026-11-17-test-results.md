@@ -35,6 +35,10 @@ Final legacy Sepolia qualification **exit 0, REAL_EXTERNAL_VERIFIED**, `emukey-f
 
 Fresh mobile Docker image build **exit 0**, `emukey-fullauth-mobile-docker.log`; Linux frozen install/bootstrap/typecheck/export/audit included. Tag `emukey-acceptance-mobile:20261118`, manifest list `sha256:054dd9ca860c2020abcb96d2f9fd7817e4260521c86c9060fd8f504dbfae98b9`. No native runtime qualification implied.
 
+Remote CI **1613ead FAIL**, [run 44250505148](https://github.com/crchinhle/MCP_API/actions/runs/44250505148): Android SUCCESS; integration 149 pass/1 fail/62 skipped. Exact failure: delayed-payment fixture hit sub-millisecond checkout boundary; JS preflight differed from unchanged PostgreSQL fulfillment trigger. Raw `emukey-fullauth-ci-1613ead-failed.log`. New precision regression (after fixing its SQL parameter cast) RED 2/2, `emukey-fullauth-payment-precision-red.log`; post-fix full commerce **18/18 exit 0**, `emukey-fullauth-payment-precision-green.log`; backend unit **544/544**, `emukey-fullauth-backend-unit-payment-final.log`; lint/typecheck/build exit 0, `emukey-fullauth-backend-payment-*.log`. No gate/assertion removed. Full integration rerun and new CI result must be assessed separately.
+
+Backend/frontend Docker builds of snapshot 1613ead **exit 0**, `emukey-fullauth-{backend,frontend}-docker.log`. Backend image predates the precision follow-up and is not evidence for that later source.
+
 ## Residual remediation verified — 18/11/2026
 
 Snapshot này supersede dependency/Gemini status trong các snapshot lịch sử phía dưới. Không đổi schema/database hiện hữu, auth/business flow hoặc external billing. New test owner `tests/emukey/mobile/unit/fingerprint-toolchain.test.ts` được mobile Jest runner gọi; các production edits mới chỉ ở hai workspace override files và lockfiles.

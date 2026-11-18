@@ -26,6 +26,10 @@ Live Sepolia phát hiện thêm lỗi transport: fallback pruned history che l�
 
 Mobile Docker build mới exit 0, gồm frozen install không lifecycle scripts, bootstrap, typecheck, Android export và audit gate; image `emukey-acceptance-mobile:20261118`. Không khởi động Metro/container runtime để thay thế bước native bị từ chối.
 
+**CI 1613ead không PASS**: [run 44250505148](https://github.com/crchinhle/MCP_API/actions/runs/44250505148) có Android SUCCESS nhưng một commerce integration thất bại (149 pass/1 fail/62 skipped). Điều tra tìm ra lỗi precision thật: pg chuyển timestamptz microsecond thành JavaScript Date millisecond, khiến preflight khác SQL fulfillment gate ở cả lower/upper bound. Hai regression mới RED cả hai; sau sửa so sánh timestamp ngay trong SELECT PostgreSQL, full commerce 18/18 qua, backend unit 544/544 và lint/typecheck/build qua. Không đổi schema hoặc nới gate. Fixture delayed-payment chọn điểm on-time biểu diễn chính xác theo timestamp của attempt thay vì phụ thuộc tốc độ scheduling. [node-postgres xác nhận giới hạn precision của Date](https://node-postgres.com/features/types). Full integration/CI mới được ghi riêng khi hoàn tất.
+
+Docker backend/frontend của snapshot 1613ead build thành công (`emukey-acceptance-{backend,frontend}:20261118`); backend image này chưa chứa payment-precision follow-up, cần rebuild sau khi source follow-up được chốt. Frontend/mobile source không đổi trong follow-up này.
+
 ## Residual remediation — 18/11/2026
 
 Mục này cập nhật trạng thái dependency/Gemini sau continuation phía dưới. HEAD vẫn `4af3fb3`; giữ toàn bộ 52 thay đổi đầu lượt. Tổng hiện tại 53 modified tracked owners và một test file mới có owner rõ ràng, không commit/push.

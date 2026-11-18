@@ -690,7 +690,10 @@ export class CommerceRepository {
 
       const attemptResult = await client.query<Record<string, unknown>>(
         `SELECT pa.*, o.*, provider.provider_chain_address, provider.provider_chain_namespace, statement_timestamp() AS database_received_at,
-                statement_timestamp() < o.ipn_accept_until AS received_before_cutoff,
+                COALESCE(received.received_at, statement_timestamp()) < o.ipn_accept_until AS received_before_cutoff,
+                effective.at >= o.service_terms_accepted_at AND effective.at >= pa.created_at
+                  AND effective.at < pa.expires_at AND effective.at < o.payment_due_at
+                  AND (pa.status <> 'SUPERSEDED' OR effective.at < pa.superseded_at) AS payment_time_eligible,
                 pa.id AS payment_attempt_id,
                 pa.amount_vnd AS payment_attempt_amount_vnd,
                 pa.status AS payment_attempt_status,
@@ -701,9 +704,12 @@ export class CommerceRepository {
          FROM payment_attempts pa
          JOIN orders o ON o.id = pa.order_id
          JOIN users provider ON provider.id = o.provider_user_id
+         LEFT JOIN payment_transactions received ON received.id = $4::uuid
+         CROSS JOIN LATERAL (SELECT CASE WHEN $3::varchar = 'SANDBOX_RECEIPT'
+           THEN COALESCE(received.received_at, statement_timestamp()) ELSE $2::timestamptz END AS at) effective
          WHERE pa.provider_reference = $1
          FOR UPDATE OF pa, o`,
-        [event.providerReference],
+        [event.providerReference, event.occurredAt, timingBasis, reconciliation?.transactionId ?? null],
       );
       const row = attemptResult.rows[0];
       if (reconciliation && (!row || (reconciliation.manual ? (reconciliation.manual.orderId !== row.matched_order_id || reconciliation.manual.paymentAttemptId !== row.payment_attempt_id) : (stored?.order_id !== row.matched_order_id || stored?.payment_attempt_id !== row.payment_attempt_id)))) {
@@ -805,20 +811,15 @@ export class CommerceRepository {
       const effectiveAt = timingBasis === 'SANDBOX_RECEIPT'
         ? date(reconciliation ? stored!.received_at : row.database_received_at)
         : event.occurredAt;
-      const occurredAt = effectiveAt.getTime();
       const eligible =
         (row.order_status === 'WAITING_PAYMENT' || (!reconciliation?.manual && row.order_status === 'CANCELLED' && row.auto_cancelled === true)) &&
         ['PENDING', 'EXPIRED', 'SUPERSEDED'].includes(
           String(row.payment_attempt_status),
         ) &&
         row.service_terms_accepted_at !== null &&
-        occurredAt >= date(row.service_terms_accepted_at).getTime() &&
-        occurredAt >= date(row.payment_attempt_created_at).getTime() &&
-        occurredAt < date(row.payment_attempt_expires_at).getTime() &&
-        occurredAt < date(row.payment_due_at).getTime() &&
-        (row.payment_attempt_status !== 'SUPERSEDED' ||
-          occurredAt < date(row.payment_attempt_superseded_at).getTime()) &&
-        (reconciliation ? date(stored!.received_at).getTime() < date(row.ipn_accept_until).getTime() : row.received_before_cutoff === true);
+        // PostgreSQL timestamps retain microseconds; Date would truncate both
+        // checkout bounds and can disagree with the authoritative SQL gate.
+        row.payment_time_eligible === true && row.received_before_cutoff === true;
       if (!eligible) {
         if (reconciliation) throw new Error('SANDBOX_PAYMENT_OUTSIDE_ACCEPTED_WINDOW');
         await client.query(

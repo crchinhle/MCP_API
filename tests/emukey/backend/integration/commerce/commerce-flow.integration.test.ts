@@ -387,6 +387,26 @@ describe('customer commerce and payment flow', () => {
     });
   });
 
+  it.each(['before-start', 'before-expiry'])('preserves PostgreSQL sub-millisecond checkout boundaries (%s)', async (boundary) => {
+    const order = await service.createOrder(customer, randomUUID(), undefined, { planId });
+    await acceptTerms(order.id);
+    const attemptId = randomUUID();
+    const created = boundary === 'before-start'
+      ? "date_trunc('milliseconds', statement_timestamp()) + interval '0.5 milliseconds'"
+      : 'statement_timestamp()';
+    await pool.query(`INSERT INTO payment_attempts
+      (id,order_id,attempt_no,provider_reference,amount_vnd,created_at,expires_at)
+      VALUES ($1::uuid,$2,1,$1::text,$3,${created},date_trunc('milliseconds',statement_timestamp()+interval '60 seconds')+interval '0.5 milliseconds')`,
+    [attemptId, order.id, order.priceVndSnapshot]);
+    const at = (await pool.query<{ at: Date }>(`SELECT date_trunc('milliseconds',
+      ${boundary === 'before-start' ? 'created_at' : 'expires_at'}) AS at FROM payment_attempts WHERE id=$1`, [attemptId])).rows[0]!.at;
+    const payment = service.ingestIpn({ amountVnd: order.priceVndSnapshot, eventId: randomUUID(),
+      occurredAt: at.toISOString(), providerReference: attemptId }, webhookSecret);
+    await expect(payment).resolves.toMatchObject({ classification: boundary === 'before-start' ? 'UNMATCHED' : 'MATCHED' });
+    const licenses = await pool.query<{ count: number }>('SELECT count(*)::int AS count FROM licenses WHERE origin_order_id=$1', [order.id]);
+    expect(licenses.rows[0]!.count).toBe(boundary === 'before-start' ? 0 : 1);
+  });
+
   it('auto-cancels overdue unpaid orders once and accepts only an on-time delayed payment', async () => {
     const repo = new CommerceRepository(pool, 86_400, new NotificationRepository(pool));
     const original = await service.createOrder(customer, '00000000-0000-4000-8000-000000000710', undefined, { planId });
@@ -407,7 +427,11 @@ describe('customer commerce and payment flow', () => {
       FROM orders WHERE id=$1`, [original.id, fixtureId]);
     await acceptTerms(overdueId);
     const checkout = await service.checkout(customer, overdueId);
-    const occurredAt = (await pool.query<{ at: Date }>('SELECT statement_timestamp() AS at')).rows[0]!.at;
+    // Choose an exactly representable on-time event, beyond the microsecond
+    // checkout boundary, without relying on host/DB scheduling speed.
+    const occurredAt = (await pool.query<{ at: Date }>(`SELECT date_trunc('milliseconds',
+      greatest(pa.created_at,o.service_terms_accepted_at))+interval '1 millisecond' AS at
+      FROM payment_attempts pa JOIN orders o ON o.id=pa.order_id WHERE pa.id=$1`, [checkout.attemptId])).rows[0]!.at;
     await pool.query('SELECT pg_sleep(2.1)');
     await Promise.all([repo.cancelOverdueOrders(), repo.cancelOverdueOrders()]);
     expect((await repo.findOrder(customer.sub, overdueId))?.orderStatus).toBe('CANCELLED');
