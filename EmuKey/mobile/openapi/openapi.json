@@ -2381,6 +2381,32 @@
         ]
       }
     },
+    "/api/v1/operations/blockchain/status": {
+      "get": {
+        "operationId": "BlockchainOperationsController_status",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlockchainHealthDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": [
+          "operations"
+        ]
+      }
+    },
     "/api/v1/operations/blockchain/reconcile": {
       "post": {
         "operationId": "BlockchainOperationsController_reconcile",

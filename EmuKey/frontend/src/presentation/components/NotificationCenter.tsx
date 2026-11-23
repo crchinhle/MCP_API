@@ -23,7 +23,7 @@ export function NotificationCenter() {
     }
     if (user?.role === 'SUPPORT_STAFF' && target.kind === 'CONVERSATION') return `/support?conversationId=${id}`;
     if (user?.role === 'PROVIDER_ADMIN' && target.kind === 'LICENSE') return `/provider/licenses?licenseId=${id}`;
-    if (user?.role === 'SYSTEM_ADMIN') return target.kind === 'PAYMENT' ? `/system/console?view=payments&transactionId=${id}` : '/system/console';
+    if (user?.role === 'SYSTEM_ADMIN' && target.kind === 'PAYMENT') return `/system/console?view=payments&transactionId=${id}`;
     return null;
   };
 

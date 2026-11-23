@@ -1,0 +1,18 @@
+{
+  "name": "EmuKey",
+  "short_name": "EmuKey",
+  "start_url": "/",
+  "display": "standalone",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/emukey.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

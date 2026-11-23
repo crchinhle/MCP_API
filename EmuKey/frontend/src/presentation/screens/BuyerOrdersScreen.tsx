@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { describeApiError } from '../../application/auth/authContext';
 import { useCreateConversation } from '../../application/assistance/assistanceQueries';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { orderStatusLabel, orderStatusTone, type OrderSummary, useOrder, useOrderMutations, useOrders, useOrderTerms } from '../../application/orders/orderQueries';
 import { CopyableId, PageHeader, PageLoading, formatMoney, FactList, StatusChip, useDebouncedValue } from '../components/WorkspacePrimitives';
 import { OrderEntitlements } from '../components/OrderSummary';
@@ -39,11 +39,16 @@ function downloadOrdersCsv(orders: readonly OrderSummary[]) {
 }
 
 export function BuyerOrdersScreen() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState<OrderTab>('all');
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebouncedValue(query);
   const [status, setStatus] = useState('all');
-  const [selectedId, setSelectedId] = useState<string>();
+  const [selectedId, setSelectedId] = useState<string | undefined>(() => searchParams.get('orderId') ?? undefined);
+  useEffect(() => {
+    const paramOrderId = searchParams.get('orderId');
+    if (paramOrderId) setSelectedId(paramOrderId);
+  }, [searchParams]);
   const [cancelTarget, setCancelTarget] = useState<OrderSummary>();
   const [accepted, setAccepted] = useState(false);
   const [page, setPage] = useState(1);
@@ -82,7 +87,10 @@ export function BuyerOrdersScreen() {
     <div className="buyer-orders-screen">
 
       <main className="buyer-orders-main" id="main-content" tabIndex={-1}>
-        <PageHeader title="Đơn hàng của tôi" />
+        <PageHeader
+          title="Đơn hàng của tôi"
+          action={<Button onClick={() => void navigate('/buyer/orders/history')}>Lịch sử thanh toán</Button>}
+        />
         <nav aria-label="Bộ lọc đơn hàng" className="buyer-orders-tabs">
           <button className={tab === 'all' ? 'active' : ''} onClick={() => setTab('all')} type="button">Tất cả {orders.length}</button>
           <button className={tab === 'sign' ? 'active' : ''} onClick={() => { setTab('sign'); setPage(1); }} type="button">Chờ đồng ý điều khoản</button>
@@ -132,7 +140,7 @@ export function BuyerOrdersScreen() {
         <Alert showIcon type="warning" title="Nếu đã chuyển tiền, hãy giữ đơn và liên hệ hỗ trợ để kiểm tra giao dịch." />
         {mutations.cancel.isError ? <Alert showIcon type="error" title={describeApiError(mutations.cancel.error, 'Không thể hủy đơn hàng. Vui lòng thử lại.')} action={<Button disabled={mutations.cancel.isPending} onClick={cancelOrder}>Thử lại</Button>} /> : null}
       </Modal>
-      <Drawer open={Boolean(selectedId)} onClose={() => { setSelectedId(undefined); setAccepted(false); }} motion={{ motionName: '' }} title={`Chi tiết ${detailQuery.data?.orderNumber ?? ''}`}>
+      <Drawer open={Boolean(selectedId)} onClose={() => { setSelectedId(undefined); setAccepted(false); if (searchParams.has('orderId')) setSearchParams((current) => { const next = new URLSearchParams(current); next.delete('orderId'); return next; }, { replace: true }); }} motion={{ motionName: '' }} title={`Chi tiết ${detailQuery.data?.orderNumber ?? ''}`}>
         {detailQuery.isLoading ? <LoadingOverlay label="Đang tải chi tiết đơn hàng" /> : detailQuery.isError ? <Alert type="error" message={describeApiError(detailQuery.error, 'Không thể tải chi tiết đơn hàng.')} action={<Button disabled={detailQuery.isFetching} onClick={() => void detailQuery.refetch()}>Thử lại</Button>} /> : detailQuery.data ? <FactList facts={[{ label: 'Sản phẩm', value: detailQuery.data.productNameSnapshot }, { label: 'Gói', value: detailQuery.data.planNameSnapshot }, { label: 'Tổng thanh toán', value: formatMoney(detailQuery.data.priceVndSnapshot) }]} /> : null}
         {detailQuery.data ? <section className="checkout-stack">
           <h3>Thông tin chi tiết gói</h3>

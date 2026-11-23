@@ -4,8 +4,10 @@
     "slug": "emukey",
     "version": "0.0.0",
     "scheme": "emukey",
+    "icon": "./assets/icon-1024.png",
     "android": {
-      "package": "app.emukey.mobile"
+      "package": "app.emukey.mobile",
+      "icon": "./assets/icon-512.png"
     },
     "plugins": ["expo-notifications"],
     "orientation": "portrait",

@@ -2304,6 +2304,20 @@ export type PlanControllerArchiveResponses = {
 export type PlanControllerArchiveResponse =
   PlanControllerArchiveResponses[keyof PlanControllerArchiveResponses];
 
+export type BlockchainOperationsControllerStatusData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/operations/blockchain/status';
+};
+
+export type BlockchainOperationsControllerStatusResponses = {
+  200: BlockchainHealthDto;
+};
+
+export type BlockchainOperationsControllerStatusResponse =
+  BlockchainOperationsControllerStatusResponses[keyof BlockchainOperationsControllerStatusResponses];
+
 export type BlockchainOperationsControllerReconcileData = {
   body?: never;
   path?: never;

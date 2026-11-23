@@ -57,6 +57,34 @@ describe('notification public contract', () => {
         .toEqual({ kind: 'ORDER', id: 'order-1' });
     }
   });
+
+  it('maps LICENSE_PROVIDER_ACCEPTED to LICENSE target and falls back to null id when licenseId is missing', () => {
+    expect(
+      mapNotification({
+        id: 'n-accepted',
+        title: 'Nhà cung cấp đã nhận bản quyền',
+        content: 'Bản quyền đang được xử lý.',
+        is_read: false,
+        created_at: new Date(),
+        read_at: null,
+        type: 'LICENSE_PROVIDER_ACCEPTED',
+        data: { licenseId: 'lic-handoff-1' },
+      }).target,
+    ).toEqual({ kind: 'LICENSE', id: 'lic-handoff-1' });
+
+    expect(
+      mapNotification({
+        id: 'n-accepted-missing',
+        title: 'Nhà cung cấp đã nhận bản quyền',
+        content: 'Bản quyền đang được xử lý.',
+        is_read: false,
+        created_at: new Date(),
+        read_at: null,
+        type: 'LICENSE_PROVIDER_ACCEPTED',
+        data: {},
+      }).target,
+    ).toEqual({ kind: 'LICENSE', id: null });
+  });
   it('maps a raw row to the camelCase DTO and never leaks snake_case columns', () => {
     const dto = mapNotification({
       id: 'n1',

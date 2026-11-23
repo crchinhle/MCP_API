@@ -14,32 +14,90 @@ import {
   StatusChip,
 } from '../components/WorkspacePrimitives';
 
+type SupportDraft = {
+  title: string;
+  description: string;
+  request: { body: string; id: string } | undefined;
+};
+
+function readSupportDraft(key: string): SupportDraft {
+  try {
+    const value = JSON.parse(sessionStorage.getItem(key) ?? 'null') as unknown;
+    if (
+      value &&
+      typeof value === 'object' &&
+      'title' in value &&
+      'description' in value &&
+      typeof value.title === 'string' &&
+      typeof value.description === 'string'
+    ) {
+      const request = 'request' in value ? value.request : null;
+      return {
+        title: value.title,
+        description: value.description,
+        request:
+          request &&
+          typeof request === 'object' &&
+          'body' in request &&
+          'id' in request &&
+          typeof request.body === 'string' &&
+          typeof request.id === 'string'
+            ? { body: request.body, id: request.id }
+            : undefined,
+      };
+    }
+  } catch {
+    /* An unavailable browser store does not prevent support. */
+  }
+  return { title: '', description: '', request: undefined };
+}
+
 export function BuyerAssistanceScreen() {
   const auth = useOptionalAuth();
-  const creationKey = `support-create:${auth?.user?.id}`;
-  const [restored] = useState(() => {
-    try {
-      const value = JSON.parse(sessionStorage.getItem(creationKey) ?? 'null') as unknown;
-      if (value && typeof value === 'object' && 'title' in value && 'description' in value &&
-          typeof value.title === 'string' && typeof value.description === 'string') {
-        const request = 'request' in value ? value.request : null;
-        return { title: value.title, description: value.description,
-          request: request && typeof request === 'object' && 'body' in request && 'id' in request &&
-            typeof request.body === 'string' && typeof request.id === 'string' ? { body: request.body, id: request.id } : undefined };
-      }
-    } catch { /* An unavailable browser store does not prevent support. */ }
-    return { title: '', description: '', request: undefined };
-  });
-  const [creating, setCreating] = useState(Boolean(restored.description));
+  const conversations = useConversations();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeContextType = (['ORDER', 'LICENSE', 'PRODUCT', 'PLAN'] as const).find((type) =>
+    searchParams.get(`${type.toLowerCase()}Id`),
+  );
+  const activeContextId = activeContextType
+    ? searchParams.get(`${activeContextType.toLowerCase()}Id`) ?? undefined
+    : undefined;
+  const draftContextType = activeContextType ?? 'GENERAL';
+  const draftContextId = activeContextType && activeContextId ? activeContextId : '';
+  const creationKey = `support-create:${auth?.user?.id ?? 'anonymous'}:${draftContextType}:${draftContextId}`;
+  const [restored] = useState(() => readSupportDraft(creationKey));
+  const [creating, setCreating] = useState(() =>
+    Boolean((activeContextType && activeContextId) || restored.description),
+  );
   const [title, setTitle] = useState(restored.title);
   const [description, setDescription] = useState(restored.description);
   const createIntent = useRef<{ body: string; id: string } | undefined>(restored.request);
+  const loadedKeyRef = useRef(creationKey);
   const createLock = useRef(false);
   useEffect(() => {
-    try { sessionStorage.setItem(creationKey, JSON.stringify({ title, description, request: createIntent.current })); } catch { /* Storage is optional. */ }
+    if (loadedKeyRef.current !== creationKey) {
+      loadedKeyRef.current = creationKey;
+      const nextDraft = readSupportDraft(creationKey);
+      setTitle(nextDraft.title);
+      setDescription(nextDraft.description);
+      createIntent.current = nextDraft.request;
+      if (activeContextType && activeContextId) {
+        setCreating(true);
+      }
+      return;
+    }
+    if (activeContextType && activeContextId) {
+      setCreating(true);
+    }
+  }, [creationKey, activeContextType, activeContextId]);
+  useEffect(() => {
+    if (loadedKeyRef.current !== creationKey) return;
+    try {
+      sessionStorage.setItem(creationKey, JSON.stringify({ title, description, request: createIntent.current }));
+    } catch {
+      /* Storage is optional. */
+    }
   }, [creationKey, title, description]);
-  const conversations = useConversations();
-  const [searchParams, setSearchParams] = useSearchParams();
   const selectedId = searchParams.get('conversationId') ?? searchParams.get('conversation');
   const setSelectedId = (id: string) => setSearchParams({ conversationId: id });
   const append = useAppendConversationMessage();
@@ -48,11 +106,21 @@ export function BuyerAssistanceScreen() {
   const requestSupport = useRequestSupport();
   const conversation = selectedId ? conversations.data?.find((item) => item.id === selectedId) : conversations.data?.[0];
   const messages = useConversationMessages(conversation?.id);
+  const clearContextParams = () => {
+    if (!activeContextType) return;
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        ['licenseId', 'orderId', 'productId', 'planId'].forEach((key) => next.delete(key));
+        return next;
+      },
+      { replace: true },
+    );
+  };
   const startConversation = async () => {
     if (createLock.current || !description.trim()) return;
-    const context = (['ORDER', 'LICENSE', 'PRODUCT', 'PLAN'] as const).find(type => searchParams.get(`${type.toLowerCase()}Id`));
-    const input = { mode: 'SUPPORT' as const, contextType: context ?? 'GENERAL' as const,
-      ...(context ? { contextId: searchParams.get(`${context.toLowerCase()}Id`)! } : {}),
+    const input = { mode: 'SUPPORT' as const, contextType: activeContextType ?? 'GENERAL' as const,
+      ...(activeContextType && activeContextId ? { contextId: activeContextId } : {}),
       title: title.trim() || 'Yêu cầu hỗ trợ', initialMessage: description.trim() };
     const body = JSON.stringify(input);
     if (createIntent.current?.body !== body) createIntent.current = { body, id: crypto.randomUUID() };
@@ -60,12 +128,20 @@ export function BuyerAssistanceScreen() {
     createLock.current = true;
     try {
       const created = await create.mutateAsync({ ...input, clientRequestId: createIntent.current.id });
+      try { sessionStorage.removeItem(creationKey); } catch { /* Storage is optional. */ }
       setSelectedId(created.id); askAi.reset(); setCreating(false); setTitle(''); setDescription(''); createIntent.current = undefined;
     } catch { /* The form and intent remain available for retry. */ }
     finally { createLock.current = false; }
   };
-  const createForm = <Modal title="Tạo yêu cầu hỗ trợ" open={creating} onCancel={() => { if (!create.isPending) setCreating(false); }} footer={null}>
+  const createForm = <Modal title="Tạo yêu cầu hỗ trợ" open={creating} onCancel={() => { if (!create.isPending) { setCreating(false); clearContextParams(); } }} footer={null}>
     <form className="support-request-form" onSubmit={event => { event.preventDefault(); void startConversation(); }}>
+      {activeContextType && activeContextId ? (
+        <Alert
+          type="info"
+          showIcon
+          title={`Yêu cầu gắn với ${conversationContextLabels[activeContextType].toLocaleLowerCase('vi')} (${activeContextId})`}
+        />
+      ) : null}
       <label>Chủ đề<Input aria-label="Chủ đề hỗ trợ" value={title} maxLength={255} disabled={create.isPending} onChange={event => setTitle(event.target.value)} /></label>
       <label>Mô tả vấn đề<Input.TextArea aria-label="Mô tả vấn đề" value={description} maxLength={8000} rows={4} required disabled={create.isPending} onChange={event => setDescription(event.target.value)} /></label>
       {create.isError ? <Alert type="error" title="Không thể tạo hội thoại. Vui lòng thử lại." /> : null}

@@ -135,4 +135,40 @@ describe('BlockchainReconciliationService', () => {
     });
     expect(setup.pool.connect).not.toHaveBeenCalled();
   });
+
+  it('reads blockchain health status for SYSTEM_ADMIN without executing reconciliation, indexer, or projection writes', async () => {
+    const setup = fixture();
+    await expect(
+      setup.service.getStatus({
+        role: 'SYSTEM_ADMIN',
+        sessionVersion: 1,
+        sub: '00000000-0000-4000-8000-000000000001',
+      }),
+    ).resolves.toEqual({
+      active_without_finality: 0,
+      pending_events: 0,
+      reorged_events: 1,
+      unknown_commands: 0,
+    });
+
+    expect(setup.commands.reconcileUnknown).not.toHaveBeenCalled();
+    expect(setup.commands.reconcileReceipt).not.toHaveBeenCalled();
+    expect(setup.indexer.poll).not.toHaveBeenCalled();
+    expect(setup.projections.reconcileCanonicalProjections).not.toHaveBeenCalled();
+    expect(setup.projections.deriveExpiredFromCanonicalChain).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-SYSTEM_ADMIN roles on getStatus', async () => {
+    const setup = fixture();
+    for (const role of ['CUSTOMER', 'PROVIDER_ADMIN', 'SUPPORT_STAFF'] as const) {
+      await expect(
+        setup.service.getStatus({
+          role,
+          sessionVersion: 1,
+          sub: '00000000-0000-4000-8000-000000000002',
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    }
+    expect(setup.pool.query).not.toHaveBeenCalled();
+  });
 });

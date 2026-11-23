@@ -19,6 +19,13 @@ export class BlockchainReconciliationService {
     >,
   ) {}
 
+  async getStatus(actor: AuthPrincipal) {
+    if (actor.role !== 'SYSTEM_ADMIN') {
+      throw new ForbiddenException();
+    }
+    return this.readHealth();
+  }
+
   async run(actor: AuthPrincipal) {
     if (actor.role !== 'SYSTEM_ADMIN' && actor.role !== 'SUPPORT_STAFF') {
       throw new ForbiddenException();
@@ -77,6 +84,25 @@ export class BlockchainReconciliationService {
     const projection = await this.projections.reconcileCanonicalProjections();
     const canonicalTime = await this.indexer.canonicalTime();
     const expiredLicenseIds = await this.projections.deriveExpiredFromCanonicalChain(canonicalTime);
+    const health = await this.readHealth();
+    const processed =
+      reconciledCommandIds.length > 0 ||
+      indexedEvents > 0 ||
+      projection.commandRepairs > 0 ||
+      projection.licenseRepairs > 0 ||
+      expiredLicenseIds.length > 0;
+    return {
+      health,
+      indexedEvents,
+      canonicalTime: canonicalTime.toISOString(),
+      expiredLicenseIds,
+      processed,
+      projection,
+      reconciledCommandIds,
+    };
+  }
+
+  private async readHealth() {
     const health = await this.pool.query<{
       active_without_finality: number;
       pending_events: number;
@@ -92,20 +118,6 @@ export class BlockchainReconciliationService {
           ON e.id=l.last_applied_chain_event_id AND e.finality_status='CONFIRMED'
       WHERE l.status IN ('ACTIVE','SUSPENDED','REVOKED') AND e.id IS NULL) AS active_without_finality`,
     );
-    const processed =
-      reconciledCommandIds.length > 0 ||
-      indexedEvents > 0 ||
-      projection.commandRepairs > 0 ||
-      projection.licenseRepairs > 0 ||
-      expiredLicenseIds.length > 0;
-    return {
-      health: health.rows[0],
-      indexedEvents,
-      canonicalTime: canonicalTime.toISOString(),
-      expiredLicenseIds,
-      processed,
-      projection,
-      reconciledCommandIds,
-    };
+    return health.rows[0];
   }
 }

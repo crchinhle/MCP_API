@@ -47,6 +47,7 @@ const KNOWN_TARGET_TYPES: Record<string, (data: Record<string, unknown>) => Noti
   KEY_ROTATED:(data)=>({kind:'LICENSE',id:typeof data.licenseId==='string'?data.licenseId:null}),
   SUPPORT_REPLY:(data)=>({kind:'CONVERSATION',id:typeof data.conversationId==='string'?data.conversationId:null}),
   LICENSE_CONFIRMED: (data) => ({ kind: 'LICENSE', id: typeof data.licenseId === 'string' ? data.licenseId : null }),
+  LICENSE_PROVIDER_ACCEPTED: (data) => ({ kind: 'LICENSE', id: typeof data.licenseId === 'string' ? data.licenseId : null }),
   LICENSE_SUSPENDED: (data) => ({ kind: 'LICENSE', id: typeof data.licenseId === 'string' ? data.licenseId : null }),
   LICENSE_REVOKED: (data) => ({ kind: 'LICENSE', id: typeof data.licenseId === 'string' ? data.licenseId : null }),
   LICENSE_RENEWED: (data) => ({ kind: 'LICENSE', id: typeof data.licenseId === 'string' ? data.licenseId : null }),

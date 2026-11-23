@@ -1,4 +1,4 @@
-import { Controller, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Body, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 
 import { Roles } from '../../identity-access/security.decorators.js';
@@ -9,7 +9,7 @@ import {
 } from '../../identity-access/security.guards.js';
 import type { AuthPrincipal } from '../../identity-access/identity.types.js';
 import { BlockchainReconciliationService } from '../application/blockchain-reconciliation.service.js';
-import { BlockchainReconciliationDto, DeadLetterRecoveryDto } from './blockchain-reconciliation.dto.js';
+import { BlockchainHealthDto, BlockchainReconciliationDto, DeadLetterRecoveryDto } from './blockchain-reconciliation.dto.js';
 import { Phase6CommandDto } from '../../licensing/licensing.dto.js';
 
 @ApiTags('operations')
@@ -21,6 +21,12 @@ export class BlockchainOperationsController {
   constructor(
     private readonly reconciliation: BlockchainReconciliationService,
   ) {}
+
+  @Get('status')
+  @ApiOkResponse({ type: BlockchainHealthDto })
+  status(@CurrentUser() actor: AuthPrincipal) {
+    return this.reconciliation.getStatus(actor);
+  }
 
   @Post('reconcile')
   @HttpCode(HttpStatus.OK)

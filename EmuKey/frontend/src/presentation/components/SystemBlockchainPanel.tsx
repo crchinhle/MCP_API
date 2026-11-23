@@ -1,10 +1,11 @@
 import { Alert, Button, Input, Modal, Select } from 'antd';
 import { useState } from 'react';
-import { useAssistanceHealth, useBlockchainReconciliation, useDeadLetterRecovery } from '../../application/operations/operationsQueries';
+import { useAssistanceHealth, useBlockchainReconciliation, useBlockchainStatus, useDeadLetterRecovery } from '../../application/operations/operationsQueries';
 import type { DeadLetterRecoveryDto } from '../../infrastructure/api/generated';
 import { FactList, PageHeader } from './WorkspacePrimitives';
 
 export function SystemBlockchainPanel() {
+  const blockchainStatus = useBlockchainStatus();
   const reconciliation = useBlockchainReconciliation();
   const [confirming, setConfirming] = useState(false);
   const result = reconciliation.data;
@@ -38,6 +39,32 @@ export function SystemBlockchainPanel() {
         { label: 'Worker nhắc hết hạn', value: health.data.workers?.expiry ?? 'UNKNOWN' },
       ]} />}
       <p>UP: có heartbeat trong hạn. DOWN: chưa nhận heartbeat hoặc worker đã dừng. UNKNOWN: chưa kiểm tra được Redis. Các trạng thái này không chứng minh dịch vụ bên ngoài đã gửi thành công.</p>
+    </section>
+    <section className="workspace-card system-section" aria-label="Tình trạng blockchain">
+      <div className="section-heading">
+        <h2>Tình trạng blockchain</h2>
+        <Button loading={blockchainStatus.isFetching} onClick={() => void blockchainStatus.refetch()}>
+          Làm mới
+        </Button>
+      </div>
+      {blockchainStatus.isPending ? (
+        <p role="status">Đang tải tình trạng blockchain…</p>
+      ) : blockchainStatus.isError ? (
+        <Alert
+          type="error"
+          title="Không thể tải tình trạng blockchain"
+          action={<Button onClick={() => void blockchainStatus.refetch()}>Thử lại</Button>}
+        />
+      ) : (
+        <FactList
+          facts={[
+            { label: 'Yêu cầu chưa rõ kết quả', value: blockchainStatus.data.unknown_commands },
+            { label: 'Sự kiện chờ xác nhận quá 5 phút', value: blockchainStatus.data.pending_events },
+            { label: 'Sự kiện bị thay đổi do tổ chức lại chuỗi', value: blockchainStatus.data.reorged_events },
+            { label: 'Bản quyền thiếu sự kiện xác nhận', value: blockchainStatus.data.active_without_finality },
+          ]}
+        />
+      )}
     </section>
     <section className="workspace-card system-section" aria-label="Chạy đối soát blockchain">
       <div className="section-heading"><h2>Kiểm tra và đồng bộ</h2><Button type="primary" loading={reconciliation.isPending} onClick={() => setConfirming(true)}>Chạy đối soát</Button></div>

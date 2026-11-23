@@ -3,7 +3,7 @@ import { LoadingOverlay } from '../components/WorkspacePrimitives';
 import { CopyableId, PageLoading, StatusChip, useDebouncedValue } from '../components/WorkspacePrimitives';
 import { Alert, Button, Empty, Input, Modal, Table } from 'antd';
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import { licenseStatusLabel as statusLabel, activationKeyErrorLabel, providerHandoffStatus, providerLicenseReady, useLicenseDevices, useLicenses, useRetrieveActivationKey, useResolveLicensingAction, useAcknowledgeActivationKey } from '../../application/licenses/licenseQueries';
 
@@ -44,6 +44,7 @@ function dateLabel(value: string) {
 }
 
 export function BuyerLicenseHubScreen() {
+  const navigate = useNavigate();
   const licenses = useLicenses();
   const retrieve = useRetrieveActivationKey();
   const acknowledge = useAcknowledgeActivationKey();
@@ -198,6 +199,20 @@ export function BuyerLicenseHubScreen() {
             {acknowledge.isError ? <Alert type="error" title="Chưa thể xác nhận đã lưu mã. Hãy thử lại." /> : null}
           </div> : selected ? <section aria-label="Chi tiết bản quyền" className="buyer-license-modal-content">
             <ProviderHandoffNotice license={selected}/>
+            {providerManaged ? (
+              <div className="workspace-actions">
+                <Button
+                  onClick={() => {
+                    const targetId = selected.id;
+                    setSelectedId('');
+                    setKeyDialogId(undefined);
+                    void navigate(`/buyer/support?licenseId=${encodeURIComponent(targetId)}`);
+                  }}
+                >
+                  Cần hỗ trợ bản quyền này
+                </Button>
+              </div>
+            ) : null}
             <header className="buyer-license-detail-header"><div><h2>{selected.productName} · {selected.plan.name}</h2><p>Mã tra cứu: {selected.publicLicenseId} · Hết hạn {dateLabel(selected.expiresAt)}</p></div><span className={`buyer-license-status buyer-license-status--${selected.status.toLowerCase()}`}>{statusLabel(selected.status)}</span></header>
             {devices.isError ? <Alert type="error" title="Không thể tải thiết bị" action={<Button onClick={() => void devices.refetch()}>Thử lại</Button>} /> : null}
                {retrieve.isError ? <Alert type="error" message={activationKeyErrorLabel(retrieve.error)} action={<Button disabled={licenses.isFetching} onClick={() => void licenses.refetch()}>Thử lại</Button>} /> : null}

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef } from 'react';
-import { requestJson, useAuth } from '../auth/authContext';
+import { requestJson, useAuth, useOptionalAuth } from '../auth/authContext';
 import {
   clearOrderIdempotencyKey,
   createOrderIdempotencyKey,
@@ -58,9 +58,11 @@ export function useOrders() {
 }
 
 export function usePaymentHistory(enabled = true, poll = false) {
+  const auth = useOptionalAuth();
+  const userScope = auth?.user?.id ?? (auth ? 'anonymous' : 'default');
   return useQuery({
-    enabled,
-    queryKey: ['payments', 'history'],
+    enabled: enabled && (!auth || Boolean(auth.user?.id)),
+    queryKey: ['payments', 'history', userScope],
     queryFn: () => requestJson<PaymentHistoryDto[]>('/payments/history'),
     refetchInterval: poll ? 2_000 : false,
   });

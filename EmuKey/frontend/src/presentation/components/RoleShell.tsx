@@ -36,8 +36,9 @@ export const supportShell: RoleShellConfig = {
   items: [
     { label: 'Hàng đợi', to: '/support', end: true },
     { label: 'Đang xử lý', to: '/support?view=active' },
-     { label: 'Đã giải quyết', to: '/support?view=resolved' },
-     { label: 'Hồ sơ', to: '/support/profile' },
+    { label: 'Đã giải quyết', to: '/support?view=resolved' },
+    { label: 'Lịch sử thanh toán', to: '/support/payments' },
+    { label: 'Hồ sơ', to: '/support/profile' },
   ],
 };
 
@@ -144,6 +145,9 @@ export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
         </button>
         <div className="role-desktop-nav">{navigation}</div>
         {auth?.user && isSystem ? <div className="role-account-footer">
+          <div className="role-account-row">
+            <NotificationCenter />
+          </div>
           <Dropdown placement="topLeft" trigger={['click']} autoFocus open={accountMenuOpen} onOpenChange={setAccountMenuOpen} menu={{ 'aria-label': 'Tài khoản quản trị', items: [
             { key: 'email', label: auth.user.email, disabled: true },
             { type: 'divider' },
@@ -162,6 +166,9 @@ export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
             </button>
           </Dropdown>
         </div> : auth?.user && config.role === 'PROVIDER_ADMIN' ? <div className="role-account-footer">
+          <div className="role-account-row">
+            <NotificationCenter />
+          </div>
           <Dropdown placement="topLeft" trigger={['click']} autoFocus menu={{ items: [
             { key: 'email', label: auth.user.email, disabled: true },
             { type: 'divider' },
@@ -198,7 +205,7 @@ export function RoleShell({ config }: { readonly config: RoleShellConfig }) {
           <div ref={mobileMenuRef} className="mobile-menu-panel role-mobile-menu" id="role-mobile-menu" role="dialog" aria-modal="true" aria-label="Menu điều hướng">
             <Button onClick={() => { setMenuOpen(false); menuButtonRef.current?.focus(); }}>Đóng menu</Button>
             {navigation}
-            {auth?.user ? <div className="mobile-menu-actions">{!isSystem && config.role !== 'PROVIDER_ADMIN' ? <NotificationCenter /> : null}<Button onClick={() => { setMenuOpen(false); void navigate(roleSettingsPath(auth.user!.role)); }}>Hồ sơ tài khoản</Button><Button onClick={() => { setMenuOpen(false); void auth.logout(); }}>Đăng xuất</Button></div> : null}
+            {auth?.user ? <div className="mobile-menu-actions"><NotificationCenter /><Button onClick={() => { setMenuOpen(false); void navigate(roleSettingsPath(auth.user!.role)); }}>Hồ sơ tài khoản</Button><Button onClick={() => { setMenuOpen(false); void auth.logout(); }}>Đăng xuất</Button></div> : null}
           </div>
         </>
       ) : null}

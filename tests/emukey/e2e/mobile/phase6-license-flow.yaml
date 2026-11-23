@@ -11,10 +11,12 @@ env:
 - tapOn: Mật khẩu
 - inputText: ${CUSTOMER_PASSWORD}
 - tapOn: Đăng nhập
-- tapOn: License
-- assertVisible: License của tôi
-- assertVisible: ".*ACTIVE.*"
-- tapOn: Xem thiết bị
+- tapOn: Tài khoản
+- tapOn: Bản quyền của tôi
+- assertVisible: Bản quyền của tôi
+- assertVisible: ".*Đang hoạt động.*|.*ACTIVE.*"
+- tapOn: ".*EMU-.*"
+- tapOn: ".*Quản lý thiết bị.*"
 - extendedWaitUntil:
-    visible: ".*ACTIVE.*"
+    visible: ".*Đang hoạt động.*|.*ACTIVE.*"
     timeout: 30000

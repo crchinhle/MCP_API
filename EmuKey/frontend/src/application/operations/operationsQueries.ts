@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { requestJson } from '../auth/authContext';
-import type { DeadLetterRecoveryDto, OperationsHealthDto, Phase6CommandDto } from '../../infrastructure/api/generated';
+import type { BlockchainHealthDto, DeadLetterRecoveryDto, OperationsHealthDto, Phase6CommandDto } from '../../infrastructure/api/generated';
 import type {ProviderIntegrationViewDto,ProviderDeliveryViewDto,SaveProviderIntegrationDto} from '../../infrastructure/api/generated';
 
 export function useProviderIntegration() {
@@ -59,6 +59,15 @@ export interface BlockchainReconciliation {
   readonly processed: boolean;
   readonly projection: { readonly commandRepairs: number; readonly licenseRepairs: number; readonly remainingMismatches: number };
   readonly reconciledCommandIds: readonly string[];
+}
+
+export function useBlockchainStatus(enabled = true) {
+  return useQuery({
+    enabled,
+    queryKey: ['operations', 'blockchain-status'],
+    queryFn: () => requestJson<BlockchainHealthDto>('/operations/blockchain/status'),
+    retry: false,
+  });
 }
 
 export function useBlockchainReconciliation() {

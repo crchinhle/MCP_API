@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import { roleHomePath, roleSettingsPath } from '../../domain/workspace';
 import { useOptionalAuth } from '../../application/auth/authContext';
 import { computeInitials, UserAvatar } from './Avatar';
+import { Brand } from './Brand';
 import { NotificationCenter } from './NotificationCenter';
 
 const roleLabels: Record<string, string> = {
@@ -104,9 +105,7 @@ export function SiteHeader({ skipTargetId = 'main-content' }: { readonly skipTar
   return (
     <header className="site-header public-header">
       <a className="skip-link" href={`#${skipTargetId}`}>Bỏ qua đến nội dung chính</a>
-      <Link aria-label="Về trang chủ EmuKey" className="brand-wordmark brand-wordmark--header" to="/">
-        EmuKey
-      </Link>
+      <Brand />
 
       <div className="site-header-right">
         <nav aria-label="Điều hướng chính" className="public-nav">

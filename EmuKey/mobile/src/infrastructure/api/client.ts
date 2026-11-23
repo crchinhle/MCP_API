@@ -4,12 +4,16 @@ import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex } from '@noble/hashes/utils';
 import type {
   AiAnswerDto,
+  CatalogSourceDto,
+  ChangePasswordDto,
   KnowledgeChunkDto,
   CitationDetailDto,
   ActivationChallengeDto,
   ActivationKeyDto,
+  CreateConversationDto,
   DeviceChallengeDto,
   CheckoutSessionDto,
+  PaymentHistoryDto,
   PaymentRetryDecisionDto,
   ComparePlansResponseDto,
   CreateOrderDto,
@@ -18,7 +22,12 @@ import type {
   Phase6CommandStatusDto,
   LicenseDeviceDto,
   ProfileDto,
+  PublicAiAnswerDto,
+  PublicAiAskDto,
   PublicCatalogProductDto,
+  PublicKnowledgeDetailDto,
+  PublicKnowledgeListResponseDto,
+  RegisterDto,
   RevokeDeviceDto,
   RotateActivationKeyDto,
   LicenseProjectionDto,
@@ -63,6 +72,7 @@ export interface MobileUser {
   displayName: string;
   role: string;
   status: string;
+  customerType?: 'BUSINESS' | 'INDIVIDUAL' | 'STUDENT' | null;
   phone?: string | null;
   address?: string | null;
   organizationName?: string | null;
@@ -75,6 +85,8 @@ export interface MobileSession {
 
 export interface MobileConversation {
   id: string;
+  claimVersion?: number;
+  claimExpiresAt?: string | null;
   customerUserId: string;
   assignedSupportUserId: string | null;
   status: 'AI_ACTIVE' | 'WAITING_SUPPORT' | 'SUPPORT_ACTIVE' | 'CLOSED';
@@ -84,7 +96,12 @@ export interface MobileConversation {
 }
 
 export interface MobileConversationMessage {
-  citationDetails?:CitationDetailDto[];
+  createdAt?: string;
+  intent?: string;
+  outcome?: string;
+  catalogSources?: CatalogSourceDto[];
+  recommendations?: CatalogSourceDto[];
+  citationDetails?: CitationDetailDto[];
   id: string;
   conversationId: string;
   clientMessageId: string;
@@ -154,7 +171,12 @@ export function subscribeSession(listener: (session: MobileSession | null) => vo
 }
 
 export class MobileApiError extends Error {
-  constructor(readonly status: number, message = 'Yêu cầu API thất bại.') {
+  constructor(
+    readonly status: number,
+    message = 'Yêu cầu API thất bại.',
+    readonly code?: string,
+    readonly retryAfterSeconds?: number,
+  ) {
     super(message);
     this.name = 'MobileApiError';
   }
@@ -247,22 +269,68 @@ async function request(path: string, init: RequestInit = {}, authenticated = tru
 async function json<T>(response: Response): Promise<T> {
   if (!response.ok) {
     let message: string | undefined;
+    let code: string | undefined;
     try {
       const body = (await response.json()) as {
-        error?: { message?: string };
+        error?: { code?: string; message?: string };
+        code?: string;
         message?: string;
       };
       message = body.error?.message ?? body.message;
+      code = body.error?.code ?? body.code;
     } catch {
       // The presentation layer provides a status-based fallback.
     }
-    throw new MobileApiError(response.status, message);
+    const retryAfterRaw = response.headers?.get?.('retry-after');
+    const retryAfterNum = retryAfterRaw ? Number(retryAfterRaw) : NaN;
+    const retryAfterSeconds = Number.isFinite(retryAfterNum) && retryAfterNum > 0 ? retryAfterNum : undefined;
+    throw new MobileApiError(response.status, message, code, retryAfterSeconds);
   }
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
+}
+
+export async function register(input: RegisterDto): Promise<void> {
+  await json<unknown>(
+    await request(
+      '/auth/register',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          ...input,
+          email: input.email.trim(),
+          displayName: input.displayName.trim(),
+        }),
+      },
+      false,
+    ),
+  );
+}
+
+export async function verifyEmail(token: string): Promise<void> {
+  await json<void>(
+    await request('/auth/verify-email', { method: 'POST', body: JSON.stringify({ token: token.trim() }) }, false),
+  );
+}
+
+export async function resendVerification(email: string): Promise<{ accepted: boolean }> {
+  return json(
+    await request('/auth/resend-verification', { method: 'POST', body: JSON.stringify({ email: email.trim() }) }, false),
+  );
 }
 
 export async function forgotPassword(email: string): Promise<void> {
   await json<void>(await request('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email: email.trim() }) }, false));
+}
+
+export async function resetPassword(token: string, password: string): Promise<void> {
+  await json<void>(
+    await request('/auth/reset-password', { method: 'POST', body: JSON.stringify({ token: token.trim(), password }) }, false),
+  );
+}
+
+export async function changePassword(input: ChangePasswordDto): Promise<{ changed: boolean }> {
+  return json(await request('/auth/password', { method: 'PUT', body: JSON.stringify(input) }));
 }
 
 export async function login(email: string, password: string): Promise<MobileSession> {
@@ -398,6 +466,16 @@ export async function createCheckout(id: string): Promise<MobileCheckoutSession>
   );
 }
 
+export async function cancelOrder(id: string): Promise<MobileOrderDetail> {
+  return json(
+    await request(`/orders/${encodeURIComponent(id)}/cancel`, { method: 'POST' }),
+  );
+}
+
+export async function listPaymentHistory(): Promise<PaymentHistoryDto[]> {
+  return json(await request('/payments/history'));
+}
+
 export async function listLicenses(): Promise<MobileLicense[]> {
   return json(await request('/licenses'));
 }
@@ -523,6 +601,10 @@ export async function listConversations(): Promise<MobileConversation[]> {
   return json(await request('/conversations'));
 }
 
+export async function getConversation(conversationId: string): Promise<MobileConversation> {
+  return json(await request(`/conversations/${encodeURIComponent(conversationId)}`));
+}
+
 export async function listConversationMessages(conversationId: string): Promise<MobileConversationMessage[]> {
   return json(await request(`/conversations/${encodeURIComponent(conversationId)}/messages`));
 }
@@ -535,11 +617,24 @@ export async function closeConversation(conversationId: string): Promise<MobileC
   );
 }
 
-export async function createConversation(title = 'Hội thoại hỗ trợ', orderId?: string): Promise<MobileConversation> {
-  return json(await request('/conversations', {
-    method: 'POST',
-    body: JSON.stringify({ contextType: orderId ? 'ORDER' : 'GENERAL', ...(orderId ? { contextId: orderId } : {}), title }),
-  }));
+export async function createConversation(
+  titleOrInput: string | CreateConversationDto = 'Hội thoại hỗ trợ',
+  orderId?: string,
+): Promise<MobileConversation> {
+  const payload: CreateConversationDto =
+    typeof titleOrInput === 'string'
+      ? {
+          contextType: orderId ? 'ORDER' : 'GENERAL',
+          ...(orderId ? { contextId: orderId } : {}),
+          title: titleOrInput,
+        }
+      : titleOrInput;
+  return json(
+    await request('/conversations', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  );
 }
 
 export async function appendConversationMessage(conversationId: string, clientMessageId: string, content: string): Promise<{ serverSequence: number; content: string }> {
@@ -548,6 +643,42 @@ export async function appendConversationMessage(conversationId: string, clientMe
 
 export async function askConversationAi(conversationId: string, question: string, clientMessageId?: string): Promise<AiAnswerDto> {
   return json(await request(`/conversations/${encodeURIComponent(conversationId)}/ai-ask`, { method: 'POST', body: JSON.stringify({ question, ...(clientMessageId ? { clientMessageId } : {}) }) }));
+}
+
+export async function requestConversationSupport(conversationId: string, reason: string): Promise<MobileConversation> {
+  return json(
+    await request(`/conversations/${encodeURIComponent(conversationId)}/request-support`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+  );
+}
+
+export async function askPublicAi(input: PublicAiAskDto): Promise<PublicAiAnswerDto> {
+  return json(
+    await request('/public/assistant/ask', { method: 'POST', body: JSON.stringify(input) }, false),
+  );
+}
+
+export async function listPublicKnowledgeDocuments(params: {
+  search?: string;
+  tag?: string;
+  productId?: string;
+  page?: number;
+  limit?: number;
+} = {}): Promise<PublicKnowledgeListResponseDto> {
+  const searchParams = new URLSearchParams();
+  if (params.search?.trim()) searchParams.set('search', params.search.trim());
+  if (params.tag?.trim() && params.tag.trim() !== 'Tất cả') searchParams.set('tag', params.tag.trim());
+  if (params.productId) searchParams.set('productId', params.productId);
+  if (params.page) searchParams.set('page', String(params.page));
+  if (params.limit) searchParams.set('limit', String(params.limit));
+  const qs = searchParams.toString();
+  return json(await request(`/knowledge/public/documents${qs ? `?${qs}` : ''}`, {}, false));
+}
+
+export async function getPublicKnowledgeDocument(id: string): Promise<PublicKnowledgeDetailDto> {
+  return json(await request(`/knowledge/public/documents/${encodeURIComponent(id)}`, {}, false));
 }
 
 export async function listNotifications(cursor?: string, limit = 20): Promise<MobileNotificationPage | MobileNotification[]> {

@@ -126,7 +126,7 @@ describe('W17-W18 Internal consoles', () => {
   it('offers the system account actions in one accessible menu', async () => {
     render(<App initialEntries={['/system/console']} />);
     expect(screen.queryByRole('link', { name: 'Hồ sơ', exact: true })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Thông báo', exact: true })).toBeNull();
+    expect(await screen.findByRole('button', { name: 'Thông báo', exact: true })).toBeTruthy();
     fireEvent.click(await screen.findByRole('button', { name: /Mở menu tài khoản.*Test User/ }));
     expect(await screen.findByRole('menuitem', { name: /Hồ sơ tài khoản/ })).toBeTruthy();
     fireEvent.click(screen.getByRole('menuitem', { name: /Đổi mật khẩu/ }));

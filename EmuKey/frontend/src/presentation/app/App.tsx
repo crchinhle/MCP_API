@@ -18,6 +18,7 @@ import { BuyerHomeScreen } from '../screens/BuyerHomeScreen';
 import { BuyerAssistanceScreen } from '../screens/BuyerAssistanceScreen';
 import { BuyerLicenseHubScreen } from '../screens/BuyerLicenseHubScreen';
 import { BuyerOrdersScreen } from '../screens/BuyerOrdersScreen';
+import { BuyerPaymentHistoryScreen } from '../screens/BuyerPaymentHistoryScreen';
 import { BuyerRenewalScreen } from '../screens/BuyerRenewalScreen';
 import { CatalogScreen } from '../screens/CatalogScreen';
 import { PublicHomeScreen } from '../screens/PublicHomeScreen';
@@ -31,6 +32,7 @@ import { ProviderLicensesScreen } from '../screens/ProviderLicensesScreen';
 import { ProviderDashboardScreen } from '../screens/ProviderDashboardScreen';
 import { ProviderOperationsScreen } from '../screens/ProviderOperationsScreen';
 import { SupportConsoleScreen } from '../screens/SupportConsoleScreen';
+import { SupportPaymentsScreen } from '../screens/SupportPaymentsScreen';
 import { SystemConsoleScreen } from '../screens/SystemConsoleScreen';
 import { PublicHelpScreen } from '../screens/PublicHelpScreen';
 import { PublicHelpDetailScreen } from '../screens/PublicHelpDetailScreen';
@@ -131,6 +133,7 @@ function AppRoutes() {
         <Route element={<ProductDetailScreen authenticated />} path="products/:slug" />
         <Route element={<BuyerCheckoutScreen />} path="checkout" />
         <Route element={<PaymentStatusScreen />} path="orders/:id/payment" />
+        <Route element={<BuyerPaymentHistoryScreen />} path="orders/history" />
         <Route element={<BuyerOrdersScreen />} path="orders" />
         <Route element={<BuyerLicenseHubScreen />} path="licenses" />
         <Route element={<BuyerRenewalScreen />} path="licenses/:licenseId/renew" />
@@ -147,6 +150,7 @@ function AppRoutes() {
       </Route>
       <Route element={<ProtectedRoute roles={['SUPPORT_STAFF']}><RoleShell config={supportShell} /></ProtectedRoute>} path="/support">
         <Route index element={<SupportConsoleScreen />} />
+        <Route element={<SupportPaymentsScreen />} path="payments" />
         <Route element={<AccountProfileScreen />} path="profile" />
       </Route>
       <Route

@@ -37,13 +37,13 @@ describe('Provider license management', () => {
     }
   });
 
-  it('does not show a notification bell in Provider desktop or mobile navigation', async () => {
+  it('shows a notification bell in Provider desktop and mobile navigation', async () => {
     render(<App initialEntries={['/provider/licenses']} />);
     await screen.findByRole('button', { name: 'SecureDesk Pro', exact: true });
-    expect(screen.queryByRole('button', { name: 'Thông báo', exact: true })).toBeNull();
+    expect(screen.getAllByRole('button', { name: 'Thông báo', exact: true })).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Mở menu vai trò' }));
     const menu = await screen.findByRole('dialog');
-    expect(within(menu).queryByRole('button', { name: 'Thông báo', exact: true })).toBeNull();
+    expect(within(menu).getByRole('button', { name: 'Thông báo', exact: true })).toBeTruthy();
   });
 
   it.each([

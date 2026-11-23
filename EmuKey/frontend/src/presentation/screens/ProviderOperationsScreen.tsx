@@ -1,90 +1,60 @@
-import { paginationTextControls } from '../theme';
-import { Alert, Button, DatePicker, Descriptions, Drawer, Empty, Input, Select, Table, Tabs } from 'antd';
+import { Button, Tabs } from 'antd';
 import { ProviderIntegrationPanel } from '../components/ProviderIntegrationPanel';
 import { ProviderDeliveryPanel } from '../components/ProviderDeliveryPanel';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import { paymentNeedsReview, usePaymentHistory } from '../../application/orders/orderQueries';
-import type { PaymentHistoryDto } from '../../infrastructure/api/generated';
-import { paymentClassificationLabels, paymentClassificationTone, PageLoading, PageHeader, StatusChip } from '../components/WorkspacePrimitives';
+import { PageHeader } from '../components/WorkspacePrimitives';
 import { useAuth } from '../../application/auth/authContext';
 import { PaymentReviewPanel } from '../components/PaymentReviewPanel';
+import { PaymentHistorySection } from '../components/PaymentHistorySection';
 
 export { paymentClassificationLabels, paymentClassificationTone } from '../components/WorkspacePrimitives';
 
-function formatPaymentTime(value: string) {
-  return Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString('vi-VN') : 'Chưa xác định';
-}
-
-const reviewStatusLabels: Record<string, string> = { OPEN: 'Chờ kiểm tra', RESOLVED: 'Đã giải quyết', CLOSED_NO_ACTION: 'Đã đóng, không cần xử lý' };
-
 export function ProviderOperationsScreen() {
   const isSystem = useAuth().user?.role === 'SYSTEM_ADMIN';
-  const [showDeliveries,setShowDeliveries]=useState(false);
-  const payments = usePaymentHistory();
-  const [query, setQuery] = useState('');
+  const [showDeliveries, setShowDeliveries] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
-  const operationsTab=searchParams.get('tab')==='integration'?'integration':'payments';
-  const setOperationsTab=(value:string)=>setSearchParams((current)=>{const next=new URLSearchParams(current);if(value==='integration')next.set('tab','integration');else next.delete('tab');return next;});
-  const requestedClassification = searchParams.get('classification') ?? '';
-  const classification = requestedClassification === 'exceptions' || Object.hasOwn(paymentClassificationLabels, requestedClassification) ? requestedClassification : '';
-  const setClassification = (value: string) => setSearchParams((previous) => {
-    const next = new URLSearchParams(previous);
-    if (value) next.set('classification', value);
-    else next.delete('classification');
-    return next;
-  }, { replace: true });
-  const [selected, setSelected] = useState<PaymentHistoryDto | null>(null);
-  const [range, setRange] = useState<[number, number] | null>(null);
-  const normalized = query.trim().toLocaleLowerCase('vi');
-  const visiblePayments = useMemo(
-    () => (payments.data ?? []).filter((payment) =>
-      (!classification || (classification === 'exceptions' ? paymentNeedsReview(payment) : payment.classification === classification)) &&
-      (!range || (new Date(payment.providerOccurredAt).getTime() >= range[0] && new Date(payment.providerOccurredAt).getTime() <= range[1])) &&
-      `${payment.orderNumber ?? ''} ${payment.productNameSnapshot ?? ''} ${payment.planNameSnapshot ?? ''} ${payment.providerTransactionReference ?? ''} ${payment.providerEventId} ${payment.transactionId} ${payment.classification} ${payment.reviewStatus ?? ''}`
-        .toLocaleLowerCase('vi')
-        .includes(normalized)),
-    [normalized, payments.data, classification, range],
-  );
-  if (payments.isLoading && !isSystem) return <PageLoading />;
+  const operationsTab = searchParams.get('tab') === 'integration' ? 'integration' : 'payments';
+  const setOperationsTab = (value: string) =>
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (value === 'integration') next.set('tab', 'integration');
+      else next.delete('tab');
+      return next;
+    });
 
   return (
     <>
       <PageHeader title="Thanh toán & đối soát" />
-      {!isSystem?<Tabs activeKey={operationsTab} onChange={setOperationsTab} items={[{key:'payments',label:'Thanh toán'},{key:'integration',label:'Tích hợp'}]}/>:null}
-      {!isSystem && operationsTab==='integration'?<ProviderIntegrationPanel/>:null}
-      <div hidden={!isSystem && operationsTab==='integration'}>
-      {isSystem ? <PaymentReviewPanel /> : null}
-      {isSystem?<><Button onClick={()=>setShowDeliveries(!showDeliveries)}>Bàn giao bản quyền</Button>{showDeliveries?<ProviderDeliveryPanel scope="operations" canRetry/>:null}</>:null}
-      {isSystem ? <h2>Lịch sử thanh toán</h2> : null}
-      <div className="inline-filter">
-        <Input.Search
-          aria-label="Tìm dữ liệu vận hành"
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Tìm mã đơn, sản phẩm hoặc giao dịch"
-          value={query}
+      {!isSystem ? (
+        <Tabs
+          activeKey={operationsTab}
+          onChange={setOperationsTab}
+          items={[
+            { key: 'payments', label: 'Thanh toán' },
+            { key: 'integration', label: 'Tích hợp' },
+          ]}
         />
-        <Select aria-label="Lọc kết quả đối soát" value={classification} onChange={setClassification} options={[{ value: '', label: 'Tất cả giao dịch' }, { value: 'exceptions', label: 'Giao dịch cần kiểm tra' }, ...Object.entries(paymentClassificationLabels).map(([value, label]) => ({ value, label }))]} />
-        <DatePicker.RangePicker {...(isSystem ? { placeholder: ['Từ ngày', 'Đến ngày'] as [string, string] } : {})} prevIcon="−" nextIcon="+" superPrevIcon="−−" superNextIcon="++" aria-label="Lọc khoảng thời gian" format="DD/MM/YYYY" onChange={(values) => setRange(values?.[0] && values[1] ? [values[0].startOf('day').valueOf(), values[1].endOf('day').valueOf()] : null)} />
-      </div>
-      <section className="workspace-card operations-card">
-        {!isSystem ? <p className="muted-copy">Đối chiếu giao dịch theo mã đơn, số tiền và thời gian ghi nhận. Liên hệ bộ phận hỗ trợ khi có giao dịch cần kiểm tra.</p> : null}
-        {payments.isError ? <Alert showIcon type="error" title="Không thể tải lịch sử thanh toán." action={<Button onClick={() => void payments.refetch()}>Thử lại</Button>} /> : null}
-        {payments.isLoading && isSystem ? <p role="status">Đang tải lịch sử thanh toán…</p> : null}
-        {!payments.isLoading && !payments.isError && visiblePayments.length === 0 ? <Empty description={isSystem && !query && !classification && !range ? 'Chưa có giao dịch thanh toán.' : 'Không có giao dịch đối soát phù hợp.'} /> : null}
-        {!payments.isError && visiblePayments.length > 0 ? <Table<PaymentHistoryDto> rowKey="transactionId" dataSource={visiblePayments} scroll={{ x: 900 }} pagination={{ ...paginationTextControls, pageSize: 10, showSizeChanger: false }} columns={[
-          { title: 'Đơn hàng', render: (_, item) => <><strong>{item.orderNumber ?? 'Chưa gắn đơn'}</strong><small>{item.orderType === 'RENEWAL' ? 'Gia hạn' : item.orderType === 'NEW_PURCHASE' ? 'Mua mới' : ''}</small></> },
-          { title: 'Sản phẩm / gói', render: (_, item) => <>{item.productNameSnapshot ?? 'Chưa xác định'}<small>{item.planNameSnapshot ?? ''}</small></> },
-          { title: 'Số tiền', align: 'right', dataIndex: 'amountVnd', render: (value: number) => `${value.toLocaleString('vi-VN')} ₫` },
-          { title: 'Thời gian', dataIndex: 'providerOccurredAt', render: formatPaymentTime },
-          { title: 'Đối soát', dataIndex: 'classification', render: (value: string) => <StatusChip tone={paymentClassificationTone(value)}>{paymentClassificationLabels[value] ?? value}</StatusChip> },
-          { title: 'Chi tiết', render: (_, item) => <Button onClick={() => setSelected(item)}>Xem</Button> },
-        ]} /> : null}
-      </section>
-      <Drawer title="Chi tiết giao dịch" size={500} className="provider-payment-drawer" open={Boolean(selected)} onClose={() => setSelected(null)}>
-        {selected ? <><h2>Đơn hàng</h2><Descriptions column={1} items={[{key:'order',label:'Mã đơn',children:selected.orderNumber ?? 'Chưa gắn đơn'},{key:'product',label:'Sản phẩm',children:selected.productNameSnapshot ?? 'Chưa xác định'},{key:'plan',label:'Gói',children:selected.planNameSnapshot ?? 'Chưa xác định'}]} /><h2>Thanh toán</h2><Descriptions column={1} items={[{key:'amount',label:'Số tiền',children:`${selected.amountVnd.toLocaleString('vi-VN')} ₫`},{key:'ref',label:'Mã giao dịch',children:selected.providerTransactionReference ?? 'Không có'},{key:'event',label:'Mã sự kiện',children:selected.providerEventId},{key:'occurred',label:'Thời gian SePay',children:formatPaymentTime(selected.providerOccurredAt)},{key:'received',label:'Thời gian tiếp nhận',children:formatPaymentTime(selected.receivedAt)}]} /><h2>Kết quả đối soát</h2><StatusChip tone={paymentClassificationTone(selected.classification)}>{paymentClassificationLabels[selected.classification] ?? selected.classification}</StatusChip>{selected.reviewStatus ? <p>Trạng thái kiểm tra: {reviewStatusLabels[selected.reviewStatus] ?? selected.reviewStatus}</p> : null}</> : null}
-      </Drawer>
+      ) : null}
+      {!isSystem && operationsTab === 'integration' ? <ProviderIntegrationPanel /> : null}
+      <div hidden={!isSystem && operationsTab === 'integration'}>
+        {isSystem ? <PaymentReviewPanel /> : null}
+        {isSystem ? (
+          <>
+            <Button onClick={() => setShowDeliveries(!showDeliveries)}>Bàn giao bản quyền</Button>
+            {showDeliveries ? <ProviderDeliveryPanel scope="operations" canRetry /> : null}
+          </>
+        ) : null}
+        {isSystem ? <h2>Lịch sử thanh toán</h2> : null}
+        <PaymentHistorySection
+          isSystem={isSystem}
+          introCopy={
+            !isSystem
+              ? 'Đối chiếu giao dịch theo mã đơn, số tiền và thời gian ghi nhận. Liên hệ bộ phận hỗ trợ khi có giao dịch cần kiểm tra.'
+              : undefined
+          }
+        />
       </div>
     </>
   );
