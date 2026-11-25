@@ -282,7 +282,7 @@ for (const workspace of workspaces) {
         const path = new URL(route.request().url()).pathname;
         if (path.endsWith('/notifications')) {
           const next = new URL(route.request().url()).searchParams.has('cursor');
-          return route.fulfill({ json: { items: Array.from({ length: next ? 1 : 8 }, (_, i) => ({ id: `notice-${next ? 8 : i}`, title: `Notice ${next ? 8 : i}`, content: `Content ${i}`, isRead: true })), nextCursor: next ? null : 'page-2' } });
+          return route.fulfill({ json: { items: Array.from({ length: next ? 1 : 8 }, (_, i) => ({ id: `notice-${next ? 8 : i}`, title: `Notice ${next ? 8 : i}`, content: `Content ${i}`, isRead: true })), nextCursor: next ? null : 'page-2', unreadCount: 0 } });
         }
         if (path.endsWith('/health/ready')) return route.fulfill({ json: { status: 'ok', dependencies: { postgres: 'up', redis: 'up' } } });
         if (path.endsWith('/operations/health/assistance')) return route.fulfill({ json: { conversations: { supportActive: 0, waitingSupport: 0 }, notifications: { deadLetter: 0, pending: 0, retryableFailed: 0 } } });
@@ -299,13 +299,9 @@ for (const workspace of workspaces) {
         expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
       }
       if (width <= 760) await page.getByRole('button', { name: 'Mở menu vai trò' }).click();
-      if (workspace.role === 'PROVIDER_ADMIN' || workspace.role === 'SYSTEM_ADMIN') {
-        await expect(page.getByRole('button', { name: 'Thông báo', exact: true })).toHaveCount(0);
-      } else {
-        await page.getByRole('button', { name: 'Thông báo', exact: true }).click();
-        await page.getByRole('button', { name: 'Xem thêm thông báo' }).click();
-        await expect(page.getByText('Notice 8', { exact: true })).toBeVisible();
-      }
+      await page.getByRole('button', { name: 'Thông báo', exact: true }).click();
+      await page.getByRole('button', { name: 'Xem thêm thông báo' }).click();
+      await expect(page.getByText('Notice 8', { exact: true })).toBeVisible();
       expect(errors).toEqual([]);
     });
   }
