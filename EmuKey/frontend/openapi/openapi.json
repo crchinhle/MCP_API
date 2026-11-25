@@ -1223,7 +1223,16 @@
     "/api/v1/auth/refresh": {
       "post": {
         "operationId": "IdentityController_refresh",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "x-refresh-request-id",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "201": {
             "description": ""
@@ -1269,7 +1278,16 @@
     "/api/v1/auth/mobile/refresh": {
       "post": {
         "operationId": "IdentityController_nativeRefresh",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "x-refresh-request-id",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {

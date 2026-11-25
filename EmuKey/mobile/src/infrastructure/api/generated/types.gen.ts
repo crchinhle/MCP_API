@@ -1721,6 +1721,9 @@ export type IdentityControllerLoginResponses = {
 
 export type IdentityControllerRefreshData = {
   body?: never;
+  headers: {
+    'x-refresh-request-id': string;
+  };
   path?: never;
   query?: never;
   url: '/api/v1/auth/refresh';
@@ -1746,6 +1749,9 @@ export type IdentityControllerNativeLoginResponse =
 
 export type IdentityControllerNativeRefreshData = {
   body: NativeRefreshDto;
+  headers: {
+    'x-refresh-request-id': string;
+  };
   path?: never;
   query?: never;
   url: '/api/v1/auth/mobile/refresh';
