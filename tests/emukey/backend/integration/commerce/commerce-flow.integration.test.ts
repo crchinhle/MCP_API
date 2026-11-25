@@ -48,13 +48,38 @@ describe('customer commerce and payment flow', () => {
     await expect(pool.query("UPDATE orders SET purchase_snapshot='{}' WHERE id=$1", [order.id])).rejects.toThrow();
     await acceptTerms(order.id);
     const checkout = await service.checkout(customer, order.id);
-    const paid = await service.ingestIpn({ amountVnd: 3600000, eventId: randomUUID(), occurredAt: new Date().toISOString(), providerReference: checkout.checkoutReference }, webhookSecret);
+    const paymentTime = await pool.query<{ at: Date }>("SELECT created_at + interval '1 millisecond' AS at FROM payment_attempts WHERE id=$1", [checkout.attemptId]);
+    const paid = await service.ingestIpn({ amountVnd: 3600000, eventId: randomUUID(), occurredAt: paymentTime.rows[0]!.at.toISOString(), providerReference: checkout.checkoutReference }, webhookSecret);
     expect(paid.classification).toBe('MATCHED');
     const license = (await pool.query('SELECT * FROM licenses WHERE origin_order_id=$1', [order.id])).rows[0];
     expect(license.max_active_devices).toBe(4);
     expect(`0x${license.plan_commitment.toString('hex')}`).toBe(order.planCommitmentSnapshot);
     const preview = await service.renewalPreview(customer, license.id);
     expect(preview).toMatchObject({ durationMonths: 3, priceVnd: 3600000 });
+  });
+
+  it('routes a payment immediately before checkout creation to review', async () => {
+    const order = await service.createOrder(customer, randomUUID(), undefined, { planId });
+    await acceptTerms(order.id);
+    const checkout = await service.checkout(customer, order.id);
+    const {
+      rows: [boundary],
+    } = await pool.query<{ occurred_at: Date }>(
+      `SELECT date_trunc('milliseconds', created_at - interval '1 microsecond') AS occurred_at
+       FROM payment_attempts WHERE id = $1`,
+      [checkout.attemptId],
+    );
+
+    const result = await service.ingestIpn({
+      amountVnd: order.priceVndSnapshot,
+      eventId: randomUUID(),
+      occurredAt: boundary!.occurred_at.toISOString(),
+      providerReference: checkout.checkoutReference,
+    }, webhookSecret);
+    expect(result.classification).toBe('UNMATCHED');
+    const stored = await pool.query('SELECT review_reason FROM payment_transactions WHERE id=$1', [result.transactionId]);
+    expect(stored.rows[0].review_reason).toBe('PAYMENT_OUTSIDE_ACCEPTED_WINDOW');
+    expect((await service.findOrder(customer, order.id)).licenseId).toBeNull();
   });
 
   it('records refund evidence explicitly and never accepts an amount mismatch by an ambiguous status', async () => {

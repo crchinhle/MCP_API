@@ -46,6 +46,8 @@ jobs:
         run: node tooling/emukey/run.mjs backend:contract
       - name: Backend security tests
         run: node tooling/emukey/run.mjs backend:security
+      - name: Build backend for database CLI tests
+        run: pnpm --dir EmuKey/backend build
       - name: Backend integration tests
         run: node tooling/emukey/run.mjs backend:integration
       - name: Frontend unit tests

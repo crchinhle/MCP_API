@@ -689,21 +689,34 @@ export class CommerceRepository {
       }
 
       const attemptResult = await client.query<Record<string, unknown>>(
-        `SELECT pa.*, o.*, provider.provider_chain_address, provider.provider_chain_namespace, statement_timestamp() AS database_received_at,
-                statement_timestamp() < o.ipn_accept_until AS received_before_cutoff,
+        `SELECT pa.*, o.*, provider.provider_chain_address, provider.provider_chain_namespace,
+                effective.occurred_at AS effective_payment_at,
+                (payment_clock.received_at < o.ipn_accept_until
+                  AND effective.occurred_at >= o.service_terms_accepted_at
+                  AND effective.occurred_at >= pa.created_at
+                  AND effective.occurred_at < pa.expires_at
+                  AND effective.occurred_at < o.payment_due_at
+                  AND (pa.status <> 'SUPERSEDED' OR effective.occurred_at < pa.superseded_at))
+                  AS within_payment_window,
                 pa.id AS payment_attempt_id,
                 pa.amount_vnd AS payment_attempt_amount_vnd,
                 pa.status AS payment_attempt_status,
-                pa.created_at AS payment_attempt_created_at,
-                pa.expires_at AS payment_attempt_expires_at,
-                pa.superseded_at AS payment_attempt_superseded_at,
                 o.id AS matched_order_id
          FROM payment_attempts pa
          JOIN orders o ON o.id = pa.order_id
          JOIN users provider ON provider.id = o.provider_user_id
+         LEFT JOIN payment_transactions prior ON prior.id = $4::uuid
+         CROSS JOIN LATERAL (
+           SELECT COALESCE(prior.received_at, statement_timestamp()) AS received_at
+         ) payment_clock
+         CROSS JOIN LATERAL (
+           SELECT CASE WHEN $3::boolean THEN payment_clock.received_at
+                       ELSE COALESCE(prior.provider_occurred_at, $2::timestamptz)
+                  END AS occurred_at
+         ) effective
          WHERE pa.provider_reference = $1
          FOR UPDATE OF pa, o`,
-        [event.providerReference],
+        [event.providerReference, event.occurredAt, timingBasis === 'SANDBOX_RECEIPT', reconciliation?.transactionId ?? null],
       );
       const row = attemptResult.rows[0];
       if (reconciliation && (!row || (reconciliation.manual ? (reconciliation.manual.orderId !== row.matched_order_id || reconciliation.manual.paymentAttemptId !== row.payment_attempt_id) : (stored?.order_id !== row.matched_order_id || stored?.payment_attempt_id !== row.payment_attempt_id)))) {
@@ -802,23 +815,12 @@ export class CommerceRepository {
         );
         return { classification: 'DUPLICATE', transactionId };
       }
-      const effectiveAt = timingBasis === 'SANDBOX_RECEIPT'
-        ? date(reconciliation ? stored!.received_at : row.database_received_at)
-        : event.occurredAt;
-      const occurredAt = effectiveAt.getTime();
       const eligible =
         (row.order_status === 'WAITING_PAYMENT' || (!reconciliation?.manual && row.order_status === 'CANCELLED' && row.auto_cancelled === true)) &&
         ['PENDING', 'EXPIRED', 'SUPERSEDED'].includes(
           String(row.payment_attempt_status),
         ) &&
-        row.service_terms_accepted_at !== null &&
-        occurredAt >= date(row.service_terms_accepted_at).getTime() &&
-        occurredAt >= date(row.payment_attempt_created_at).getTime() &&
-        occurredAt < date(row.payment_attempt_expires_at).getTime() &&
-        occurredAt < date(row.payment_due_at).getTime() &&
-        (row.payment_attempt_status !== 'SUPERSEDED' ||
-          occurredAt < date(row.payment_attempt_superseded_at).getTime()) &&
-        (reconciliation ? date(stored!.received_at).getTime() < date(row.ipn_accept_until).getTime() : row.received_before_cutoff === true);
+        row.within_payment_window === true;
       if (!eligible) {
         if (reconciliation) throw new Error('SANDBOX_PAYMENT_OUTSIDE_ACCEPTED_WINDOW');
         await client.query(
@@ -936,7 +938,7 @@ export class CommerceRepository {
            FROM licenses WHERE id = $1 FOR UPDATE`,
           [licenseId],
         );
-        expiresAt = renewalExpiry(renewed.rows[0]!.expires_at, effectiveAt, Number(row.duration_months_snapshot));
+        expiresAt = renewalExpiry(renewed.rows[0]!.expires_at, date(row.effective_payment_at), Number(row.duration_months_snapshot));
       }
 
       const commandPayload =

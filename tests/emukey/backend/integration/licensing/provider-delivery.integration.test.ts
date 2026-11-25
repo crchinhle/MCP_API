@@ -113,7 +113,11 @@ describe('durable provider handoff storage', () => {
       const checkout=await commerce.checkout(customer,order.id);
       await integration.state(providerId,1,false);
       await expect(commerce.createOrder(customer,randomUUID(),undefined,{planId:'00000000-0000-4000-8000-000000000301'})).rejects.toMatchObject({response:{code:'PROVIDER_INTEGRATION_NOT_READY'}});
-      const payment={amountVnd:order.priceVndSnapshot,eventId:randomUUID(),occurredAt:new Date().toISOString(),providerReference:checkout.checkoutReference};
+      const paymentTime = async (attemptId: string) => {
+        const result = await pool.query<{ at: Date }>("SELECT created_at + interval '1 millisecond' AS at FROM payment_attempts WHERE id=$1", [attemptId]);
+        return result.rows[0]!.at.toISOString();
+      };
+      const payment={amountVnd:order.priceVndSnapshot,eventId:randomUUID(),occurredAt:await paymentTime(checkout.attemptId),providerReference:checkout.checkoutReference};
       const issued=await commerce.ingestIpn(payment,token);
       expect((await commerce.ingestIpn(payment,token)).classification).toBe('DUPLICATE');
       await integration.state(providerId,1,true);
@@ -268,7 +272,7 @@ describe('durable provider handoff storage', () => {
       const renewalTerms=await commerce.getServiceTerms(customer,renewal.id);
       await commerce.acceptServiceTerms(customer,renewal.id,{accepted:true,version:renewalTerms.version,hash:renewalTerms.hash});
       const renewalCheckout=await commerce.checkout(customer,renewal.id);
-      const paidRenewal=await commerce.ingestIpn({amountVnd:renewal.priceVndSnapshot,eventId:randomUUID(),occurredAt:new Date().toISOString(),providerReference:renewalCheckout.checkoutReference},token);
+      const paidRenewal=await commerce.ingestIpn({amountVnd:renewal.priceVndSnapshot,eventId:randomUUID(),occurredAt:await paymentTime(renewalCheckout.attemptId),providerReference:renewalCheckout.checkoutReference},token);
       await confirm(paidRenewal.commandId!,'LICENSE_RENEWED');
       receiver.setFault('DROP_AFTER_COMMIT');await handoff.runOne();
       const expiryBeforeRetry=(await verify(nextKey)).expiresAt;
