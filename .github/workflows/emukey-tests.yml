@@ -38,16 +38,22 @@ jobs:
           for component in backend frontend mobile; do
             pnpm --dir EmuKey/$component audit --prod --audit-level high
           done
-      - name: Workspace verification
-        run: |
-          node tooling/emukey/run.mjs baseline
-          node tooling/emukey/run.mjs backend:unit
-          node tooling/emukey/run.mjs backend:contract
-          node tooling/emukey/run.mjs backend:security
-          node tooling/emukey/run.mjs backend:integration
-          node tooling/emukey/run.mjs frontend:unit
-          node tooling/emukey/run.mjs mobile:unit
-          node tooling/emukey/run.mjs contracts
+      - name: Verify workspace baseline
+        run: node tooling/emukey/run.mjs baseline
+      - name: Backend unit tests
+        run: node tooling/emukey/run.mjs backend:unit
+      - name: Backend contract tests
+        run: node tooling/emukey/run.mjs backend:contract
+      - name: Backend security tests
+        run: node tooling/emukey/run.mjs backend:security
+      - name: Backend integration tests
+        run: node tooling/emukey/run.mjs backend:integration
+      - name: Frontend unit tests
+        run: node tooling/emukey/run.mjs frontend:unit
+      - name: Mobile unit tests
+        run: node tooling/emukey/run.mjs mobile:unit
+      - name: Smart contract tests
+        run: node tooling/emukey/run.mjs contracts
       - name: Product quality gates
         run: |
           pnpm --dir EmuKey/backend contracts:build
