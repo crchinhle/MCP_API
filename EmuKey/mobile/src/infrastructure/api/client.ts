@@ -2,6 +2,7 @@ import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex } from '@noble/hashes/utils';
+import { clearCheckoutIntent, readCheckoutIntent, writeCheckoutIntent } from '../checkout-intent';
 import type {
   AiAnswerDto,
   CatalogSourceDto,
@@ -138,7 +139,9 @@ export async function getKnowledgeChunk(documentId: string, chunkId: string): Pr
 
 let activeSession: MobileSession | null = null;
 const sessionListeners = new Set<(session: MobileSession | null) => void>();
-let refreshWork: Promise<void> | null = null;
+let refreshWork: { session: MobileSession; promise: Promise<void> } | null = null;
+let refreshRequest: { session: MobileSession; id: string } | null = null;
+const logoutOperations = new Map<MobileSession, Promise<void>>();
 let sessionGeneration = 0;
 let accountGeneration = 0;
 let storageWork: Promise<void> = Promise.resolve();
@@ -183,8 +186,11 @@ export class MobileApiError extends Error {
 }
 
 export async function restoreSession(): Promise<MobileSession | null> {
+  if (activeSession) return activeSession;
+  const generation = sessionGeneration;
   try {
     const raw = await SecureStore.getItemAsync(SESSION_KEY);
+    if (generation !== sessionGeneration || activeSession) return activeSession;
     if (!raw) return null;
     const parsed = JSON.parse(raw) as MobileSession;
     if (!parsed.accessToken || parsed.user?.role !== 'CUSTOMER') return null;
@@ -197,6 +203,7 @@ export async function restoreSession(): Promise<MobileSession | null> {
 
 async function saveSession(session: MobileSession | null): Promise<void> {
   activeSession = session;
+  refreshRequest = null;
   sessionGeneration += 1;
   for (const listener of sessionListeners) listener(session);
   await serializeStorage(async () => {
@@ -214,6 +221,7 @@ async function invalidateSession(session: MobileSession): Promise<void> {
 
 async function request(path: string, init: RequestInit = {}, authenticated = true, retried = false): Promise<Response> {
   const sessionAtStart = activeSession;
+  if (authenticated && sessionAtStart && logoutOperations.has(sessionAtStart)) throw new MobileApiError(401);
   const accountAtStart = accountGeneration;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -240,23 +248,35 @@ async function request(path: string, init: RequestInit = {}, authenticated = tru
       };
       if (activeSession !== sessionAtStart) return replay();
       if (!sessionAtStart.refreshToken) { await invalidateSession(sessionAtStart); return response; }
-      refreshWork ??= (async () => {
+      if (refreshWork?.session !== sessionAtStart) {
+        if (refreshRequest?.session !== sessionAtStart) {
+          refreshRequest = { session: sessionAtStart, id: Crypto.randomUUID() };
+        }
+        const requestId = refreshRequest.id;
         const generation = sessionGeneration;
-        const refreshed = await request('/auth/mobile/refresh', {
-          method: 'POST', body: JSON.stringify({ refreshToken: sessionAtStart.refreshToken }),
-        }, false);
-        if (refreshed.status === 401 || refreshed.status === 403) {
-          if (generation === sessionGeneration) await invalidateSession(sessionAtStart);
-          throw new MobileApiError(401);
-        }
-        const next = await json<MobileSession>(refreshed);
-        if (generation !== sessionGeneration) throw new MobileApiError(401);
-        if (!next.refreshToken || next.user.id !== sessionAtStart.user.id || next.user.role !== 'CUSTOMER') {
-          await invalidateSession(sessionAtStart); throw new MobileApiError(401);
-        }
-        await saveSession(next);
-      })().finally(() => { refreshWork = null; });
-      await refreshWork;
+        const promise = (async () => {
+          const refreshed = await request('/auth/mobile/refresh', {
+            method: 'POST',
+            headers: { 'X-Refresh-Request-Id': requestId },
+            body: JSON.stringify({ refreshToken: sessionAtStart.refreshToken }),
+          }, false);
+          if (refreshed.status === 401 || refreshed.status === 403) {
+            if (generation === sessionGeneration) await invalidateSession(sessionAtStart);
+            throw new MobileApiError(401);
+          }
+          const next = await json<MobileSession>(refreshed);
+          if (generation !== sessionGeneration) throw new MobileApiError(401);
+          if (!next.refreshToken || next.user.id !== sessionAtStart.user.id || next.user.role !== 'CUSTOMER') {
+            await invalidateSession(sessionAtStart);
+            throw new MobileApiError(401);
+          }
+          await saveSession(next);
+        })().finally(() => {
+          if (refreshWork?.promise === promise) refreshWork = null;
+        });
+        refreshWork = { session: sessionAtStart, promise };
+      }
+      await refreshWork.promise;
       return replay();
     }
     if (authenticated && response.status === 401 && retried && activeSession && activeSession.user.id === sessionAtStart?.user.id) await invalidateSession(activeSession);
@@ -336,10 +356,18 @@ export async function changePassword(input: ChangePasswordDto): Promise<{ change
 export async function login(email: string, password: string): Promise<MobileSession> {
   const generation = ++accountGeneration;
   sessionGeneration += 1;
+  const normalizedEmail = email.trim();
+  // Logout invalidates all credentials for this customer on the server.
+  for (const [session, work] of logoutOperations) {
+    if (session.user.email?.toLowerCase() === normalizedEmail.toLowerCase()) {
+      await work.catch(() => undefined);
+    }
+  }
+  if (generation !== accountGeneration) throw new MobileApiError(401);
   const session = await json<MobileSession>(
     await request(
       '/auth/mobile/login',
-      { method: 'POST', body: JSON.stringify({ email: email.trim(), password }) },
+      { method: 'POST', body: JSON.stringify({ email: normalizedEmail, password }) },
       false,
     ),
   );
@@ -354,22 +382,48 @@ export async function login(email: string, password: string): Promise<MobileSess
 }
 
 export async function logout(): Promise<void> {
-  const userId = activeSession?.user.id;
+  const session = activeSession;
+  if (!session) return;
+  const current = logoutOperations.get(session);
+  if (current) return current;
+
   accountGeneration += 1;
   sessionGeneration += 1;
   pushRegistrationGeneration += 1;
-  await pushRegistrationWork.catch(() => undefined);
-  try {
-    const token = await SecureStore.getItemAsync(PUSH_TOKEN_KEY);
-    try { if (token) await removePushToken(token); }
-    finally { if (activeSession?.refreshToken) await request('/auth/mobile/logout', { method: 'POST', body: JSON.stringify({ refreshToken: activeSession.refreshToken }) }, false); }
-  } finally {
-    try { if (userId) await clearPrivateValues(userId); }
-    finally {
-      try { await SecureStore.deleteItemAsync(PUSH_TOKEN_KEY); }
-      finally { await saveSession(null); }
+  const work = (async () => {
+    await pushRegistrationWork.catch(() => undefined);
+    try {
+      const token = await SecureStore.getItemAsync(PUSH_TOKEN_KEY);
+      if (token && activeSession === session) {
+        await json<void>(await request('/notifications/push-tokens/remove', {
+          method: 'POST',
+          headers: { authorization: `Bearer ${session.accessToken}` },
+          body: JSON.stringify({ token }),
+        }, false));
+      }
+    } finally {
+      try {
+        if (session.refreshToken) {
+          await json<void>(await request('/auth/mobile/logout', {
+            method: 'POST',
+            body: JSON.stringify({ refreshToken: session.refreshToken }),
+          }, false));
+        }
+      } finally {
+        try {
+          await clearPrivateValues(session.user.id);
+        } finally {
+          await clearCheckoutIntent(session.user.id);
+          if (activeSession === session) {
+            const clearPushToken = serializeStorage(() => SecureStore.deleteItemAsync(PUSH_TOKEN_KEY));
+            await Promise.all([clearPushToken, saveSession(null)]);
+          }
+        }
+      }
     }
-  }
+  })().finally(() => { logoutOperations.delete(session); });
+  logoutOperations.set(session, work);
+  return work;
 }
 
 export async function listOrders(): Promise<MobileOrderSummary[]> {
@@ -406,33 +460,91 @@ export async function comparePlans(ids: readonly string[]): Promise<MobilePlanCo
   );
 }
 
-async function idempotencyKeyFor(input: CreateOrderDto): Promise<{ storageKey: string; key: string }> {
-  const intent = `${activeSession?.user.id ?? 'anonymous'}:${JSON.stringify(input)}`;
-  const storageKey = `${IDEMPOTENCY_PREFIX}${bytesToHex(sha256(intent))}`;
-  const existing = await SecureStore.getItemAsync(storageKey);
-  if (existing) return { storageKey, key: existing };
-  const key = Crypto.randomUUID();
-  await SecureStore.setItemAsync(storageKey, key, { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY });
-  return { storageKey, key };
-}
+const pendingOrderCreations = new Map<string, Promise<MobileOrderDetail>>();
 
 export async function createOrder(
   input: CreateOrderDto,
   licenseKey?: string,
+  checkout?: { readonly userId: string; readonly draftId?: string },
 ): Promise<MobileOrderDetail> {
-  const intent = await idempotencyKeyFor(input);
-  const result = await json<MobileOrderDetail>(
-    await request('/orders', {
-      method: 'POST',
-      headers: {
-        'Idempotency-Key': intent.key,
-        ...(licenseKey ? { 'X-License-Key': licenseKey } : {}),
-      },
-      body: JSON.stringify(input),
-    }),
-  );
-  await SecureStore.deleteItemAsync(intent.storageKey);
-  return result;
+  const userId = activeSession?.user.id;
+  const generation = accountGeneration;
+  if (!userId || (checkout && checkout.userId !== userId)) throw new MobileApiError(401);
+
+  const assertAccount = () => {
+    if (accountGeneration !== generation || activeSession?.user.id !== userId) {
+      throw new MobileApiError(401);
+    }
+  };
+  const payload = JSON.stringify(input);
+  const storageKey = `${IDEMPOTENCY_PREFIX}${bytesToHex(sha256(`${userId}:${payload}`))}`;
+  const operation = `${generation}:${storageKey}`;
+  const activeCreation = pendingOrderCreations.get(operation);
+  if (activeCreation) return activeCreation;
+
+  const selection = {
+    planId: input.planId,
+    draftId: checkout?.draftId,
+    targetLicenseId: input.targetLicenseId,
+    deviceQuantity: input.deviceQuantity,
+    durationMonths: input.durationMonths,
+  };
+  const creation = (async () => {
+    let key = await SecureStore.getItemAsync(storageKey);
+    assertAccount();
+    const pending = await readCheckoutIntent(userId, selection);
+    assertAccount();
+    if (pending) {
+      const order = await getOrder(pending.orderId);
+      assertAccount();
+      if (order.orderStatus !== 'CANCELLED' && order.orderStatus !== 'EXPIRED') return order;
+      await clearCheckoutIntent(userId, pending.orderId);
+      assertAccount();
+    }
+    if (!key) {
+      key = Crypto.randomUUID();
+      await SecureStore.setItemAsync(storageKey, key, {
+        keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+      });
+      assertAccount();
+    }
+
+    const order = await json<MobileOrderDetail>(
+      await request('/orders', {
+        method: 'POST',
+        headers: {
+          'Idempotency-Key': key,
+          ...(licenseKey ? { 'X-License-Key': licenseKey } : {}),
+        },
+        body: payload,
+      }),
+    );
+    assertAccount();
+    try {
+      await writeCheckoutIntent(userId, {
+        orderId: order.id,
+        planId: order.planId,
+        productId: order.productId,
+        ...(checkout?.draftId ? { draftId: checkout.draftId } : {}),
+        ...(input.targetLicenseId ? { targetLicenseId: input.targetLicenseId } : {}),
+        ...(typeof input.deviceQuantity === 'number' ? { deviceQuantity: input.deviceQuantity } : {}),
+        ...(typeof input.durationMonths === 'number' ? { durationMonths: input.durationMonths } : {}),
+      });
+      assertAccount();
+      await SecureStore.deleteItemAsync(storageKey);
+    } catch {
+      // The known order can proceed. Retaining the key makes a later retry replay it.
+    }
+    assertAccount();
+    return order;
+  })();
+
+  pendingOrderCreations.set(operation, creation);
+  try {
+    return await creation;
+  } finally {
+    pendingOrderCreations.delete(operation);
+  }
 }
 
 export async function getOrderTerms(id: string): Promise<MobileOrderTerms> {

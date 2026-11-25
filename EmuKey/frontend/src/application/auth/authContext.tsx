@@ -23,6 +23,7 @@ export type RefreshResult =
   | { kind: 'transient'; error?: unknown };
 let refreshPromise: Promise<RefreshResult> | null = null;
 let authGeneration = 0;
+let refreshRequest: { generation: number; id: string } | null = null;
 let authChannel: BroadcastChannel | null | undefined;
 let authStorageListenerInstalled = false;
 function storageSafe(action: () => void): boolean {
@@ -101,6 +102,7 @@ function ensureStorageAuthListener(): void {
 }
 function invalidateAuthOperations(): void {
   authGeneration += 1;
+  refreshRequest = null;
 }
 // Cross-tab refresh coordination. navigator.locks is the preferred primitive;
 // the localStorage lease is a best-effort fallback for browsers without it.
@@ -207,10 +209,19 @@ async function refreshSession(): Promise<RefreshResult> {
     let outcome: RefreshResult;
     try {
       outcome = await withRefreshLock(async () => {
+        if (captured !== authGeneration) return { kind: 'invalid', stale: true } as const;
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
         try {
-          const headers = new Headers({ 'content-type': 'application/json' });
+          if (refreshRequest?.generation !== captured) {
+            const bytes = crypto.getRandomValues(new Uint8Array(16));
+            const id = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+            refreshRequest = { generation: captured, id };
+          }
+          const headers = new Headers({
+            'content-type': 'application/json',
+            'X-Refresh-Request-Id': refreshRequest.id,
+          });
           const response = await fetch(`${API_URL}/auth/refresh`, {
             method: 'POST',
             headers,
@@ -236,6 +247,7 @@ async function refreshSession(): Promise<RefreshResult> {
     // A late response is discarded instead of being applied to a newer login
     // or to a tab that explicitly logged out while refresh was in flight.
     if (captured !== authGeneration) return { kind: 'invalid', stale: true };
+    if (outcome.kind !== 'transient') refreshRequest = null;
     return outcome;
   })().finally(() => {
     refreshPromise = null;

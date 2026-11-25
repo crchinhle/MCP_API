@@ -25,7 +25,7 @@ import {
   subscribeSession,
   type MobileProduct,
 } from '../../../../EmuKey/mobile/src/infrastructure/api/client';
-import { readCheckoutIntent, writeCheckoutIntent } from '../../../../EmuKey/mobile/src/infrastructure/checkout-intent';
+import { clearCheckoutIntent, readCheckoutIntent, writeCheckoutIntent } from '../../../../EmuKey/mobile/src/infrastructure/checkout-intent';
 
 jest.mock('../../../../EmuKey/mobile/src/infrastructure/api/client', () => {
   const actual = jest.requireActual<
@@ -417,6 +417,24 @@ describe('mobile home selectors, cart persistence, purchase config & checkout re
     expect(onOpenTerms).not.toHaveBeenCalled();
     expect((await screen.findAllByText('1.250.000 ₫')).length).toBeGreaterThan(0);
     expect(screen.getByText('Đã tính giá theo cấu hình')).toBeOnTheScreen();
+  });
+
+  it('keeps legacy and new pending checkout intents separate, including different configurations', async () => {
+    await AsyncStorage.setItem('emukey_checkout_intent_v1_buyer', JSON.stringify({
+      orderId: 'order-a', planId: 'plan-a', productId: 'product-a',
+    }));
+    await Promise.all([
+      writeCheckoutIntent('buyer', { orderId: 'order-b', planId: 'plan-b', productId: 'product-b' }),
+      writeCheckoutIntent('buyer', { orderId: 'order-custom', planId: 'plan-a', productId: 'product-a', deviceQuantity: 5 }),
+    ]);
+
+    await expect(readCheckoutIntent('buyer', { planId: 'plan-a' })).resolves.toMatchObject({ orderId: 'order-a' });
+    await expect(readCheckoutIntent('buyer', { planId: 'plan-b' })).resolves.toMatchObject({ orderId: 'order-b' });
+    await expect(readCheckoutIntent('buyer', { planId: 'plan-a', deviceQuantity: 5 })).resolves.toMatchObject({ orderId: 'order-custom' });
+
+    await clearCheckoutIntent('buyer', 'order-b');
+    await expect(readCheckoutIntent('buyer', { planId: 'plan-b' })).resolves.toBeNull();
+    await expect(readCheckoutIntent('buyer', { planId: 'plan-a' })).resolves.toMatchObject({ orderId: 'order-a' });
   });
 
   it('recovers a pending checkout intent order via GET without calling createOrder again', async () => {
@@ -833,7 +851,7 @@ describe('mobile home selectors, cart persistence, purchase config & checkout re
     expect(createOrder).not.toHaveBeenCalled();
     if (failure === 'storage') expect(getOrder).not.toHaveBeenCalled();
     // Intent must still be preserved in storage
-    expect(await readCheckoutIntent('cust-err')).toMatchObject({ orderId: 'ord-err-a' });
+    expect(await readCheckoutIntent('cust-err', { planId: 'plan-1' })).toMatchObject({ orderId: 'ord-err-a' });
 
     // Confirm button must NOT create a new order while recovery failed
     const confirmBtn = screen.getByRole('button', { name: 'Xác nhận cấu hình' });

@@ -13,7 +13,6 @@ import type { CreateOrderDto } from '../../infrastructure/api/generated';
 import {
   clearCheckoutIntent,
   readCheckoutIntent,
-  writeCheckoutIntent,
 } from '../../infrastructure/checkout-intent';
 import { useCustomerSession } from '../auth/useCustomerSession';
 
@@ -28,6 +27,7 @@ const TERMINAL_CHECKOUT_STATUSES = new Set([
 
 export function useCheckoutOrder(initialOrderId?: string) {
   const { user } = useCustomerSession();
+  const userId = user?.id;
   const [order, setOrder] = useState<MobileOrderDetail | null>(null);
   const [terms, setTerms] = useState<MobileOrderTerms | null>(null);
   const [termsState, setTermsState] = useState<TermsLoadState>('idle');
@@ -115,27 +115,17 @@ export function useCheckoutOrder(initialOrderId?: string) {
       setRecoveryError(null);
 
       try {
-        const intent = await readCheckoutIntent(user.id);
-        if (recoveryGenerationRef.current !== gen) return 'none';
-        if (!intent || intent.planId !== planId) return 'none';
-        if (draftId && intent.draftId !== draftId) return 'none';
-        if (
-          typeof deviceQuantity === 'number' &&
-          typeof intent.deviceQuantity === 'number' &&
-          intent.deviceQuantity !== deviceQuantity
-        ) {
-          return 'none';
-        }
-        if (
-          typeof durationMonths === 'number' &&
-          typeof intent.durationMonths === 'number' &&
-          intent.durationMonths !== durationMonths
-        ) {
-          return 'none';
-        }
+        const intent = await readCheckoutIntent(user.id, {
+          planId,
+          ...(draftId ? { draftId } : {}),
+          ...(deviceQuantity !== undefined ? { deviceQuantity } : {}),
+          ...(durationMonths !== undefined ? { durationMonths } : {}),
+        });
+        if (recoveryGenerationRef.current !== gen || !intent) return 'none';
 
         const fetched = await getOrder(intent.orderId);
         if (recoveryGenerationRef.current !== gen) return 'none';
+        if (fetched.orderType === 'RENEWAL') return 'none';
         if (TERMINAL_CHECKOUT_STATUSES.has(fetched.orderStatus)) {
           await clearCheckoutIntent(user.id, intent.orderId);
           return 'none';
@@ -184,20 +174,10 @@ export function useCheckoutOrder(initialOrderId?: string) {
       setBusy(true);
       setError(null);
       try {
-        const created = await createOrder(input);
+        const created = userId
+          ? await createOrder(input, undefined, { userId, ...(draftId ? { draftId } : {}) })
+          : await createOrder(input);
         setOrder(created);
-        await writeCheckoutIntent(user?.id, {
-          orderId: created.id,
-          planId: created.planId,
-          productId: created.productId,
-          ...(draftId ? { draftId } : {}),
-          ...(typeof input.deviceQuantity === 'number'
-            ? { deviceQuantity: input.deviceQuantity }
-            : {}),
-          ...(typeof input.durationMonths === 'number'
-            ? { durationMonths: input.durationMonths }
-            : {}),
-        });
         if (created.orderStatus === 'WAITING_SERVICE_TERMS_ACCEPTANCE') {
           await loadTerms(created.id);
         }
@@ -217,7 +197,7 @@ export function useCheckoutOrder(initialOrderId?: string) {
         setBusy(false);
       }
     },
-    [loadTerms, user?.id],
+    [loadTerms, userId],
   );
 
   const acceptTerms = useCallback(async (): Promise<MobileOrderDetail | null> => {

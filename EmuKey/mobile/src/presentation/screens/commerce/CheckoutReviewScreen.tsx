@@ -54,9 +54,9 @@ export function CheckoutReviewScreen({
 
   useEffect(() => {
     if (!orderId && planId) {
-      void recoverPendingIntent(planId, draftId, deviceQuantity, durationMonths);
+      void recoverPendingIntent(planId, draftId, customized ? deviceQuantity : undefined, customized ? durationMonths : undefined);
     }
-  }, [deviceQuantity, draftId, durationMonths, orderId, planId, recoverPendingIntent]);
+  }, [customized, deviceQuantity, draftId, durationMonths, orderId, planId, recoverPendingIntent]);
 
   const priceChanged = Boolean(
     order && typeof priceVnd === 'number' && order.priceVndSnapshot !== priceVnd,
@@ -230,7 +230,7 @@ export function CheckoutReviewScreen({
           message={recoveryError}
           onAction={() => {
             if (planId) {
-              void recoverPendingIntent(planId, draftId, deviceQuantity, durationMonths);
+              void recoverPendingIntent(planId, draftId, customized ? deviceQuantity : undefined, customized ? durationMonths : undefined);
             }
           }}
           tone="error"

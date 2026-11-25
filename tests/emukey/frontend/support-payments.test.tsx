@@ -136,4 +136,31 @@ describe('Support staff payment history (UC2)', () => {
       vi.mocked(fetch).mockImplementation(original);
     }
   });
+
+  it('reuses the refresh request ID when retrying a failed session check', async () => {
+    const original = vi.mocked(fetch).getMockImplementation()!;
+    const refreshIds: (string | null)[] = [];
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith('/auth/refresh')) {
+        refreshIds.push(new Headers(init?.headers).get('X-Refresh-Request-Id'));
+        if (refreshIds.length === 1) return Response.json({}, { status: 503 });
+        return Response.json({
+          accessToken: 'tok-sup',
+          user: { id: 'sup-1', email: 's@example.com', displayName: 'Sup', role: 'SUPPORT_STAFF', status: 'ACTIVE' },
+        });
+      }
+      if (url.endsWith('/payments/history')) return Response.json(supportHistoryFixture);
+      return original(input, init);
+    });
+    try {
+      window.history.pushState({}, '', '/support/payments');
+      render(<App />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Thử lại' }));
+      expect(await screen.findByText('ORD-SUP-001')).toBeTruthy();
+      expect(refreshIds).toEqual([expect.stringMatching(/^[0-9a-f]{32}$/), refreshIds[0]]);
+    } finally {
+      vi.mocked(fetch).mockImplementation(original);
+    }
+  });
 });

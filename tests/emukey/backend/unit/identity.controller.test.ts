@@ -49,10 +49,11 @@ describe('IdentityController HTTP boundary', () => {
   });
   it('rotates native refresh tokens from the body using the shared session service', async () => {
     service.refresh.mockResolvedValueOnce({ accessToken: 'a2', refreshToken: 'r2', user: { id: 'u1', role: 'CUSTOMER' } });
-    const response = await request(server()).post('/auth/mobile/refresh').send({ refreshToken: 'r'.repeat(43) }).expect(200);
+    const requestId = '0a5298a2-55bc-4d59-b3a1-ac97dc88e8f2';
+    const response = await request(server()).post('/auth/mobile/refresh').set('X-Refresh-Request-Id', requestId).send({ refreshToken: 'r'.repeat(43) }).expect(200);
     expect(response.body.refreshToken).toBe('r2');
     expect(response.headers['cache-control']).toBe('no-store');
-    expect(service.refresh).toHaveBeenLastCalledWith('r'.repeat(43));
+    expect(service.refresh).toHaveBeenLastCalledWith('r'.repeat(43), requestId);
     expect(response.headers['set-cookie']).toBeUndefined();
   });
   it('accepts only an email and normalizes it without administrator-supplied profile data', async () => {
@@ -142,8 +143,9 @@ describe('IdentityController HTTP boundary', () => {
   });
   it('rotates the HttpOnly refresh cookie without exposing the token in the response body', async () => {
     service.refresh.mockResolvedValueOnce({ accessToken: 'next-access', refreshToken: 'next-refresh', user: { id: 'u1' } });
-    const response = await request(server()).post('/auth/refresh').set('Cookie', 'emukey_refresh=current').expect(201);
-    expect(service.refresh).toHaveBeenCalledWith('current');
+    const requestId = '0a5298a255bc8d59b3a1ac97dc88e8f2';
+    const response = await request(server()).post('/auth/refresh').set('Cookie', 'emukey_refresh=current').set('X-Refresh-Request-Id', requestId).expect(201);
+    expect(service.refresh).toHaveBeenCalledWith('current', requestId);
     expect(response.headers['set-cookie']?.[0]).toContain('emukey_refresh=next-refresh;');
     expect(response.headers['set-cookie']?.[0]).toContain('HttpOnly');
     expect(response.body).toEqual({ accessToken: 'next-access', user: { id: 'u1' } });

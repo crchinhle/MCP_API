@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -63,15 +64,109 @@ it('unregisters the current push token before clearing the account session', asy
   expect(calls.findIndex((url) => url.endsWith('/notifications/push-tokens/remove'))).toBeLessThan(calls.findIndex((url) => url.endsWith('/auth/mobile/logout')));
 });
 
+it('does not let an old logout revoke or clear a newer account', async () => {
+  const revoked: string[] = [];
+  jest.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+    if (String(url).endsWith('/auth/mobile/login')) {
+      const { email } = JSON.parse(String(init?.body));
+      const id = email.split('@')[0];
+      return Response.json({ accessToken: id, refreshToken: `refresh-${id}`, user: { id, role: 'CUSTOMER' } });
+    }
+    revoked.push(JSON.parse(String(init?.body)).refreshToken);
+    return new Response(null, { status: 204 });
+  });
+  await login('old-buyer@example.test', 'Password@123');
+  let finishLookup!: (value: null) => void;
+  jest.mocked(SecureStore.getItemAsync).mockReturnValueOnce(new Promise((resolve) => { finishLookup = resolve; }));
+  const firstLogout = logout();
+  await Promise.resolve();
+  const secondLogout = logout();
+
+  await login('new-buyer@example.test', 'Password@123');
+  finishLookup(null);
+  await Promise.all([firstLogout, secondLogout]);
+
+  expect(revoked).toEqual(['refresh-old-buyer']);
+  await expect(restoreSession()).resolves.toMatchObject({ user: { id: 'new-buyer' } });
+  expect(values.get('emukey_mobile_session_v1')).toContain('refresh-new-buyer');
+  await logout();
+});
+
+it('resumes the order saved after a checkout screen initially found no pending order', async () => {
+  await AsyncStorage.clear();
+  let posted = 0;
+  const stored = { id: 'order-reopened', planId: 'plan-reopened', productId: 'product-reopened', orderStatus: 'WAITING_PAYMENT' };
+  jest.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+    if (String(url).endsWith('/auth/mobile/login')) {
+      return Response.json({ accessToken: 'token', user: { id: 'buyer-reopened', role: 'CUSTOMER' } });
+    }
+    if (String(url).endsWith('/orders/order-reopened')) return Response.json(stored);
+    if (init?.method === 'POST') posted += 1;
+    return Response.json(stored);
+  });
+  await login('buyer-reopened@example.test', 'Password@123');
+  const input = { planId: 'plan-reopened' };
+  await createOrder(input);
+  await expect(createOrder(input)).resolves.toMatchObject({ id: stored.id });
+  expect(posted).toBe(1);
+  await logout();
+});
+
 it('persists a valid intent key through network failure and reuses it on retry', async () => {
-  const fetchMock = jest.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('network lost'));
+  const fetchMock = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+    Response.json({ accessToken: 'token', user: { id: 'buyer-network', role: 'CUSTOMER' } }),
+  );
+  await login('buyer-network@example.test', 'Password@123');
+  fetchMock.mockClear().mockRejectedValueOnce(new Error('network lost'));
   await expect(createOrder({ planId: 'plan-1' })).rejects.toThrow('network lost');
-  expect(values.size).toBe(1);
+  expect([...values.keys()].filter((key) => key.startsWith('emukey_order_intent_'))).toHaveLength(1);
   const firstHeaders = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
-  fetchMock.mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({ id: 'order-1' }) } as Response);
-  await expect(createOrder({ planId: 'plan-1' })).resolves.toEqual({ id: 'order-1' });
+  fetchMock.mockResolvedValueOnce(Response.json({ id: 'order-1', planId: 'plan-1', productId: 'prod-1' }));
+  await expect(createOrder({ planId: 'plan-1' })).resolves.toMatchObject({ id: 'order-1' });
   expect(new Headers(fetchMock.mock.calls[1]?.[1]?.headers).get('Idempotency-Key')).toBe(firstHeaders.get('Idempotency-Key'));
-  expect(values.size).toBe(0);
+  expect([...values.keys()].filter((key) => key.startsWith('emukey_order_intent_'))).toHaveLength(0);
+  await logout();
+});
+
+it('aborts order creation if the account changes while reading the local idempotency key', async () => {
+  const fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+    if (String(url).endsWith('/auth/mobile/login')) {
+      const { email } = JSON.parse(String(init?.body));
+      return Response.json({ accessToken: email, user: { id: email.split('@')[0], role: 'CUSTOMER' } });
+    }
+    return Response.json({ id: 'unexpected-order' });
+  });
+  await login('buyer-a@example.test', 'Password@123');
+  let resumeRead!: (value: null) => void;
+  jest.mocked(SecureStore.getItemAsync).mockReturnValueOnce(new Promise((resolve) => { resumeRead = resolve; }));
+  const create = createOrder({ planId: 'plan-1' });
+  await login('buyer-b@example.test', 'Password@123');
+  resumeRead(null);
+  await expect(create).rejects.toMatchObject({ status: 401 });
+  expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/orders'))).toBe(false);
+  await logout();
+});
+
+it('keeps the order idempotency key if saving the returned order fails', async () => {
+  await AsyncStorage.clear();
+  const requests: string[] = [];
+  const fetchMock = jest.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+    if (String(url).endsWith('/auth/mobile/login')) {
+      return Response.json({ accessToken: 'token', user: { id: 'buyer-storage', role: 'CUSTOMER' } });
+    }
+    requests.push(new Headers(init?.headers).get('idempotency-key')!);
+    return Response.json({ id: 'order-storage', planId: 'plan-1', productId: 'prod-1' });
+  });
+  await login('buyer-storage@example.test', 'Password@123');
+  jest.mocked(AsyncStorage.setItem).mockRejectedValueOnce(new Error('storage unavailable'));
+  await expect(createOrder({ planId: 'plan-1' })).resolves.toMatchObject({ id: 'order-storage' });
+  expect([...values.keys()].some((key) => key.startsWith('emukey_order_intent_'))).toBe(true);
+  await expect(createOrder({ planId: 'plan-1' })).resolves.toMatchObject({ id: 'order-storage' });
+  expect(requests).toHaveLength(2);
+  expect(requests[0]).toBe(requests[1]);
+  expect([...values.keys()].some((key) => key.startsWith('emukey_order_intent_'))).toBe(false);
+  await logout();
+  fetchMock.mockRestore();
 });
 
 it('stores and retrieves activation keys with a valid native storage key', async () => {
@@ -118,18 +213,24 @@ it.each([401, 403])('clears account secrets when the refresh family is definitiv
 
 it('preserves secure credentials and allows retry after a transient refresh failure', async () => {
   let unavailable = true;
+  const requestIds: (string | null)[] = [];
   jest.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     if (String(input).endsWith('/auth/mobile/login')) return Response.json({ accessToken: 'old', refreshToken: 'valid-refresh', user: { id: 'buyer', role: 'CUSTOMER' } });
-    if (String(input).endsWith('/auth/mobile/refresh')) return unavailable ? Response.json({}, { status: 503 }) : Response.json({ accessToken: 'new', refreshToken: 'rotated', user: { id: 'buyer', role: 'CUSTOMER' } });
+    if (String(input).endsWith('/auth/mobile/refresh')) {
+      requestIds.push(new Headers(init?.headers).get('X-Refresh-Request-Id'));
+      return unavailable ? Response.json({}, { status: 503 }) : Response.json({ accessToken: 'new', refreshToken: 'rotated', user: { id: 'buyer', role: 'CUSTOMER' } });
+    }
     return new Headers(init?.headers).get('authorization') === 'Bearer new' ? Response.json([]) : Response.json({}, { status: 401 });
   });
   await login('buyer@example.test', 'Password@123');
   await storeActivationKey('license-1', 'private-key-transient-sentinel');
   await expect(listOrders()).rejects.toMatchObject({ status: 503 });
   expect(await restoreSession()).toMatchObject({ refreshToken: 'valid-refresh' });
+  expect(values.get('emukey_mobile_session_v1')).toContain('valid-refresh');
   expect([...values.values()].some((value) => value.includes('private-key-transient-sentinel'))).toBe(true);
   unavailable = false;
   await expect(listOrders()).resolves.toEqual([]);
+  expect(requestIds).toEqual(['11111111-2222-4333-8444-555555555555', '11111111-2222-4333-8444-555555555555']);
 });
 
 it('never replays an old account request after a different account logs in', async () => {

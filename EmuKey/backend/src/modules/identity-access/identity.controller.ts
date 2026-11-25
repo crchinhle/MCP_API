@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Header,
+  Headers,
   HttpCode,
   Param,
   ParseUUIDPipe,
@@ -148,9 +149,10 @@ export class IdentityController {
   async refresh(
     @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
+    @Headers('x-refresh-request-id') requestId?: string,
   ) {
     try {
-      const result = await this.service.refresh(this.refreshCookie(request));
+      const result = await this.service.refresh(this.refreshCookie(request), requestId);
       this.setRefresh(response, result.refreshToken);
       return { accessToken: result.accessToken, user: result.user };
     } catch (error) {
@@ -186,8 +188,11 @@ export class IdentityController {
   @Header('Cache-Control', 'no-store')
   @HttpCode(200)
   @ApiOkResponse({ type: NativeSessionDto })
-  async nativeRefresh(@Body() dto: NativeRefreshDto) {
-    const result = await this.service.refresh(dto.refreshToken);
+  async nativeRefresh(
+    @Body() dto: NativeRefreshDto,
+    @Headers('x-refresh-request-id') requestId?: string,
+  ) {
+    const result = await this.service.refresh(dto.refreshToken, requestId);
     if (result.user.role !== 'CUSTOMER') {
       await this.service.logout(result.refreshToken);
       throw new UnauthorizedException({ code: 'INVALID_SESSION' });

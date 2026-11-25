@@ -17,6 +17,14 @@ class FakeRedis implements IdentityRedis {
       this.data.delete(key);
       return Promise.resolve(1);
     }
+    if (numKeys === 4) {
+      if (value === null || value !== args[4]) return Promise.resolve(0);
+      this.data.set(String(args[2]), String(args[5]));
+      this.data.set(String(args[1]), value);
+      if (args[7]) this.data.set(String(args[3]), String(args[7]));
+      this.data.delete(key);
+      return Promise.resolve(1);
+    }
     this.data.delete(key);
     if (numKeys === 2 && value) this.data.set(String(args[1]), value);
     return Promise.resolve(value);
@@ -147,6 +155,40 @@ describe('IdentityService', () => {
     expect(second.refreshToken).not.toBe(first.refreshToken);
     await expect(service.refresh(first.refreshToken)).rejects.toMatchObject({ response: { code: 'REFRESH_REUSE_DETECTED' } });
   });
+  it('recovers a lost refresh response only for the same request identity', async () => {
+    const redis = new FakeRedis();
+    const repository = repo();
+    const service = new IdentityService(repository, redis, new TextEncoder().encode('test-secret'), {
+      sendEmailVerification: vi.fn(), sendPasswordReset: vi.fn(),
+    });
+    const requestId = '12345678-1234-4234-8234-123456789abc';
+    const first = await service.issue(user);
+    const rotated = await service.refresh(first.refreshToken, requestId);
+    const retry = await service.refresh(first.refreshToken, requestId);
+    expect(retry.refreshToken).toBe(rotated.refreshToken);
+    expect(repository.bumpSessionVersion).not.toHaveBeenCalled();
+    await expect(service.refresh(first.refreshToken, '87654321-1234-4234-8234-123456789abc'))
+      .rejects.toMatchObject({ response: { code: 'REFRESH_REUSE_DETECTED' } });
+    expect(repository.bumpSessionVersion).toHaveBeenCalledWith(user.id);
+  });
+
+  it('keeps a refresh token usable when loading its user fails temporarily', async () => {
+    const redis = new FakeRedis();
+    const repository = repo();
+    const service = new IdentityService(repository, redis, new TextEncoder().encode('test-secret'), {
+      sendEmailVerification: vi.fn(), sendPasswordReset: vi.fn(),
+    });
+    const first = await service.issue(user);
+    vi.mocked(repository.findById).mockRejectedValueOnce(new Error('database unavailable'));
+
+    await expect(service.refresh(first.refreshToken)).rejects.toThrow('database unavailable');
+    const second = await service.refresh(first.refreshToken);
+    expect(second.refreshToken).not.toBe(first.refreshToken);
+    expect(repository.bumpSessionVersion).not.toHaveBeenCalled();
+    await expect(service.refresh(first.refreshToken)).rejects.toMatchObject({ response: { code: 'REFRESH_REUSE_DETECTED' } });
+    expect(repository.bumpSessionVersion).toHaveBeenCalledWith(user.id);
+  });
+
   it('consumes reset tokens once and bumps the durable session version', async () => {
     const repository = repo(); const redis = new FakeRedis(); const service = new IdentityService(repository, redis, new TextEncoder().encode('test-secret'), { sendEmailVerification: vi.fn(), sendPasswordReset: vi.fn() }); await service.forgotPassword(user.email);
     expect([...redis.data.keys()].filter((key) => key.startsWith('reset:'))).toHaveLength(1);

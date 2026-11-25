@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
@@ -87,12 +88,19 @@ describe('identity security flow', () => {
     expect(verified?.emailVerifiedAt).toBeInstanceOf(Date);
   });
 
-  it('rotates refresh tokens and revokes the family on replay', async () => {
+  it('recovers concurrent attempts of the same refresh and revokes sessions on distinct replay', async () => {
     const login = await service.login('support.staff@example.test', password);
-    const rotated = await service.refresh(login.refreshToken);
-    await expect(service.refresh(login.refreshToken)).rejects.toBeInstanceOf(
-      UnauthorizedException,
-    );
+    const requestId = randomUUID();
+    const [rotated, recovered] = await Promise.all([
+      service.refresh(login.refreshToken, requestId),
+      service.refresh(login.refreshToken, requestId),
+    ]);
+    expect(rotated.refreshToken).not.toBe(login.refreshToken);
+    expect(recovered.refreshToken).toBe(rotated.refreshToken);
+    await expect(service.authenticate(recovered.accessToken)).resolves.toMatchObject({ role: 'SUPPORT_STAFF' });
+    await expect(service.refresh(login.refreshToken, randomUUID())).rejects.toMatchObject({
+      response: { code: 'REFRESH_REUSE_DETECTED' },
+    });
     await expect(service.authenticate(rotated.accessToken)).rejects.toBeInstanceOf(
       UnauthorizedException,
     );

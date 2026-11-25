@@ -16,7 +16,6 @@ import {
   type MobileSession,
   type MobileUser,
 } from '../../infrastructure/api/client';
-import { clearCheckoutIntent } from '../../infrastructure/checkout-intent';
 
 const NON_CUSTOMER_ERROR = 'Ứng dụng này dành cho tài khoản khách hàng.';
 
@@ -93,14 +92,14 @@ export function CustomerSessionProvider({ children }: { readonly children: React
   }, []);
 
   const signOut = useCallback(async () => {
-    const uid = session?.user.id;
     try {
       await apiLogout();
     } finally {
-      await clearCheckoutIntent(uid);
-      setSessionState(null);
+      setSessionState((current) => current?.user.id === session?.user.id &&
+        current?.accessToken === session?.accessToken && current?.refreshToken === session?.refreshToken
+        ? null : current);
     }
-  }, [session?.user.id]);
+  }, [session]);
 
   const value = useMemo<CustomerSessionContextValue>(
     () => ({

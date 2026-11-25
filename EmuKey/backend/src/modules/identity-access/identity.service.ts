@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
 
 import {
   BadRequestException,
@@ -86,6 +86,8 @@ interface RefreshSession {
 }
 
 const REFRESH_TTL = 2_592_000;
+const REFRESH_RETRY_TTL = 60;
+const REFRESH_REQUEST_ID = /^(?:[0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
 const RESET_TTL = 3_600;
 const VERIFY_TTL = 86_400;
 const LOGIN_LIMIT = 10;
@@ -386,7 +388,11 @@ export class IdentityService {
     return this.issue(user);
   }
 
-  async issue(user: IdentityUser, familyId: string = randomUUID()) {
+  private async prepareSession(
+    user: IdentityUser,
+    familyId: string,
+    refreshToken = randomBytes(32).toString('base64url'),
+  ) {
     const accessToken = await new SignJWT({
       role: user.role,
       sessionVersion: user.sessionVersion,
@@ -396,19 +402,23 @@ export class IdentityService {
       .setIssuedAt()
       .setExpirationTime(`${this.accessTtl}s`)
       .sign(this.secret);
-    const refreshToken = randomBytes(32).toString('base64url');
     const session: RefreshSession = {
       familyId,
       id: user.id,
       version: user.sessionVersion,
     };
+    return { session, credentials: { accessToken, refreshToken, user: this.publicUser(user) } };
+  }
+
+  async issue(user: IdentityUser, familyId: string = randomUUID()) {
+    const { session, credentials } = await this.prepareSession(user, familyId);
     await this.redis.set(
-      `refresh:${this.digest(refreshToken)}`,
+      `refresh:${this.digest(credentials.refreshToken)}`,
       JSON.stringify(session),
       'EX',
       REFRESH_TTL,
     );
-    return { accessToken, refreshToken, user: this.publicUser(user) };
+    return credentials;
   }
 
   private async consumeRefresh(raw: string | undefined): Promise<RefreshSession | null> {
@@ -422,6 +432,11 @@ export class IdentityService {
       REFRESH_TTL,
     );
     if (typeof value === 'string') return JSON.parse(value) as RefreshSession;
+    await this.rejectRefreshReuse(digest);
+    return null;
+  }
+
+  private async rejectRefreshReuse(digest: string): Promise<void> {
     const replay = await this.redis.get(`refresh-used:${digest}`);
     if (replay) {
       const session = JSON.parse(replay) as RefreshSession;
@@ -431,22 +446,70 @@ export class IdentityService {
         message: 'Refresh token reuse was detected.',
       });
     }
-    return null;
   }
 
-  async refresh(raw: string | undefined) {
-    const data = await this.consumeRefresh(raw);
-    if (!data) throw this.invalidSession();
+  private async recoverRefresh(digest: string, requestHash: string, nextToken?: string) {
+    if (nextToken && await this.redis.get(`refresh-retry:${digest}`) === requestHash) {
+      const saved = await this.redis.get(`refresh:${this.digest(nextToken)}`);
+      if (!saved) throw this.invalidSession();
+      const session = JSON.parse(saved) as RefreshSession;
+      const user = await this.repo.findById(session.id);
+      if (!user || user.status !== 'ACTIVE' || user.sessionVersion !== session.version) {
+        throw this.invalidSession();
+      }
+      const { credentials } = await this.prepareSession(user, session.familyId, nextToken);
+      return credentials;
+    }
+    await this.rejectRefreshReuse(digest);
+    throw this.invalidSession();
+  }
+
+  async refresh(raw: string | undefined, requestId?: string) {
+    if (!raw) throw this.invalidSession();
+    const id = typeof requestId === 'string' && REFRESH_REQUEST_ID.test(requestId)
+      ? requestId.toLowerCase()
+      : undefined;
+    const digest = this.digest(raw);
+    const requestHash = id ? this.digest(id) : '';
+    // Derive the same successor on retry without storing a raw credential in Redis.
+    const nextToken = id && createHmac('sha256', this.secret)
+      .update('refresh-rotation-v1\0')
+      .update(raw)
+      .update('\0')
+      .update(id)
+      .digest('base64url');
+    const currentKey = `refresh:${digest}`;
+    const serialized = await this.redis.get(currentKey);
+    if (serialized === null) return this.recoverRefresh(digest, requestHash, nextToken);
+
+    const data = JSON.parse(serialized) as RefreshSession;
     const user = await this.repo.findById(data.id);
-    if (
-      !user ||
-      user.status !== 'ACTIVE' ||
-      user.sessionVersion !== data.version
-    ) {
-      if (user) await this.repo.bumpSessionVersion(data.id);
+    if (!user || user.status !== 'ACTIVE' || user.sessionVersion !== data.version) {
+      const consumed = await this.consumeRefresh(raw);
+      if (consumed && user) await this.repo.bumpSessionVersion(data.id);
       throw this.invalidSession();
     }
-    return this.issue(user, data.familyId);
+
+    // Finish database validation and signing before atomically swapping the refresh credential.
+    const { session, credentials } = await this.prepareSession(user, data.familyId, nextToken);
+    const rotated = await this.redis.eval(
+      "local v=redis.call('GET',KEYS[1]); if not v or v ~= ARGV[1] then return 0 end; " +
+      "redis.call('SET',KEYS[3],ARGV[2],'EX',ARGV[3]); redis.call('SET',KEYS[2],v,'EX',ARGV[3]); " +
+      "if ARGV[4] ~= '' then redis.call('SET',KEYS[4],ARGV[4],'EX',ARGV[5]); end; " +
+      "redis.call('DEL',KEYS[1]); return 1",
+      4,
+      currentKey,
+      `refresh-used:${digest}`,
+      `refresh:${this.digest(credentials.refreshToken)}`,
+      `refresh-retry:${digest}`,
+      serialized,
+      JSON.stringify(session),
+      REFRESH_TTL,
+      requestHash,
+      REFRESH_RETRY_TTL,
+    );
+    if (rotated !== 1) return this.recoverRefresh(digest, requestHash, nextToken);
+    return credentials;
   }
 
   async logout(raw: string | undefined): Promise<void> {

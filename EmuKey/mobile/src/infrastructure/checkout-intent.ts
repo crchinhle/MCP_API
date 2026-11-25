@@ -5,6 +5,7 @@ export interface MobileCheckoutIntent {
   readonly planId: string;
   readonly productId: string;
   readonly draftId?: string;
+  readonly targetLicenseId?: string;
   readonly deviceQuantity?: number;
   readonly durationMonths?: number;
 }
@@ -15,45 +16,64 @@ function storageKey(userId: string): string {
   return `${CHECKOUT_INTENT_PREFIX}${userId}`;
 }
 
-export async function readCheckoutIntent(
-  userId: string | null | undefined,
-): Promise<MobileCheckoutIntent | null> {
-  if (!userId) return null;
-  const raw = await AsyncStorage.getItem(storageKey(userId));
-  if (raw === null) return null;
-  const parsed = JSON.parse(raw) as Partial<MobileCheckoutIntent> | null;
-  if (
-    !parsed ||
-    typeof parsed.orderId !== 'string' ||
-    typeof parsed.planId !== 'string' ||
-    typeof parsed.productId !== 'string'
-  ) {
-    throw new Error('Invalid saved checkout intent');
-  }
-  return {
-    orderId: parsed.orderId,
-    planId: parsed.planId,
-    productId: parsed.productId,
-    ...(typeof parsed.draftId === 'string' ? { draftId: parsed.draftId } : {}),
-    ...(typeof parsed.deviceQuantity === 'number'
-      ? { deviceQuantity: parsed.deviceQuantity }
-      : {}),
-    ...(typeof parsed.durationMonths === 'number'
-      ? { durationMonths: parsed.durationMonths }
-      : {}),
-  };
+type CheckoutSelection = Pick<
+  MobileCheckoutIntent, 'planId' | 'draftId' | 'targetLicenseId' | 'deviceQuantity' | 'durationMonths'
+>;
+
+let storageChanges = Promise.resolve();
+
+function changeStorage(work: () => Promise<void>): Promise<void> {
+  const change = storageChanges.then(work);
+  storageChanges = change.catch(() => undefined);
+  return change;
 }
 
-export async function writeCheckoutIntent(
+async function readSavedIntents(userId: string): Promise<MobileCheckoutIntent[]> {
+  const raw = await AsyncStorage.getItem(storageKey(userId));
+  if (raw === null) return [];
+  const parsed: unknown = JSON.parse(raw);
+  // Previously the same storage entry held a single order.
+  const entries: unknown[] = Array.isArray(parsed) ? parsed : [parsed];
+  return entries.map((entry) => {
+    const intent = entry as Partial<MobileCheckoutIntent> | null;
+    if (!intent || typeof intent.orderId !== 'string' ||
+        typeof intent.planId !== 'string' || typeof intent.productId !== 'string') {
+      throw new Error('Invalid saved checkout intent');
+    }
+    return {
+      orderId: intent.orderId,
+      planId: intent.planId,
+      productId: intent.productId,
+      ...(typeof intent.draftId === 'string' ? { draftId: intent.draftId } : {}),
+      ...(typeof intent.targetLicenseId === 'string' ? { targetLicenseId: intent.targetLicenseId } : {}),
+      ...(typeof intent.deviceQuantity === 'number' ? { deviceQuantity: intent.deviceQuantity } : {}),
+      ...(typeof intent.durationMonths === 'number' ? { durationMonths: intent.durationMonths } : {}),
+    };
+  });
+}
+
+function matchesSelection(left: CheckoutSelection, right: CheckoutSelection): boolean {
+  return left.planId === right.planId && left.draftId === right.draftId &&
+    left.targetLicenseId === right.targetLicenseId &&
+    left.deviceQuantity === right.deviceQuantity && left.durationMonths === right.durationMonths;
+}
+
+export async function readCheckoutIntent(
   userId: string | null | undefined,
-  intent: MobileCheckoutIntent,
-): Promise<void> {
-  if (!userId) return;
-  try {
-    await AsyncStorage.setItem(storageKey(userId), JSON.stringify(intent));
-  } catch {
-    // Storage failure must not block purchase progression.
-  }
+  selection: CheckoutSelection,
+): Promise<MobileCheckoutIntent | null> {
+  if (!userId) return null;
+  await storageChanges;
+  const entries = await readSavedIntents(userId);
+  return entries.find((entry) => matchesSelection(entry, selection)) ?? null;
+}
+
+export async function writeCheckoutIntent(userId: string, intent: MobileCheckoutIntent): Promise<void> {
+  await changeStorage(async () => {
+    const entries = await readSavedIntents(userId);
+    const remaining = entries.filter((entry) => entry.orderId !== intent.orderId && !matchesSelection(entry, intent));
+    await AsyncStorage.setItem(storageKey(userId), JSON.stringify([...remaining, intent]));
+  });
 }
 
 export async function clearCheckoutIntent(
@@ -61,13 +81,16 @@ export async function clearCheckoutIntent(
   expectedOrderId?: string,
 ): Promise<void> {
   if (!userId) return;
-  try {
+  await changeStorage(async () => {
     if (expectedOrderId) {
-      const current = await readCheckoutIntent(userId);
-      if (current && current.orderId !== expectedOrderId) return;
+      const entries = await readSavedIntents(userId);
+      const remaining = entries.filter((entry) => entry.orderId !== expectedOrderId);
+      if (remaining.length === entries.length) return;
+      if (remaining.length) {
+        await AsyncStorage.setItem(storageKey(userId), JSON.stringify(remaining));
+        return;
+      }
     }
     await AsyncStorage.removeItem(storageKey(userId));
-  } catch {
-    // Best-effort cleanup.
-  }
+  }).catch(() => undefined); // Best-effort cleanup.
 }
